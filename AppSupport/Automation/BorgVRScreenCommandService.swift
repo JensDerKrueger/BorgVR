@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   typealias DatasetListProvider = () async throws -> [BorgVRMCPDatasetCatalogEntry]
-  typealias DatasetOpener = (String) async throws -> Void
+  typealias DatasetOpener = (String, @escaping () throws -> Void, @escaping () throws -> Void) async throws -> Void
   typealias DatasetCloser = () async throws -> Void
 
   private let session: ScreenBorgVRSession
@@ -20,7 +20,7 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   init(
     session: ScreenBorgVRSession,
     datasetListProvider: @escaping DatasetListProvider = { [] },
-    datasetOpener: @escaping DatasetOpener = { _ in
+    datasetOpener: @escaping DatasetOpener = { _, _, _ in
       throw BorgVRMCPCommandError.unsupported("Opening datasets is not available.")
     },
     settingsStoreProvider: (() -> BorgVRSettingsStore)? = nil,
@@ -42,11 +42,21 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   }
 
   func openDataset(id: String) async throws {
+    try await openDataset(id: id, validateContext: { try Task.checkCancellation() })
+  }
+
+  func openDataset(id: String, validateContext: @escaping () throws -> Void) async throws {
+    try await openDataset(id: id, validateContext: validateContext, didBegin: {})
+  }
+
+  func openDataset(id: String, validateContext: @escaping () throws -> Void, didBegin: @escaping () throws -> Void) async throws {
+    try validateContext()
     if session.runtimeState.activeDataset?.uniqueId == id, session.runtimeState.rendererHasActiveDataset {
       session.runtimeState.useDeterministicAutomationState()
+      try didBegin()
       return
     }
-    try await session.performAction(.openDataset(id), source: .mcp) { try await datasetOpener(id) }
+    try await session.performAction(.openDataset(id), source: .mcp) { try await datasetOpener(id, validateContext, didBegin) }
   }
 
   func closeDataset() async throws {

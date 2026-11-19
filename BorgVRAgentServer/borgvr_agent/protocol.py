@@ -19,13 +19,14 @@ MAX_HISTORY_BYTES = 8 * 1024 * 1024
 
 # No datasets can be opened/closed, edited, exported, or deleted by this agent.
 ALLOWED_TOOLS = frozenset({
+    "search_datasets", "open_dataset",
     "get_application_state", "get_transfer_function", "get_background",
     "set_render_mode", "set_transform", "rotate_view", "set_iso_value",
     "set_clipping", "set_lighting", "set_background", "set_transfer_function",
     "set_bounding_box", "set_screen_projection", "wait_until_rendered",
     "capture_screenshot",
 })
-APPLICATION_TOOLS = frozenset({"get_application_state"})
+APPLICATION_TOOLS = frozenset({"get_application_state", "search_datasets", "open_dataset"})
 
 
 class ProtocolError(ValueError):
@@ -52,6 +53,7 @@ class Hello(Message):
     protocol: Literal[1]
     dataset_id: str | None = Field(min_length=1, max_length=128)
     application_session: bool = False
+    dataset_opening: bool = False
     context_id: str = Field(min_length=1, max_length=128)
     tools: list[ToolDefinition] = Field(max_length=32)
     execution_limits: ExecutionLimits | None = None
@@ -62,6 +64,8 @@ class Hello(Message):
     def require_dataset_for_legacy_session(self):
         if self.dataset_id is None and not self.application_session:
             raise ValueError("A dataset-free session requires application_session")
+        if self.dataset_opening and not self.application_session:
+            raise ValueError("Dataset transitions require application_session")
         return self
 
 
@@ -69,6 +73,12 @@ class UserMessage(Message):
     type: Literal["user_message"]
     request_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     text: str = Field(min_length=1, max_length=8192)
+
+
+class DatasetTransition(Message):
+    dataset_id: str = Field(min_length=1, max_length=128)
+    context_id: str = Field(min_length=1, max_length=128)
+    tools: list[ToolDefinition] = Field(max_length=32)
 
 
 class ToolResult(Message):
@@ -81,6 +91,7 @@ class ToolResult(Message):
     error: str | None = Field(default=None, max_length=1024)
     image_png_base64: str | None = None
     view_revision: int | None = Field(default=None, ge=0, le=2**53 - 1)
+    dataset_transition: DatasetTransition | None = None
 
 
 class UserChange(Message):

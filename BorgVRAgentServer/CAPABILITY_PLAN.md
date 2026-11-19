@@ -9,8 +9,9 @@ Funktionsumfang und Erlaubnis für einen konkreten Auftrag sind getrennt.
 
 Verfügbar sind der [Funktionskatalog](CAPABILITIES.md), seine
 [maschinenlesbare Grundlage](capabilities.json), der statische Registerabgleich und die
-appweite Sitzung auf allen drei Plattformen. Das Startmenü erlaubt Gespräche und die
-Abfrage des App-Zustands ohne Renderer. Weitere Werkzeuge sowie Import-/Fusionsjobs in
+appweite Sitzung auf allen drei Plattformen. Das Startmenü erlaubt Gespräche, die Abfrage
+des App-Zustands, begrenzte Metadatensuche und gezieltes Öffnen eines Treffers ohne Renderer.
+Weitere Werkzeuge sowie Import-/Fusionsjobs in
 diesem Plan sind Entwürfe, keine schon verfügbaren Funktionen. Die Erweiterung erfordert
 einen aktualisierten Agentenserver, startet diesen aber nicht automatisch neu.
 
@@ -47,17 +48,18 @@ eingeführt. [Bisherige Grenzen](../AppSupport/Voice/ARCHITECTURE.md) gelten wei
 
 ## Befund des Funktionsabgleichs
 
-- 59 native MCP-Werkzeuge sind definiert; maximal 15 davon sind im nativen Agenten
+- 60 native MCP-Werkzeuge sind definiert; maximal 17 davon sind im nativen Agenten
   auf beiden Seiten erlaubt. Plattform, RGB/RGBA und Bildfreigabe reduzieren sie weiter.
   Die weiteren vier Modellwerkzeuge dienen nur dem Agentenablauf, nicht der App-Steuerung.
 - Marker, Messungen und Editing sind überwiegend bereits über Commands und MCP erreichbar.
   Hier fehlen vor allem vollständige Agentenverträge, Freigaben und End-to-End-Tests.
-- Katalogabfrage und Öffnen/Schließen existieren über MCP, sind aber noch nicht für den
-  Agenten freigeschaltet. Die KI-Verbindung funktioniert ohne Datensatz; im Leerlauf
+- Katalogabfrage und Öffnen/Schließen existieren über MCP. Der Agent erhält eine begrenzte
+  Metadatensuche und das autorisierte Öffnen eines kürzlich gelieferten Treffers. Schließen
+  ist noch nicht freigeschaltet. Die KI-Verbindung funktioniert ohne Datensatz; im Leerlauf
   werden beim Wechsel Kontext und Werkzeuge neu abgeglichen. Laufende Arbeit wird
   beendet, das Assistentenfenster bleibt bestehen.
 - Die Katalogeinträge enthalten bereits verfügbare Metadaten und Provenance. Eine
-  begrenzte Themen-/Filterabfrage mit belegten Treffern ist noch kein eigenes Werkzeug.
+  begrenzte Themenabfrage mit Belegen und Snapshot-Paginierung ist als `search_datasets` verfügbar.
 - Import, Bildsequenzen und Fusion besitzen gemeinsame Konvertierungsalgorithmen, aber
   noch keinen fachlichen, appweiten Command-/MCP-/Agenten-Jobvertrag. macOS-GSC unterstützt
   Datei-/Verzeichnisimport, jedoch nicht den vollständigen mehrstufigen Fusionsablauf.

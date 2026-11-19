@@ -14,7 +14,8 @@ def test_all_declared_commands_tools_gsc_ui_registries_and_settings_are_classifi
     catalog, inventory = current()
     assert audit.validate(catalog, inventory) == []
     assert inventory["agent"] < inventory["mcp"]
-    assert {"list_datasets", "open_dataset", "edit_volume", "upsert_measurement", "upsert_sphere_marker"} <= inventory["mcp"] - inventory["agent"]
+    assert {"list_datasets", "edit_volume", "upsert_measurement", "upsert_sphere_marker"} <= inventory["mcp"] - inventory["agent"]
+    assert {"search_datasets", "open_dataset"} <= inventory["agent"]
     assert inventory["settings"]["screen"] and inventory["settings"]["vision"]
 
 
@@ -24,7 +25,7 @@ def test_checked_in_report_is_current_and_links_to_the_implementation_plan():
     assert report == audit.render(catalog, inventory)
     assert (audit.ROOT / "BorgVRAgentServer/CAPABILITY_PLAN.md").is_file()
     assert "CAPABILITY_PLAN.md" in report
-    assert "Ohne offenen Datensatz ist nur `get_application_state` freigegeben" in report
+    assert "`get_application_state`, `search_datasets` und `open_dataset`" in report
 
 
 @pytest.mark.parametrize("field,value", [("symbols", "BorgVRCommand.newOperation"),

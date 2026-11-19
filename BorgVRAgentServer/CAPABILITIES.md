@@ -3,9 +3,9 @@
 Generiert aus `capabilities.json` und den Quellcode-Registern mit `python3 audit_capabilities.py --write`.
 Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nachweis ausgeführter Tests.
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
-Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz ist nur `get_application_state` freigegeben.** Renderer-Werkzeuge erfordern einen bereiten Datensatz; Katalogsuche und Import-/Fusionsjobs sind noch nicht freigeschaltet.
+Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets` und `open_dataset` verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
 
-Erfasst: **75 Funktionsgruppen**, **59 MCP-Werkzeuge**, **15 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
+Erfasst: **75 Funktionsgruppen**, **60 MCP-Werkzeuge**, **17 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
@@ -24,8 +24,8 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | App und Assistent | [Eigenen Mandelbulb erzeugen und öffnen](#app-fractal) | job | Service/Abfrage | nein | nein |
 | Datensätze und Quellen | [Pufferung, Prefetch und Remote-Downloadstatus verfolgen](#datasets-streaming) | dataset | Service/Abfrage | nein | nein |
 | Datensätze und Quellen | [Verfügbare Datensätze und vollständige Metadaten abfragen](#datasets-catalog) | application | Service/Abfrage | ja | nein |
-| Datensätze und Quellen | [Datensätze nach Thema suchen, sortieren und gruppieren](#datasets-search) | application | teilweise | nein | nein |
-| Datensätze und Quellen | [Datensatz öffnen und Laden abbrechen](#datasets-open) | application | vorhanden | ja | nein |
+| Datensätze und Quellen | [Datensätze nach Thema suchen, sortieren und gruppieren](#datasets-search) | application | Service/Abfrage | ja | ja* |
+| Datensätze und Quellen | [Datensatz öffnen und Laden abbrechen](#datasets-open) | application | vorhanden | ja | ja* |
 | Datensätze und Quellen | [Datensatz schließen und Zustand sichern](#datasets-close) | dataset | vorhanden | ja | nein |
 | Datensätze und Quellen | [Datensatzliste aktualisieren und Quellenstatus prüfen](#datasets-refresh) | application | Service/Abfrage | nein | nein |
 | Datensätze und Quellen | [Lokale Datensätze und lokale Kopien löschen](#datasets-delete) | application | Service/Abfrage | nein | nein |
@@ -93,7 +93,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Fenster und Panels | [Render-, TF-, Iso-, Licht-, Objekt-, Mess- und Pinselpanel öffnen](#windows-panels) | dataset | nur UI | nein | nein |
 | Fenster und Panels | [Panels andocken, abdocken, formatieren und Layout speichern](#windows-layout) | dataset | nur UI | nein | nein |
 
-* Kontextabhängig: ohne Datensatz nur `get_application_state`, sonst der verfügbare Renderer-Kontext; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.
+* Kontextabhängig: App-Zustand, begrenzte Metadatensuche und autorisiertes Öffnen sind ohne Renderer nutzbar; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.
 
 ## Interne Agentenwerkzeuge
 
@@ -114,11 +114,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - MCP: fehlt
 - Native Agentenwerkzeuge: fehlen
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: Appweite Sitzung mit Startmenü-Einstieg, Text/Sprache und optionalem Datensatzkontext. Ohne Datensatz nur get_application_state; idle Kontextwechsel gleichen Werkzeuge ab und behalten begrenzte historische Textauszüge, niemals alte Bilder oder Werkzeugfolgen.
-- Lücke: Katalogsuche, fachliche App-Aufträge und Import-/Fusionsjobs folgen noch. Laufende Arbeit wird beim Kontextwechsel gestoppt statt automatisch fortgesetzt.
-- Nächster Schritt: Geplante, autorisierte Öffnungsübergänge und App-Werkzeuge ergänzen; Bridge-Trennung und keine automatische Mikrofonaufnahme beibehalten.
+- Zustandsabfrage: Appweite Sitzung mit Text/Sprache, App-Zustand, begrenzter Katalogsuche und autorisiertem Öffnen ohne vorherigen Renderer. Geplante Übergänge verwerfen alte Werkzeugpläne und erfordern frische Zustandsabfrage.
+- Lücke: Import-/Fusionsjobs und weitere fachliche App-Aufträge folgen noch. Fremde Kontextwechsel stoppen laufende Arbeit.
+- Nächster Schritt: Weitere App-Werkzeuge über die Bridge ergänzen; keine automatische Mikrofonaufnahme.
 - Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [macOSApp/ModeSelectionView.swift](../macOSApp/ModeSelectionView.swift), [iOSApp/ModeSelectionView.swift](../iOSApp/ModeSelectionView.swift), [VisionApp/ModeSelectionView.swift](../VisionApp/ModeSelectionView.swift), [BorgVRAgentServer/PROTOCOL.md](../BorgVRAgentServer/PROTOCOL.md)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_application_session.py](../BorgVRAgentServer/tests/test_application_session.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_application_session.py](../BorgVRAgentServer/tests/test_application_session.py), [BorgVRAgentServer/tests/test_dataset_navigation.py](../BorgVRAgentServer/tests/test_dataset_navigation.py)
 
 <a id="app-script_input"></a>
 ### Textparameter für einen Skriptauftrag eingeben
@@ -198,9 +198,9 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - MCP: `list_datasets`
 - Native Agentenwerkzeuge: fehlen
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: list_datasets liefert Metadaten, Provenance, Quellen und Metadatenfehler.
-- Lücke: Im nativen Agenten auf beiden Seiten gesperrt; keine Paginierung/Themensuche als eigenes Werkzeug.
-- Nächster Schritt: Begrenzte Katalogabfrage im App-Kontext freigeben; Suchtreffer mit Metadatenbelegen statt erfundener Bildinhalte zurückgeben.
+- Zustandsabfrage: list_datasets liefert vollständige Metadaten, Provenance, Quellen und Metadatenfehler an MCP-Clients. Der native Agent verwendet stattdessen die begrenzte search_datasets-Abfrage.
+- Lücke: Vollständige Rohmetadaten und Quellenadressen bleiben im Agenten gesperrt; Quellenabdeckung ist nicht garantiert.
+- Nächster Schritt: Gezielte Metadatendetails und Quellenverfügbarkeit bei Bedarf ergänzen; keine globale Volumendatenübertragung.
 - Quellen: [BORGVR-Services/BorgVRMCP.swift](../BORGVR-Services/BorgVRMCP.swift), [AppSupport/Automation/BorgVRScreenCommandService.swift](../AppSupport/Automation/BorgVRScreenCommandService.swift), [VisionApp/VisionBorgVRCommandService.swift](../VisionApp/VisionBorgVRCommandService.swift), [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift)
 - Vorhandene Testquellen: [Tests/MCPCatalogLimitsTests.swift](../Tests/MCPCatalogLimitsTests.swift)
 
@@ -209,14 +209,14 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 
 - Kennung: `datasets.search`; Plattformen: macOS, iOS, visionOS; Kontext: `application`; Wirkung: Metadatenzugriff.
 - Register: kein spezifischer Command/UI-Registereintrag
-- MCP: fehlt
-- Native Agentenwerkzeuge: fehlen
+- MCP: `search_datasets`
+- Native Agentenwerkzeuge: `search_datasets`
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: Die UI sortiert/gruppiert den Katalog; MCP kann dessen Metadaten lesen.
-- Lücke: Kein query-/filter-/cursor-Vertrag; eine Metadatenübereinstimmung belegt nicht den sichtbaren Bildinhalt.
-- Nächster Schritt: search_datasets mit Suchfeldern, begrenzten Ergebnissen, Vollständigkeitsstatus und Belegen; kein globaler Volumendownload für eine einfache Suche.
-- Quellen: [AppSupport/Datasets/OpenDatasetView.swift](../AppSupport/Datasets/OpenDatasetView.swift), [VisionApp/OpenDatasetView.swift](../VisionApp/OpenDatasetView.swift), [BORGVR-Services/BorgVRMCP.swift](../BORGVR-Services/BorgVRMCP.swift)
-- Vorhandene Testquellen: kein spezifischer Test zugeordnet
+- Zustandsabfrage: Begrenzte Metadatensuche mit AND-verknüpften Begriffen, Belegen, stabiler Snapshot-Paginierung und Hinweis auf nicht verifizierte Quellenabdeckung. Keine Bildinhaltsanalyse; der Agent kann übersetzte Begriffe und Synonyme versuchen.
+- Lücke: Keine semantische Vektorsuche und keine gesicherte Vollständigkeit nicht erreichbarer Quellen. Treffer sind Metadatenbelege, keine Diagnose oder Segmentierung.
+- Nächster Schritt: Bei Bedarf gezielte Filter und Quellenstatus ergänzen; gemeinsame Suchimplementierung für UI/MCP/Agent beibehalten.
+- Quellen: [BORGVR-Services/BorgVRDatasetSearch.swift](../BORGVR-Services/BorgVRDatasetSearch.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_dataset_navigation.py](../BorgVRAgentServer/tests/test_dataset_navigation.py)
 
 <a id="datasets-open"></a>
 ### Datensatz öffnen und Laden abbrechen
@@ -224,13 +224,13 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `datasets.open`; Plattformen: macOS, iOS, visionOS; Kontext: `application`; Wirkung: Datensatz-/Rendererwechsel, Netzwerk und Speicher.
 - Register: `BorgVRRecordedAction.openDataset`
 - MCP: `open_dataset`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `open_dataset`
 - Benannte GSC-Befehle (macOS): `opendataset`
-- Zustandsabfrage: get_application_state und DatasetOpenWorkflow; noch kein allgemeiner Öffnungsauftrag mit Job-ID.
-- Lücke: Agent sperrt open_dataset; aktuelle Kontextprüfung würde den beabsichtigten Wechsel als fremden Kontextwechsel behandeln.
-- Nächster Schritt: Erwarteten Übergang autorisieren und bis bereit/abgebrochen verfolgen; kein automatisches Laden alter Zustände bei Automatisierung.
-- Quellen: [AppSupport/Datasets/DatasetOpenWorkflow.swift](../AppSupport/Datasets/DatasetOpenWorkflow.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
+- Zustandsabfrage: Autorisiertes Öffnen eines kürzlich zurückgelieferten Suchtreffers über denselben Command-Service. Korrelierte Öffnungs-ID, Warten auf Rendererbereitschaft, neue Werkzeuge und erneute Zustandsabfrage vor Fortsetzung.
+- Lücke: Noch kein allgemeiner Jobvertrag. Pro Auftrag höchstens ein Öffnen; bereits begonnener Ladevorgang wird beim Abbruch nicht automatisch rückgängig gemacht.
+- Nächster Schritt: Bei Bedarf Öffnungsfortschritt als allgemeinen Job exponieren; unbekannte IDs, fremde Übergänge und automatische Befehlswiederholung weiter abweisen.
+- Quellen: [AppSupport/Datasets/DatasetOpenWorkflow.swift](../AppSupport/Datasets/DatasetOpenWorkflow.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_agent/datasets.py](../BorgVRAgentServer/borgvr_agent/datasets.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_dataset_navigation.py](../BorgVRAgentServer/tests/test_dataset_navigation.py)
 
 <a id="datasets-close"></a>
 ### Datensatz schließen und Zustand sichern

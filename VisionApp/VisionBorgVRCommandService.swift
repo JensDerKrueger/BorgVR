@@ -62,7 +62,7 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
 @MainActor
 final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   typealias DatasetListProvider = () async throws -> [BorgVRMCPDatasetCatalogEntry]
-  typealias DatasetOpener = (String) async throws -> Void
+  typealias DatasetOpener = (String, @escaping () throws -> Void, @escaping () throws -> Void) async throws -> Void
   typealias DatasetCloser = () async throws -> Void
 
   private let session: VisionBorgVRSession
@@ -88,11 +88,21 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   }
 
   func openDataset(id: String) async throws {
+    try await openDataset(id: id, validateContext: { try Task.checkCancellation() })
+  }
+
+  func openDataset(id: String, validateContext: @escaping () throws -> Void) async throws {
+    try await openDataset(id: id, validateContext: validateContext, didBegin: {})
+  }
+
+  func openDataset(id: String, validateContext: @escaping () throws -> Void, didBegin: @escaping () throws -> Void) async throws {
+    try validateContext()
     if session.runtimeState.activeDataset?.uniqueId == id, applicationState().rendererReady {
       session.runtimeState.useDeterministicAutomationState()
+      try didBegin()
       return
     }
-    try await session.performAction(.openDataset(id), source: .mcp) { try await datasetOpener(id) }
+    try await session.performAction(.openDataset(id), source: .mcp) { try await datasetOpener(id, validateContext, didBegin) }
   }
 
   func closeDataset() async throws {

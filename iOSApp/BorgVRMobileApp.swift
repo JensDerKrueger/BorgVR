@@ -199,8 +199,8 @@ struct BorgVRMobileApp: App {
       datasetListProvider: {
         try await loadMCPDatasetRecords().map(\.catalogEntry)
       },
-      datasetOpener: { id in
-        try await openMCPDataset(id: id)
+      datasetOpener: { id, validate, didBegin in
+        try await openMCPDataset(id: id, validateContext: validate, didBegin: didBegin)
       },
       datasetCloser: {
         closeMCPDataset()
@@ -208,11 +208,14 @@ struct BorgVRMobileApp: App {
     )
     mcpController.configure(commandService: service, logger: appModel.logger)
     voiceAgent.configure(service: service) {
-      guard case .rendering(let dataset, let requestID) = appModel.datasetSessionState,
-            !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
-            !appModel.volumeBrush.isWaitingForSharedState else { return nil }
-      return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
-                               editStateID: appModel.volumeBrush.activeState?.id)
+      switch appModel.datasetSessionState {
+        case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
+          guard !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
+                !appModel.volumeBrush.isWaitingForSharedState else { return nil }
+          return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
+                                   editStateID: appModel.volumeBrush.activeState?.id)
+        default: return nil
+      }
     }
     applyMCPConfiguration()
   }
@@ -231,8 +234,10 @@ struct BorgVRMobileApp: App {
   }
 
   @MainActor
-  private func openMCPDataset(id: String) async throws {
+  private func openMCPDataset(id: String, validateContext: @escaping () throws -> Void,
+                              didBegin: @escaping () throws -> Void) async throws {
     let records = try await loadMCPDatasetRecords()
+    try validateContext()
     guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
       throw BorgVRMCPCommandError.datasetNotFound(id)
     }
@@ -263,8 +268,10 @@ struct BorgVRMobileApp: App {
     try await appModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
       datasetURL: entry.editStorageURL(directoryURL: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first),
       interactive: false, restoreLastSelection: false)
+    try validateContext()
     appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true,
                          automaticallyLoadState: false)
+    try didBegin()
     sharePlay.datasetOpened()
   }
 

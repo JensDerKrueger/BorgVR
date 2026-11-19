@@ -179,7 +179,8 @@ are rejected, not delivered to the model. On dataset close, disconnect the agent
 New clients send `application_session:true` in `hello` and require the same flag in `ready`.
 Only this negotiated mode permits `dataset_id:null`; the property itself is still required.
 It represents the start menu or another context without a render-ready dataset, never a
-synthetic dataset ID. Both sides filter the native catalog to `get_application_state` in
+synthetic dataset ID. Both sides filter the native catalog to `get_application_state`, `search_datasets`
+and, when explicitly negotiated, `open_dataset` in
 this state. Text/speech interaction does not require a renderer or enable microphone recording.
 
 When **idle**, send a new `context_id`, the nullable dataset ID and the complete, current
@@ -198,6 +199,40 @@ conversation and assistant window survive this disconnect, but server-side conte
 fresh on the next explicit request. A server rejects an in-flight `context_changed` in app
 mode. Legacy sessions retain their original dataset-bound behavior. Existing clients can
 connect to the new server; app-wide clients require a server implementing this extension.
+
+## Catalog and requested dataset opening
+
+`search_datasets` accepts an optional query (maximum 256 characters, up to twelve AND-linked
+terms), limit (1...20) and opaque cursor (maximum 128 characters). It matches case/accent-insensitive
+description and bounded metadata/provenance text, not voxel contents. Results contain IDs,
+descriptions, up to three short evidence excerpts, metadata availability, source kinds and
+pagination. URLs, paths and recognizable secrets are redacted from text. Source addresses,
+credentials and raw errors are not exposed. `coverage: available_catalog_metadata_only`
+explicitly does not assert that configured remote sources were reachable. Cursors refer to
+a stable five-minute result snapshot; at most two snapshots and 512 cursors are retained.
+
+New clients additionally negotiate `dataset_opening:true` in hello/ready. Both sides allow
+opening only an ID actually returned by a search within five minutes, and require a current
+state read first. Search alone is not permission to open; the model must obtain selection
+intent from the user and ask about ambiguous choices. At most one opening is permitted per
+request. App guards are rechecked after asynchronous preparation, before replacing the dataset.
+
+For an authorized open call only, the native `tool_result` uses the **old** dataset/context IDs
+for correlation and adds `dataset_transition: {dataset_id, context_id, tools}`. The result
+must confirm `rendererReady:true` and `dataset.id` matching the requested target. The native
+adapter waits for the specific opening identity to become ready; a foreign switch cancels
+continuation. Opening takes at most 300 seconds, with 330-second transport guards (search: 75
+seconds, including the underlying 60-second catalog deadline), also bounded by the request budget.
+Cancellation does not undo an already started load or automatically retry it.
+
+The server validates the target/new context/catalog and acknowledges with `context_updated`
+before any new call. A new catalog is only published after this acknowledgement. The old
+model run's remaining tool plan, including other batched calls, is discarded. Planning resumes
+within the original request and usage/deadline budget, using bounded historical text and
+verified operation receipts, never old images or executable calls. The rebuilt agent must
+read fresh application state before visualization changes. Unknown IDs, unexpected transition
+receipts, stale results and unnegotiated transitions are rejected. Ordinary user-driven context
+changes retain the stop/reconnect rules above.
 
 ## Collaborative editing extension
 

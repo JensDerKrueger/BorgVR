@@ -1,5 +1,44 @@
 [
   {
+    "description" : "Search available catalog metadata, not image contents. All whitespace-separated terms must match; case and accents are ignored. Use translated terms\/synonyms in separate searches as needed. Empty query lists candidates. Results include bounded evidence and opaque five-minute pagination cursors; do not invent IDs. Source completeness is not verified.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "cursor" : {
+          "maxLength" : 128,
+          "type" : "string"
+        },
+        "limit" : {
+          "maximum" : 20,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "query" : {
+          "maxLength" : 256,
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "search_datasets"
+  },
+  {
+    "description" : "Open a dataset from the catalog by its stable ID.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "open_dataset"
+  },
+  {
     "description" : "Return the active dataset and visualization state.",
     "inputSchema" : {
       "additionalProperties" : false,

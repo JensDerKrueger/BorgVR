@@ -5,7 +5,7 @@
 Development reference: [capability inventory and gaps](CAPABILITIES.md) and
 [application-wide assistant plan](CAPABILITY_PLAN.md), currently in German. The inventory
 distinguishes app Commands, MCP tools and tools actually allowed for the agent. Start-menu
-assistance is available; topic search, import and fusion remain planned, not enabled by these documents.
+assistance, bounded metadata search and opening a selected match are available; import and fusion remain planned.
 The static audit requires a complete repository checkout and Python 3.10 or newer; it
 does not contact the GPU server or need a running app.
 
@@ -384,10 +384,14 @@ as described in the next section.
    contents as the access token.
 4. Run the server test in Settings. No dataset needs to be open.
 5. Choose **AI Assistant** in the start menu or render controls. No dataset needs to be open.
-   Without a dataset, the assistant can chat and read application state; catalog search and
-   import/fusion jobs are not yet exposed. Opening or closing a dataset keeps the assistant
+   Without a dataset, the assistant can chat, read application state, search metadata and open a chosen match.
+   For example: “Which datasets about bones do we have?” followed by “Open the second match”.
+   Search uses bounded description, metadata and provenance text, not voxel contents; translated
+   keywords can help and unreachable sources remain an uncertainty. Import/fusion jobs are not yet exposed.
+   Opening or closing a dataset keeps the assistant
    window and conversation visible. An idle connection updates its dataset context; active
-   work is stopped without replaying commands. Type a request or
+   work is stopped on an unrelated switch without replaying commands. A requested opening waits
+   for the renderer, negotiates new tools, reads fresh state and continues unfinished work. Type a request or
    speak using the microphone.
 
 **Never copy `server.key` or the internal `vllm_token` to devices.** The client token is

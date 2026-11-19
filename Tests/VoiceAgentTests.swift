@@ -70,6 +70,27 @@ struct VoiceAgentTests {
     app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
     let session = ScreenBorgVRSession.screen(appModel: app, renderingParameters: parameters, appSettings: appSettings)
     let service = BorgVRScreenCommandService(session: session)
+    var boneMetadata = BorgVRMCPDatasetMetadata(metadata)
+    boneMetadata.longDescription = "Synthetic bone and skull test volume"
+    boneMetadata.meta = "Knochen https://private.example/?token=secret /Users/private/scan.data"
+    boneMetadata.provenance = [.init("Donated test bones")]
+    let bone = BorgVRMCPDatasetCatalogEntry(id: entry.uniqueId, description: "Bone test", metadata: boneMetadata,
+      metadataError: nil, sources: [.init(kind: "remote", address: "private.example", port: 9999, passwordProtected: true)])
+    let secondBone = BorgVRMCPDatasetCatalogEntry(id: "second-bone", description: "Bone second", metadata: boneMetadata,
+      metadataError: nil, sources: [])
+    let missing = BorgVRMCPDatasetCatalogEntry(id: "missing", description: "Unknown", metadata: nil,
+      metadataError: "Private /Users/secret", sources: [])
+    let search = BorgVRDatasetSearch()
+    let firstPage = try await search.search(query: "BONE", limit: 1, cursor: nil) { [bone, secondBone, missing] }
+    try expect(firstPage["totalMatches"] as? Int == 2 && firstPage["metadataUnavailableCount"] as? Int == 1,
+               "Metadata search counted the wrong matches or hid missing metadata")
+    let cursor = firstPage["nextCursor"] as! String
+    let nextPage = try await search.search(query: "BONE", limit: 1, cursor: cursor) { throw Failure.failed("Reloaded a paginated snapshot") }
+    try expect(nextPage["hasMore"] as? Bool == false, "Search pagination did not terminate")
+    let safeResult = try await search.search(query: "Knöchen", limit: 20, cursor: nil) { [bone] }
+    let safeJSON = try VoiceAgentPolicy.encoded(safeResult)
+    try expect(!safeJSON.contains("private.example") && !safeJSON.contains("/Users/") && !safeJSON.contains("token=secret") &&
+               safeResult["totalMatches"] as? Int == 1, "Search leaked connection data or failed accent-insensitive matching")
     let router = BorgVRMCPToolRouter(commandService: service)
     var commandEvents: [BorgVRCommandEvent] = []
     let commandObservation = session.commandEvents.sink { commandEvents.append($0) }
@@ -208,6 +229,80 @@ struct VoiceAgentTests {
                emptyApp.activeDataset == nil && !emptyApp.rendererHasActiveDataset && !startAgent.speech.isRecording,
                "Startup assistant required a previously initialized renderer or started listening")
     startAgent.cancel()
+    var openCount = 0
+    var simulateReady = true
+    var waitBeforeOpen = false
+    var preflightStarted = false
+    let catalogService = BorgVRScreenCommandService(session: emptySession, datasetListProvider: { [bone] },
+      datasetOpener: { id, validate, didBegin in
+        try validate()
+        if waitBeforeOpen {
+          preflightStarted = true
+          try await Task.sleep(for: .milliseconds(300))
+          try validate()
+        }
+        openCount += 1
+        emptyApp.openDataset(entry, automaticallyLoadState: false)
+        try didBegin()
+        guard case .opening(_, let request) = emptyApp.datasetSessionState else { fatalError() }
+        if simulateReady {
+          emptyApp.prepareDatasetRenderer(key: emptyApp.activeDatasetRenderKey, metadata: metadata, requestID: request)
+          _ = emptyApp.markRenderedDataset(key: emptyApp.activeDatasetRenderKey, requestID: request)
+        }
+      })
+    let searchToolResult = try await BorgVRMCPToolRouter(commandService: catalogService)
+      .callTool(name: "search_datasets", arguments: ["query": "bone"])
+    let searchText = (searchToolResult["content"] as! [[String: Any]])[0]["text"] as! String
+    let searchTextObject = try VoiceAgentPolicy.decode(searchText)
+    try expect(searchTextObject["totalMatches"] as? Int == 1,
+               "MCP clients without structuredContent did not receive the search results")
+    let catalogAgent = VoiceAgentController(settings: settings)
+    catalogAgent.configure(service: catalogService) {
+      switch emptyApp.datasetSessionState {
+        case .opening(let dataset, let request), .rendering(let dataset, let request):
+          return .init(datasetID: dataset.uniqueId, openingID: request, editStateID: nil)
+        default: return nil
+      }
+    }
+    let catalogObservation = emptyApp.$datasetSessionState.sink { _ in
+      Task { @MainActor in catalogAgent.invalidateContext() }
+    }
+    defer { catalogObservation.cancel() }
+    await catalogAgent.submit("catalog-search")
+    try await wait { !catalogAgent.busy }
+    try expect(catalogAgent.errorText == nil && openCount == 0 && emptyApp.activeDataset == nil,
+               "Searching opened a dataset or failed")
+    await catalogAgent.submit("catalog-open")
+    try await wait { !catalogAgent.busy }
+    try expect(catalogAgent.errorText == nil && openCount == 1 && emptyApp.rendererHasActiveDataset &&
+               catalogAgent.messages.last?.text == "Catalog dataset opened and fresh state verified.",
+               "Planned opening failed or was repeated: \(catalogAgent.errorText ?? "")")
+    catalogAgent.newConversation()
+    emptyApp.closeDataset(destination: .start)
+    simulateReady = false
+    await Task.yield()
+    await catalogAgent.submit("catalog-open-wait")
+    try await wait { openCount == 2 }
+    try expect(catalogAgent.busy && !emptyApp.rendererHasActiveDataset, "Opening claimed success before the renderer was ready")
+    emptyApp.closeDataset(destination: .start)
+    catalogAgent.invalidateContext()
+    try expect(!catalogAgent.busy && catalogAgent.connectionState == .disconnected,
+               "Manual close during planned opening did not stop the agent")
+    try await Task.sleep(for: .milliseconds(100))
+    try expect(openCount == 2, "Interrupted opening was automatically replayed")
+    catalogObservation.cancel()
+    catalogAgent.newConversation()
+    waitBeforeOpen = true
+    await catalogAgent.submit("catalog-open-wait")
+    try await wait { preflightStarted }
+    emptyApp.openDataset(entry, automaticallyLoadState: false)
+    guard case .opening(_, let manualOpening) = emptyApp.datasetSessionState else { fatalError() }
+    // Deliberately omit invalidateContext: the function-level preflight must also protect this race.
+    try await wait { !catalogAgent.busy }
+    try expect(openCount == 2 && catalogAgent.connectionState == .disconnected,
+               "A delayed agent opener replaced the user's manual selection")
+    guard case .opening(_, let retainedOpening) = emptyApp.datasetSessionState else { fatalError() }
+    try expect(manualOpening == retainedOpening, "Manual opening identity was overwritten")
     let agent = VoiceAgentController(settings: settings)
     var context: VoiceAgentContext? = .init(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
     agent.configure(service: service) { context }

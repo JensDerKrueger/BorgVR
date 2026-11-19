@@ -59,7 +59,8 @@ struct VoiceAgentPolicyTests {
       _ = try ledger.begin(id: "long-\(index)", signature: "state")
       try ledger.finish(id: "long-\(index)", reply: "ok")
     }
-    try check(!VoiceAgentPolicy.allowed.contains("open_dataset") && !VoiceAgentPolicy.allowed.contains("edit_volume") &&
+    try check(VoiceAgentPolicy.allowed.contains("open_dataset") && VoiceAgentPolicy.reads.contains("search_datasets") &&
+              !VoiceAgentPolicy.allowed.contains("edit_volume") &&
               !VoiceAgentPolicy.allowed.contains("load_settings"), "Agent gained unsafe capabilities")
     try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: false, completionUncertain: false) == .contextLimit,
               "Context overflow without a mutation was misreported")

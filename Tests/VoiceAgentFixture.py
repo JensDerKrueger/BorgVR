@@ -55,7 +55,26 @@ async def model(messages, info):
     user = next((part.content for message in messages for part in message.parts
                  if isinstance(part, UserPromptPart) and isinstance(part.content, str)
                  and not part.content.startswith(SUMMARY_MARKER)), "")
-    if user == "application-state":
+    opening_receipt = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
+                          '"opening_completed":true' in str(part.content)
+                          for message in messages for part in message.parts)
+    if user == "catalog-search":
+        steps = [("get_application_state", {}), ("search_datasets", {"query": "bone"})]
+        if len(returned) >= 2:
+            assert len(returned[-1].content["matches"]) == 1
+            return ModelResponse(parts=[TextPart("One bone dataset found; not opened.")])
+    elif user in {"catalog-open", "catalog-open-wait"}:
+        if opening_receipt:
+            if returned:
+                assert returned[-1].content["rendererReady"] is True
+                return ModelResponse(parts=[TextPart("Catalog dataset opened and fresh state verified.")])
+            steps = [("get_application_state", {})]
+        else:
+            steps = [("get_application_state", {}), ("search_datasets", {"query": "bone"})]
+            if len(returned) >= 2:
+                target = returned[-1].content["matches"][0]["id"]
+                steps.append(("open_dataset", {"id": target}))
+    elif user == "application-state":
         if not returned:
             return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="app-state")])
         state = returned[-1].content

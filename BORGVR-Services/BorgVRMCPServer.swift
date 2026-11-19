@@ -494,11 +494,13 @@ final class BorgVRMCPServer: @unchecked Sendable {
 /// Transport-independent command catalog and dispatch, shared by MCP and the voice agent.
 final class BorgVRMCPToolRouter {
   private weak var commandService: (any BorgVRMCPCommandService)?
+  @MainActor private lazy var datasetSearch = BorgVRDatasetSearch()
 
   init(commandService: any BorgVRMCPCommandService) { self.commandService = commandService }
 
   @MainActor
-  func callTool(name: String, arguments: [String: Any], validateContext: (() throws -> Void)? = nil) async throws -> [String: Any] {
+  func callTool(name: String, arguments: [String: Any], validateContext: (() throws -> Void)? = nil,
+                datasetDidBegin: (() throws -> Void)? = nil) async throws -> [String: Any] {
     try validateContext?()
     guard let service = commandService else {
       throw BorgVRMCPCommandError.rendererUnavailable
@@ -507,8 +509,28 @@ final class BorgVRMCPToolRouter {
     switch name {
       case "list_datasets":
         return structuredToolResult(try await service.listDatasets())
+      case "search_datasets":
+        guard Set(arguments.keys).isSubset(of: ["query", "limit", "cursor"]) else {
+          throw BorgVRMCPCommandError.invalidArgument("Use only query, limit and cursor for dataset search.")
+        }
+        let limit = try arguments["limit"].map { raw -> Int in
+          let value = try BorgVRVolumeEditingArguments.number(raw)
+          guard value.rounded() == value, (1...20).contains(value) else {
+            throw BorgVRMCPCommandError.invalidArgument("limit must be an integer in 1...20.")
+          }
+          return Int(value)
+        } ?? 20
+        let result = try await datasetSearch.search(query: try optionalString("query", in: arguments) ?? "",
+          limit: limit,
+          cursor: try optionalString("cursor", in: arguments), load: { try await service.listDatasets() })
+        try validateContext?()
+        let text = String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self)
+        return ["structuredContent": result, "content": [["type": "text", "text": text]]]
       case "open_dataset":
-        try await service.openDataset(id: try string("id", in: arguments))
+        try await service.openDataset(id: try string("id", in: arguments), validateContext: {
+          try Task.checkCancellation()
+          try validateContext?()
+        }, didBegin: { try datasetDidBegin?() })
         return structuredToolResult(service.applicationState())
       case "close_dataset":
         try await service.closeDataset()
@@ -922,6 +944,10 @@ final class BorgVRMCPToolRouter {
         "list_datasets",
         "List available datasets with their complete volume metadata and known sources."
       ),
+      tool("search_datasets", "Search available catalog metadata, not image contents. All whitespace-separated terms must match; case and accents are ignored. Use translated terms/synonyms in separate searches as needed. Empty query lists candidates. Results include bounded evidence and opaque five-minute pagination cursors; do not invent IDs. Source completeness is not verified.",
+        properties: ["query": ["type": "string", "maxLength": 256],
+                     "limit": ["type": "integer", "minimum": 1, "maximum": 20],
+                     "cursor": ["type": "string", "maxLength": 128]]),
       tool(
         "open_dataset",
         "Open a dataset from the catalog by its stable ID.",

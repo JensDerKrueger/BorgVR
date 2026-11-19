@@ -518,6 +518,9 @@ protocol BorgVRMCPCommandService: AnyObject {
   func activateVolumeEditing()
   func listDatasets() async throws -> [BorgVRMCPDatasetCatalogEntry]
   func openDataset(id: String) async throws
+  func openDataset(id: String, validateContext: @escaping () throws -> Void) async throws
+  func openDataset(id: String, validateContext: @escaping () throws -> Void,
+                   didBegin: @escaping () throws -> Void) async throws
   func closeDataset() async throws
   func applicationState() -> BorgVRMCPApplicationState
   func setRenderMode(_ mode: String) throws
@@ -567,6 +570,15 @@ protocol BorgVRMCPCommandService: AnyObject {
 }
 
 extension BorgVRMCPCommandService {
+  func openDataset(id: String, validateContext: @escaping () throws -> Void,
+                   didBegin: @escaping () throws -> Void) async throws {
+    try await openDataset(id: id, validateContext: validateContext)
+    try didBegin()
+  }
+  func openDataset(id: String, validateContext: @escaping () throws -> Void) async throws {
+    try validateContext()
+    try await openDataset(id: id)
+  }
   var commandExecutor: (any BorgVRCommandExecuting)? { nil }
 
   func replayCommandRecording(_ data: Data) async throws {

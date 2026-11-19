@@ -8,6 +8,7 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   private let router: BorgVRMCPToolRouter
   private let contextProvider: () -> VoiceAgentContext?
   private let origin = BorgVRCommandSource.controller(UUID().uuidString)
+  private var searchResults: [String: Date] = [:]
 
   init(service: any BorgVRMCPCommandService, context: @escaping () -> VoiceAgentContext?) {
     self.service = service
@@ -15,7 +16,8 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
     self.contextProvider = context
   }
 
-  var context: VoiceAgentContext? { contextProvider() }
+  var applicationDatasetContext: VoiceAgentContext? { contextProvider() }
+  var context: VoiceAgentContext? { rendererReady ? contextProvider() : nil }
   var rendererReady: Bool { service.applicationState().rendererReady }
   var datasetID: String? { service.applicationState().dataset?.id }
   var hasTransferFunctions: Bool { service.transferFunctionCount > 0 }
@@ -41,8 +43,48 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   }
 
   func executeTool(name: String, arguments: [String: Any], validateContext: @escaping () throws -> Void) async throws -> [String: Any] {
-    try await BorgVRCommandExecutionContext.$originOverride.withValue(origin) {
+    let result = try await BorgVRCommandExecutionContext.$originOverride.withValue(origin) {
       try await router.callTool(name: name, arguments: arguments, validateContext: validateContext)
+    }
+    if name == "search_datasets", let payload = result["structuredContent"] as? [String: Any],
+       let matches = payload["matches"] as? [[String: Any]] {
+      searchResults = searchResults.filter { $0.value > Date() }
+      for match in matches {
+        if let id = match["id"] as? String {
+          if searchResults.count >= 2000, let oldest = searchResults.min(by: { $0.value < $1.value })?.key {
+            searchResults.removeValue(forKey: oldest)
+          }
+          searchResults[id] = Date().addingTimeInterval(300)
+        }
+      }
+    }
+    return result
+  }
+
+  func openDataset(id: String, validateContext: @escaping () throws -> Void,
+                   didBegin: @escaping (VoiceAgentContext) throws -> Void) async throws -> [String: Any] {
+    guard let expiry = searchResults[id], expiry > Date() else {
+      return ["structuredContent": ["ok": false, "not_applied": true, "code": "search_required",
+        "note": "Search the catalog again and use an ID returned to this client within five minutes."]]
+    }
+    var expected: VoiceAgentContext?
+    _ = try await BorgVRCommandExecutionContext.$originOverride.withValue(origin) {
+      try await router.callTool(name: "open_dataset", arguments: ["id": id], validateContext: validateContext,
+        datasetDidBegin: { [self] in
+          guard let opened = applicationDatasetContext, opened.datasetID == id else { throw VoiceAgentError.contextChanged }
+          try didBegin(opened)
+          expected = opened
+        })
+    }
+    guard let expected else { throw VoiceAgentError.contextChanged }
+    let deadline = ContinuousClock.now + .seconds(300)
+    while true {
+      try Task.checkCancellation()
+      try validateContext()
+      guard applicationDatasetContext == expected else { throw VoiceAgentError.contextChanged }
+      if context == expected { return ["structuredContent": try stateSnapshot()] }
+      guard ContinuousClock.now < deadline else { throw VoiceAgentError.timedOut }
+      try await Task.sleep(for: .milliseconds(100))
     }
   }
 

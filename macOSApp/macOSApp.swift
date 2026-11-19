@@ -245,11 +245,14 @@ struct macOSApp: App {
           )
           mcpController.configure(commandService: commandService, logger: appModel.logger)
           voiceAgent.configure(service: commandService) {
-            guard case .rendering(let dataset, let requestID) = appModel.datasetSessionState,
-                  !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
-                  !appModel.volumeBrush.isWaitingForSharedState else { return nil }
-            return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
-                                     editStateID: appModel.volumeBrush.activeState?.id)
+            switch appModel.datasetSessionState {
+              case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
+                guard !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
+                      !appModel.volumeBrush.isWaitingForSharedState else { return nil }
+                return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
+                                         editStateID: appModel.volumeBrush.activeState?.id)
+              default: return nil
+            }
           }
           applyMCPConfiguration()
         }
@@ -436,8 +439,8 @@ struct macOSApp: App {
       datasetListProvider: {
         try await loadMCPDatasetRecords().map(\.catalogEntry)
       },
-      datasetOpener: { id in
-        try await openMCPDataset(id: id)
+      datasetOpener: { id, validate, didBegin in
+        try await openMCPDataset(id: id, validateContext: validate, didBegin: didBegin)
       },
       settingsStoreProvider: {
         appSettings.settingsStore(overrides: storedAppModel.settingsArchiveEntries)
@@ -461,8 +464,10 @@ struct macOSApp: App {
   }
 
   @MainActor
-  private func openMCPDataset(id: String) async throws {
+  private func openMCPDataset(id: String, validateContext: @escaping () throws -> Void,
+                              didBegin: @escaping () throws -> Void) async throws {
     let records = try await loadMCPDatasetRecords()
+    try validateContext()
     guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
       throw BorgVRMCPCommandError.datasetNotFound(id)
     }
@@ -495,8 +500,10 @@ struct macOSApp: App {
     try await appModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
       datasetURL: entry.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()),
       interactive: false, restoreLastSelection: false)
+    try validateContext()
     appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true,
                          automaticallyLoadState: false)
+    try didBegin()
     docking.resetForDatasetClose()
     sharePlay.datasetOpened()
   }

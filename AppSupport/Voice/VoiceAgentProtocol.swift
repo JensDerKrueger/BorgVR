@@ -83,14 +83,15 @@ enum VoiceAgentPolicy {
   static let maximumFrameBytes = 4 * 1024 * 1024
   static let maximumResultBytes = 256 * 1024
   static let allowed: Set<String> = [
+    "search_datasets", "open_dataset",
     "get_application_state", "get_transfer_function", "get_background", "set_render_mode",
     "set_transform", "rotate_view", "set_iso_value", "set_clipping", "set_lighting",
     "set_background", "set_transfer_function", "set_bounding_box", "set_screen_projection",
     "wait_until_rendered", "capture_screenshot"
   ]
-  static let reads: Set<String> = ["get_application_state", "get_transfer_function", "get_background",
+  static let reads: Set<String> = ["search_datasets", "get_application_state", "get_transfer_function", "get_background",
                                     "wait_until_rendered", "capture_screenshot"]
-  static let applicationTools: Set<String> = ["get_application_state"]
+  static let applicationTools: Set<String> = ["get_application_state", "search_datasets", "open_dataset"]
 
   static func catalog(_ definitions: [[String: Any]], vision: Bool, transferFunctions: Bool,
                       images: Bool, datasetReady: Bool = true) -> [[String: Any]] {

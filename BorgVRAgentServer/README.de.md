@@ -4,8 +4,8 @@
 
 Für die Weiterentwicklung: [Funktionskatalog und Lücken](CAPABILITIES.md) sowie
 [Plan für den appweiten Assistenten](CAPABILITY_PLAN.md). Der Katalog unterscheidet
-App-Commands, MCP-Werkzeuge und tatsächlich erlaubte Agentenwerkzeuge. Die geplante
-Die Nutzung im Startmenü ist verfügbar; Themenabfragen, Import und Fusion sind noch nicht freigeschaltet.
+App-Commands, MCP-Werkzeuge und tatsächlich erlaubte Agentenwerkzeuge. Gespräche,
+Metadatensuche und gezieltes Öffnen sind im Startmenü verfügbar; Import und Fusion noch nicht.
 Der statische Abgleich benötigt einen vollständigen Repository-Checkout und Python
 3.10 oder neuer, weder GPU noch ai1.
 
@@ -397,9 +397,14 @@ stattdessen deren Vertrauenskette wie im folgenden Abschnitt beschrieben einrich
 4. Den Servertest in den Einstellungen ausführen. Dafür muss kein Datensatz geöffnet sein.
 5. **KI-Assistent** im Startmenü oder in den Render-Bedienelementen wählen. Ein geöffneter
    Datensatz ist nicht erforderlich. Ohne Datensatz kann der Assistent Gespräche führen und
-   den App-Zustand abfragen; Katalogsuche und Import-/Fusionsjobs sind noch nicht angebunden.
+   den App-Zustand abfragen, passende Metadatentreffer suchen und einen davon auf Wunsch öffnen.
+   Beispiel: „Welche Datensätze haben wir zu Knochen?“ und danach „Öffne den zweiten Treffer“.
+   Gesucht wird in Beschreibungen und begrenzten Metadaten-/Provenance-Texten, nicht im Bildinhalt.
+   Der Agent kann übersetzte Suchbegriffe versuchen; nicht erreichbare Quellen bleiben eine Unsicherheit.
+   Import-/Fusionsjobs sind noch nicht angebunden.
    Öffnen und Schließen eines Datensatzes lassen Assistentenfenster und Gespräch sichtbar.
-   Im Leerlauf wird der Kontext aktualisiert; laufende Arbeit wird ohne Befehlswiederholung gestoppt.
+   Beim ausdrücklich angeforderten Öffnen wartet der Assistent auf den Renderer und setzt den Auftrag
+   mit neuen Werkzeugen und frischer Zustandsabfrage fort. Ein fremder Wechsel stoppt laufende Arbeit.
    Eine Textanfrage eingeben oder über das Mikrofon sprechen.
 
 **Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel

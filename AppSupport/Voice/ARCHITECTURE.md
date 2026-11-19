@@ -55,8 +55,8 @@ Aktivierung in den Einstellungen, startet aber weder Mikrofonaufnahme noch einen
 
 Der Bridge-Kontext ist ohne Datensatz wirklich `nil`. Im ausgehandelten Protokollzusatz
 `application_session` wird `dataset_id: null` übertragen. Ohne renderbereiten Datensatz
-geben Client und Server nur `get_application_state` frei. Katalogsuche, Öffnen/Schließen
-und Import-/Fusionsjobs sind noch nachfolgende Ausbauschritte, keine implizite Freigabe.
+geben Client und Server `get_application_state`, `search_datasets` und `open_dataset` frei.
+Schließen und Import-/Fusionsjobs sind noch nachfolgende Ausbauschritte, keine implizite Freigabe.
 
 Bei einem Wechsel im Leerlauf werden Kontext-ID und Werkzeugkatalog neu abgeglichen.
 Die Verbindung und der sichtbare Gesprächsverlauf bleiben erhalten. Der Server übernimmt
@@ -65,8 +65,34 @@ alten Datensatzes entfallen. Ein neuer Auftrag muss den aktuellen Zustand neu le
 Bei laufendem Auftrag, noch ausstehendem Werkzeug, manueller Bearbeitung oder erneutem
 Wechsel während des Abgleichs wird stattdessen die Verbindung beendet. Fenster und
 Gesprächsverlauf bleiben bestehen; nur eine neue Nutzereingabe startet neue Arbeit.
-Alte Aufträge werden niemals automatisch fortgesetzt oder wiederholt. Ältere Server
+Alte Aufträge werden bei fremden Wechseln niemals automatisch fortgesetzt oder wiederholt. Ältere Server
 werden mit einem verständlichen Aktualisierungshinweis abgewiesen.
+
+## Katalog und geplantes Öffnen
+
+`BorgVRDatasetSearch` ist ein normaler, agentenunabhängiger Automatisierungsdienst hinter
+dem MCP-Router. Er verwendet die bestehenden begrenzten Katalogprovider und liefert bis zu
+20 Treffer mit kurzen Metadatenbelegen. Maximal zwei Ergebnissnapshots, 512 Cursor und fünf
+Minuten Lebensdauer begrenzen die Paginierung. URLs, Pfade und erkennbare Schlüsselwerte
+werden aus Auszügen entfernt; Quellenadressen und Zugangsdaten werden nicht ausgegeben.
+Nicht erreichbare Quellen sind kein Nachweis für fehlende Datensätze. Die Suche ist keine
+Bildanalyse oder semantische Vektorsuche; Synonyme und Übersetzungen plant der Agent.
+
+Nur der Bridge-Adapter kennt Katalog und Command-Service. Beide Agentenseiten merken sich
+höchstens 2000 tatsächlich gelieferte Treffer-IDs für fünf Minuten. `open_dataset` erfordert
+einen solchen Treffer, eine frische Zustandsabfrage und eine ausdrückliche Nutzerabsicht.
+Pro Auftrag ist höchstens ein Öffnen möglich. Der gemeinsame Service prüft den Kontext nach
+asynchronen Vorbereitungen und meldet den Öffnungsbeginn synchron mit seiner neuen Identität.
+Die Bridge wartet bis zu fünf Minuten auf den Renderer und kontrolliert dabei die Öffnungs-ID.
+Fremde Auswahl oder Abbruch stoppen die Fortsetzung, ohne bereits begonnene Änderungen
+automatisch zurückzunehmen. Der normale Command-/GSC-Pfad bleibt erhalten.
+
+Die ausgehandelte Erweiterung `dataset_opening` koppelt den Werkzeugbeleg an den neuen
+Kontext und Werkzeugkatalog. Erst die Serverbestätigung erlaubt neue Aufrufe. Der Server
+verwirft den alten Werkzeugplan einschließlich weiterer Aufrufe aus demselben Modellpaket,
+übernimmt nur historische Textauszüge und Ausführungsbelege und plant die unerledigten Teile
+des ursprünglichen Auftrags mit frischer Zustandsabfrage neu. Keine Agententypen gelangen
+in Katalog, Renderer, App-Modelle oder Command-Ausführung.
 
 ## Gemeinsame Bearbeitung
 

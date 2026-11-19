@@ -435,8 +435,8 @@ struct VisionApp: App {
       datasetListProvider: {
         try await loadMCPDatasetRecords().map(\.catalogEntry)
       },
-      datasetOpener: { id in
-        try await openMCPDataset(id: id)
+      datasetOpener: { id, validate, didBegin in
+        try await openMCPDataset(id: id, validateContext: validate, didBegin: didBegin)
       },
       datasetCloser: {
         closeMCPDataset()
@@ -444,11 +444,14 @@ struct VisionApp: App {
     )
     mcpController.configure(commandService: service, logger: runtimeAppModel.logger)
     voiceAgent.configure(service: service) {
-      guard case .rendering(let dataset, let requestID) = runtimeAppModel.datasetSessionState,
-            !runtimeAppModel.volumeBrush.isOpeningState, !runtimeAppModel.volumeBrush.isRestoringPersonalState,
-            !runtimeAppModel.volumeBrush.isWaitingForSharedState else { return nil }
-      return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
-                               editStateID: runtimeAppModel.volumeBrush.activeState?.id)
+      switch runtimeAppModel.datasetSessionState {
+        case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
+          guard !runtimeAppModel.volumeBrush.isOpeningState, !runtimeAppModel.volumeBrush.isRestoringPersonalState,
+                !runtimeAppModel.volumeBrush.isWaitingForSharedState else { return nil }
+          return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
+                                   editStateID: runtimeAppModel.volumeBrush.activeState?.id)
+        default: return nil
+      }
     }
     applyMCPConfiguration()
   }
@@ -467,10 +470,12 @@ struct VisionApp: App {
   }
 
   @MainActor
-  private func openMCPDataset(id: String) async throws {
+  private func openMCPDataset(id: String, validateContext: @escaping () throws -> Void,
+                              didBegin: @escaping () throws -> Void) async throws {
     let preparation = try runtimeAppModel.beginDatasetOpeningPreparation()
     defer { runtimeAppModel.finishDatasetOpeningPreparation(preparation) }
     let records = try await loadMCPDatasetRecords()
+    try validateContext()
     guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
       throw BorgVRMCPCommandError.datasetNotFound(id)
     }
@@ -507,11 +512,13 @@ struct VisionApp: App {
     }
     try await runtimeAppModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
       datasetURL: editURL, interactive: false, restoreLastSelection: false)
+    try validateContext()
     runtimeAppModel.startImmersiveSpace(
       dataset: entry,
       asGroupSessionHost: !sharedAppModel.isInGroupSession || runtimeAppModel.groupSessionHost,
       automaticallyLoadState: false
     )
+    try didBegin()
   }
 
   @MainActor
