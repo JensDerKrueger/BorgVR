@@ -107,6 +107,7 @@ class BORGVRRemoteDataManager {
 
   /// The underlying NWConnection for this manager.
   private let connection: NWConnection
+  private let connectionCancellation = RemoteRequestCancellation()
   /// Once transferred, the dataset owns the connection and the manager must no longer use it.
   private var connectionOwnershipTransferred = false
   /// The local list of datasets.
@@ -153,17 +154,18 @@ class BORGVRRemoteDataManager {
     self.connection = NWConnection(host: NWEndpoint.Host(host),
                                    port: NWEndpoint.Port(rawValue: port)!,
                                    using: .tcp)
+    connectionCancellation.register { [weak connection] in connection?.cancel() }
     logger?.dev("BORGVRRemoteDataManager initialized")
   }
 
   deinit {
     if !connectionOwnershipTransferred {
-      connection.cancel()
+      cancel()
     }
     logger?.dev("BORGVRRemoteDataManager deinitialized")
   }
 
-  func cancel() { connection.cancel() }
+  func cancel() { connectionCancellation.cancel() }
 
   /**
    Establishes a connection to the remote server with a timeout.
