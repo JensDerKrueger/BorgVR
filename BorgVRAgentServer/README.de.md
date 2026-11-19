@@ -269,6 +269,41 @@ und Parallelität bleiben bei späteren Modellwechseln erhalten. Zurück zu eine
 mit `sudo ./setup.sh model qwen35-4b --gpu 0 --tensor-parallel-size 1`.
 Mehrere GPUs werden derzeit nur für NVIDIA/CUDA unterstützt; ROCm bleibt bei einer Karte.
 
+#### Kompatibilitätsoptionen für die GPU-Kommunikation
+
+Falls ein Multi-GPU-Start bei der Kommunikation zwischen den Karten hängen bleibt,
+können zwei getrennte Workarounds aktiviert werden. Die Kombination hat auf einem Rechner
+mit zwei RTX PRO 5000 Blackwell den Start bis zum erfolgreichen Healthcheck ermöglicht;
+sie ist keine allgemeine Empfehlung für alle Blackwell-Systeme:
+
+```
+sudo ./setup.sh model qwen38-27b --gpu all --tensor-parallel-size 2 \
+  --nccl-p2p-disable true --disable-custom-all-reduce true
+```
+
+`--nccl-p2p-disable true` unterbindet direkte NCCL-GPU-Transfers; NCCL kann stattdessen
+Shared Memory verwenden. `--disable-custom-all-reduce true` deaktiviert zusätzlich
+vLLMs eigenen All-Reduce-Kernel. Beide GPUs teilen sich weiterhin das Modell. Der andere
+Übertragungsweg kann langsamer sein. Die Ursache im Treiber, der PCIe-Konfiguration oder
+der Laufzeit muss bei Bedarf separat untersucht werden; BIOS-Änderungen sind nicht nötig,
+um diese Optionen auszuprobieren.
+
+Beide Optionen akzeptieren nur `true` oder `false`, gelten auch für `install`, `init` und
+`configure` und sind standardmäßig `false`. Sie werden in `.env` gespeichert und bleiben
+bei Neustarts, Updates und Modellwechseln erhalten. Der NCCL-Schalter ist CUDA-spezifisch;
+vor einem Wechsel zu ROCm muss er auf `false` gesetzt werden. Die Optionen betreffen nur
+vLLM, nicht den Agenten oder den BorgVR-Client. Host, Port, Zertifikate und Schlüssel
+bleiben bei einem `model`-Aufruf unverändert. Zum Abschalten beide Werte ausdrücklich
+auf `false` setzen; `configure` speichert nur, `model` übernimmt die Änderung sofort.
+
+Nach einem manuellen Diagnoselauf mit `docker compose run --rm` zuerst diesen Container
+mit Ctrl+C beenden. Falls nötig, seine ID mit `sudo docker ps` bestimmen und ausschließlich
+den betreffenden `borgvr-ai-vllm-run-...`-Container mit `sudo docker stop --time 10 ID`
+stoppen. Erst dann den normalen Dienst mit obigem `model`-Befehl starten und
+`sudo ./setup.sh test` ausführen. Der Diagnosecontainer ersetzt den normalen Dienst nicht.
+Ein neues Agenten-Image ist für diese Optionen nicht nötig: `git pull --ff-only` aktualisiert
+die eingebundenen vLLM-Startdateien und die Compose-Konfiguration.
+
 `doctor`, die Installation und Multi-GPU-Updates prüfen Sichtbarkeit und eine kleine
 Speicherallokation auf jeder benötigten Karte. Zusätzlich prüft der vLLM-Starter die Anzahl
 sichtbarer GPUs, bevor Worker gestartet werden. vLLM verwendet lokale Prozesse (`mp`),

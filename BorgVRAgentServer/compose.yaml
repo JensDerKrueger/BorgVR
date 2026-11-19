@@ -23,6 +23,8 @@ services:
     environment:
       <<: *model-environment
       BORGVR_TENSOR_PARALLEL_SIZE: ${BORGVR_TENSOR_PARALLEL_SIZE:-1}
+      BORGVR_NCCL_P2P_DISABLE: ${BORGVR_NCCL_P2P_DISABLE:-false}
+      BORGVR_DISABLE_CUSTOM_ALL_REDUCE: ${BORGVR_DISABLE_CUSTOM_ALL_REDUCE:-false}
       HF_HOME: /cache/huggingface
       HF_HUB_DISABLE_TELEMETRY: "1"
       DO_NOT_TRACK: "1"

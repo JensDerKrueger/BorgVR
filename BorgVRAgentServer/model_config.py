@@ -87,6 +87,8 @@ class ModelConfig:
     eager: bool
     cpu_offload_gb: float
     tensor_parallel_size: int = 1
+    nccl_p2p_disable: bool = False
+    disable_custom_all_reduce: bool = False
 
     @classmethod
     def from_env(cls, env):
@@ -110,7 +112,9 @@ class ModelConfig:
                    number(get("MAX_SEQS"), 1, 16, True), number(get("MAX_OUTPUT_TOKENS"), 128, context - 1024, True),
                    number(get("GPU_MEMORY_FRACTION"), 0.05, 0.98), number(get("MIN_FREE_GIB"), 1, 1048576, True),
                    boolean(get("ENFORCE_EAGER")), number(get("CPU_OFFLOAD_GB"), 0, 4096),
-                   number(values.get("BORGVR_TENSOR_PARALLEL_SIZE", "1"), 1, 8, True))
+                   number(values.get("BORGVR_TENSOR_PARALLEL_SIZE", "1"), 1, 8, True),
+                   boolean(values.get("BORGVR_NCCL_P2P_DISABLE", "false")),
+                   boolean(values.get("BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "false")))
 
     def arguments(self):
         result = ["vllm", "serve", self.model, "--revision", self.revision,
@@ -122,6 +126,8 @@ class ModelConfig:
             result += ["--reasoning-parser", self.reasoning_parser]
         if self.tensor_parallel_size > 1:
             result += ["--distributed-executor-backend", "mp"]
+        if self.disable_custom_all_reduce:
+            result += ["--disable-custom-all-reduce"]
         if self.vision:
             result += ["--limit-mm-per-prompt", '{"image":2,"video":0}']
         if self.quantization != "auto":

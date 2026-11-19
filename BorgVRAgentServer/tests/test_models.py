@@ -69,6 +69,29 @@ def test_invalid_tensor_parallel_size_is_rejected(value):
         ModelConfig.from_env({"BORGVR_TENSOR_PARALLEL_SIZE": value})
 
 
+@pytest.mark.parametrize("key", ["BORGVR_NCCL_P2P_DISABLE", "BORGVR_DISABLE_CUSTOM_ALL_REDUCE"])
+@pytest.mark.parametrize("value", ["1", "yes", "TRUE", "", "$(id)"])
+def test_gpu_workarounds_require_strict_booleans(key, value):
+    with pytest.raises(ValueError):
+        ModelConfig.from_env({key: value})
+
+
+def test_gpu_workaround_defaults_and_compose_isolation(tmp_path):
+    config = ModelConfig.from_env({})
+    assert not config.nccl_p2p_disable and not config.disable_custom_all_reduce
+    assert "--disable-custom-all-reduce" not in config.arguments()
+    configure.create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
+    root = Path(__file__).resolve().parents[1]
+    services = yaml.safe_load((root / "compose.yaml").read_text())["services"]
+    for key in configure.GPU_RUNTIME_OPTIONS.values():
+        assert configure.read_value(key, tmp_path) == "false"
+        assert services["vllm"]["environment"][key] == "${" + key + ":-false}"
+        assert key not in services["agent"]["environment"]
+    (tmp_path / ".env").write_text("BORGVR_MODEL=Qwen/Qwen3.8-27B\n")
+    for key in configure.GPU_RUNTIME_OPTIONS.values():
+        assert configure.read_value(key, tmp_path) == "false"
+
+
 def test_parallel_hardware_selection_survives_model_switch_and_preserves_connection(tmp_path):
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
@@ -77,13 +100,18 @@ def test_parallel_hardware_selection_survives_model_switch_and_preserves_connect
     original = configure.read_configuration(tmp_path)
     tokens = {name: (tmp_path / "runtime/secrets" / name).read_bytes() for name in ("agent_token", "vllm_token")}
     certificate = (tmp_path / "runtime/tls/server.crt").read_bytes()
-    options = parser.parse_args(["--profile", "qwen38-27b", "--gpu", "all", "--tensor-parallel-size", "2"])
+    options = parser.parse_args(["--profile", "qwen38-27b", "--gpu", "all", "--tensor-parallel-size", "2",
+                                "--nccl-p2p-disable", "true", "--disable-custom-all-reduce", "true"])
     configure.write_configuration_changes(tmp_path, configure.inference_values(options, original))
     dual = configure.read_configuration(tmp_path)
     options = parser.parse_args(["--profile", "qwen35-4b"])
     configure.write_configuration_changes(tmp_path, configure.inference_values(options, dual))
     updated = configure.read_configuration(tmp_path)
     assert updated["BORGVR_GPU"] == "all" and updated["BORGVR_TENSOR_PARALLEL_SIZE"] == "2"
+    assert all(updated[key] == "true" for key in configure.GPU_RUNTIME_OPTIONS.values())
+    options = parser.parse_args(["--nccl-p2p-disable", "false", "--disable-custom-all-reduce", "false"])
+    changes = configure.inference_values(options, updated)
+    assert all(changes[key] == "false" for key in configure.GPU_RUNTIME_OPTIONS.values())
     for key in ("BORGVR_BIND_ADDRESS", "BORGVR_PORT", "BORGVR_UID", "BORGVR_GID"):
         assert updated[key] == original[key]
     assert (tmp_path / "runtime/tls/server.crt").read_bytes() == certificate
@@ -101,9 +129,13 @@ def test_parallelism_does_not_silently_expand_gpu_access(backend, gpu):
 
 
 @pytest.mark.parametrize("visible", [1, 2])
-def test_vllm_bootstrap_checks_gpu_count_before_starting_workers(monkeypatch, visible):
+@pytest.mark.parametrize("p2p,custom", [(False, False), (True, False), (False, True), (True, True)])
+def test_vllm_bootstrap_checks_gpu_count_before_starting_workers(monkeypatch, visible, p2p, custom):
     root = Path(__file__).resolve().parents[1]
     monkeypatch.setenv("BORGVR_TENSOR_PARALLEL_SIZE", "2")
+    monkeypatch.setenv("BORGVR_NCCL_P2P_DISABLE", str(p2p).lower())
+    monkeypatch.setenv("BORGVR_DISABLE_CUSTOM_ALL_REDUCE", str(custom).lower())
+    monkeypatch.delenv("NCCL_P2P_DISABLE", raising=False)
     monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(device_count=lambda: visible)))
     original_read = Path.read_text
     monkeypatch.setattr(Path, "read_text", lambda self, *args, **kwargs:
@@ -112,6 +144,10 @@ def test_vllm_bootstrap_checks_gpu_count_before_starting_workers(monkeypatch, vi
     class Executed(Exception):
         pass
     def execute(binary, args):
+        assert os.environ.get("NCCL_P2P_DISABLE") == ("1" if p2p else None)
+        assert ("--disable-custom-all-reduce" in args) == custom
+        assert os.environ["VLLM_API_KEY"] == "test-token"
+        assert "test-token" not in args
         calls.append((binary, args))
         raise Executed()
     monkeypatch.setattr(os, "execvp", execute)
@@ -123,6 +159,14 @@ def test_vllm_bootstrap_checks_gpu_count_before_starting_workers(monkeypatch, vi
         with pytest.raises(Executed):
             runpy.run_path(str(root / "vllm_start.py"), run_name="__main__")
         assert calls[0][1][calls[0][1].index("--tensor-parallel-size") + 1] == "2"
+
+
+def test_nccl_workaround_cannot_silently_follow_backend_switch_to_rocm():
+    parser = argparse.ArgumentParser()
+    configure.add_model_options(parser)
+    parser.add_argument("--agent-image")
+    with pytest.raises(ValueError, match="requires --backend cuda"):
+        configure.inference_values(parser.parse_args(["--backend", "rocm", "--nccl-p2p-disable", "true"]))
 
 
 @pytest.mark.parametrize("backend,image", [("cuda", CUDA_IMAGE), ("rocm", ROCM_IMAGE)])

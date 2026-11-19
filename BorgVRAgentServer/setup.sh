@@ -36,6 +36,9 @@ usage() {
     '                      CUDA also accepts all; WSL requires this explicit all-GPU access.' \
     '  --tensor-parallel-size N  Shard one model across N GPUs (1..8; default 1).' \
     '                      Multiple GPUs currently require --backend cuda --gpu all.' \
+    '  --nccl-p2p-disable true|false  Disable NCCL direct GPU transfers (default false).' \
+    '  --disable-custom-all-reduce true|false  Disable vLLM custom all-reduce (default false).' \
+    '                      Hardware workarounds persist across model changes.' \
     '  --backend cuda|rocm  Select NVIDIA CUDA or AMD ROCm (install/init/configure).' \
     '  --profile NAME      Model preset; list with: ./setup.sh profiles.' \
     '  --model REPO --model-revision REV --tool-parser NAME  Custom image-capable model.' \
@@ -59,7 +62,7 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
     install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up|_dev-agent-health) COMMAND="$1"; shift ;;
-    --gpu|--tensor-parallel-size|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
+    --gpu|--tensor-parallel-size|--nccl-p2p-disable|--disable-custom-all-reduce|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
     --yes|--remove-images|--remove-checkout|--files-only) UNINSTALL_ARGS+=("$1"); shift ;;

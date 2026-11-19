@@ -432,9 +432,11 @@ def test_dual_gpu_probe_checks_both_devices_and_rejects_missing_device(operation
 def test_model_switch_uses_all_gpu_overlay_and_retains_parallelism(operations):
     root, run = operations
     before = configure.read_configuration(root)
-    result, calls = run("model", "qwen38-27b", "--gpu", "all", "--tensor-parallel-size", "2")
+    result, calls = run("model", "qwen38-27b", "--gpu", "all", "--tensor-parallel-size", "2",
+                        "--nccl-p2p-disable", "true", "--disable-custom-all-reduce", "true")
     assert result.returncode == 0, result.stderr
     assert configure.read_value("BORGVR_TENSOR_PARALLEL_SIZE", root) == "2"
+    assert all(configure.read_value(key, root) == "true" for key in configure.GPU_RUNTIME_OPTIONS.values())
     args = [call["args"] for call in calls]
     assert any("--gpus" in call and call[call.index("--gpus") + 1] == "all" for call in args)
     assert any("up" in call and str(root / "compose.cuda-all.yaml") in call for call in args)
@@ -443,6 +445,30 @@ def test_model_switch_uses_all_gpu_overlay_and_retains_parallelism(operations):
     assert result.returncode == 0, result.stderr
     assert configure.read_value("BORGVR_GPU", root) == "all"
     assert configure.read_value("BORGVR_TENSOR_PARALLEL_SIZE", root) == "2"
+    assert all(configure.read_value(key, root) == "true" for key in configure.GPU_RUNTIME_OPTIONS.values())
+
+
+def test_install_accepts_gpu_workarounds_and_can_turn_them_off(operations):
+    root, run = operations
+    before = configure.read_configuration(root)
+    result, calls = run("install", "--nccl-p2p-disable", "true", "--disable-custom-all-reduce", "true")
+    assert result.returncode == 0, result.stderr
+    assert all(configure.read_value(key, root) == "true" for key in configure.GPU_RUNTIME_OPTIONS.values())
+    assert configure.read_value("BORGVR_BIND_ADDRESS", root) == before["BORGVR_BIND_ADDRESS"]
+    assert any("up" in call["args"] for call in calls)
+    result, _ = run("configure", "--nccl-p2p-disable", "false", "--disable-custom-all-reduce", "false")
+    assert result.returncode == 0, result.stderr
+    assert all(configure.read_value(key, root) == "false" for key in configure.GPU_RUNTIME_OPTIONS.values())
+
+
+@pytest.mark.parametrize("option", ["--nccl-p2p-disable", "--disable-custom-all-reduce"])
+def test_invalid_gpu_workaround_leaves_configuration_and_services_unchanged(operations, option):
+    root, run = operations
+    before = (root / ".env").read_bytes()
+    result, calls = run("configure", option, "yes")
+    assert result.returncode != 0
+    assert (root / ".env").read_bytes() == before
+    assert not any("up" in call["args"] for call in calls)
 
 
 @pytest.mark.parametrize("backend", ["cuda", "rocm"])

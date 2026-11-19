@@ -101,6 +101,10 @@ MODEL_OPTIONS = {
     "gpu-memory-fraction": "GPU_MEMORY_FRACTION", "min-free-gib": "MIN_FREE_GIB",
     "enforce-eager": "ENFORCE_EAGER", "cpu-offload-gb": "CPU_OFFLOAD_GB",
 }
+GPU_RUNTIME_OPTIONS = {
+    "nccl-p2p-disable": "BORGVR_NCCL_P2P_DISABLE",
+    "disable-custom-all-reduce": "BORGVR_DISABLE_CUSTOM_ALL_REDUCE",
+}
 
 
 def add_model_options(parser):
@@ -109,6 +113,8 @@ def add_model_options(parser):
     parser.add_argument("--vllm-image", type=image_reference)
     parser.add_argument("--gpu")
     parser.add_argument("--tensor-parallel-size")
+    for name in GPU_RUNTIME_OPTIONS:
+        parser.add_argument("--" + name, choices=("true", "false"))
     for name in MODEL_OPTIONS:
         parser.add_argument("--" + name)
 
@@ -130,6 +136,8 @@ def gpu_groups(root):
 
 def validate_model_gpu(values):
     config = ModelConfig.from_env(values)
+    if config.nccl_p2p_disable and values.get("BORGVR_BACKEND", "cuda") != "cuda":
+        raise ValueError("--nccl-p2p-disable true requires --backend cuda")
     if config.tensor_parallel_size > 1 and (values.get("BORGVR_BACKEND", "cuda") != "cuda" or values.get("BORGVR_GPU", "0") != "all"):
         raise ValueError("Multi-GPU inference currently requires --backend cuda --gpu all. Select --tensor-parallel-size 1 for a single GPU or ROCm.")
     return config
@@ -154,6 +162,12 @@ def inference_values(args, existing=None):
     if parallel is not None:
         values["BORGVR_TENSOR_PARALLEL_SIZE"] = parallel
     values.setdefault("BORGVR_TENSOR_PARALLEL_SIZE", "1")
+    # Hardware workarounds must survive model profile changes.
+    for name, key in GPU_RUNTIME_OPTIONS.items():
+        value = getattr(args, name.replace("-", "_"), None)
+        if value is not None:
+            values[key] = value
+        values.setdefault(key, "false")
     backend = args.backend or existing.get("BORGVR_BACKEND", "cuda")
     if backend not in ("cuda", "rocm"):
         raise ValueError("Backend must be cuda or rocm")
@@ -410,6 +424,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
         "BORGVR_VIDEO_GID": device_group("video"),
         "BORGVR_GPU": gpu,
         "BORGVR_TENSOR_PARALLEL_SIZE": "1",
+        **{key: "false" for key in GPU_RUNTIME_OPTIONS.values()},
         "BORGVR_CONTEXT_LENGTH": "16384",
         "BORGVR_GPU_MEMORY_FRACTION": "0.85",
         "BORGVR_UID": str(uid), "BORGVR_GID": str(gid),
@@ -427,7 +442,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
 
 
 def read_value(name, root=ROOT):
-    if not re.fullmatch(r"BORGVR_[A-Z_]+", name):
+    if not re.fullmatch(r"BORGVR_[A-Z][A-Z0-9_]*", name):
         raise ValueError("Invalid configuration key")
     configuration = read_configuration(root)
     for key, value in configuration.items():
@@ -440,7 +455,8 @@ def read_value(name, root=ROOT):
     defaults = {**profile_values(next((key for key, item in PROFILES.items()
                                        if item["MODEL"] == configuration.get("BORGVR_MODEL")), "qwen36-35b")),
                 "BORGVR_BACKEND": "cuda", "BORGVR_RENDER_GID": device_group("render"),
-                "BORGVR_VIDEO_GID": device_group("video"), "BORGVR_TENSOR_PARALLEL_SIZE": "1"}
+                "BORGVR_VIDEO_GID": device_group("video"), "BORGVR_TENSOR_PARALLEL_SIZE": "1",
+                **{key: "false" for key in GPU_RUNTIME_OPTIONS.values()}}
     if name in defaults:
         return defaults[name]
     raise ValueError("Missing configuration value")
