@@ -110,6 +110,9 @@ struct BorgVRMobileApp: App {
         .environmentObject(mcpController)
         .environmentObject(voiceAgent)
         .environmentObject(session)
+        .sheet(isPresented: $voiceAgent.isPresented) {
+          VoiceAgentView(agent: voiceAgent)
+        }
         .onAppear {
           settingsFiles.applySettings = { operation in try session.mutateSettings { try operation() } }
           presentSharePlayDisplayNameOnboardingIfNeeded()

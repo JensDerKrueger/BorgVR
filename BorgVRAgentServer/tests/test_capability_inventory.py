@@ -24,7 +24,7 @@ def test_checked_in_report_is_current_and_links_to_the_implementation_plan():
     assert report == audit.render(catalog, inventory)
     assert (audit.ROOT / "BorgVRAgentServer/CAPABILITY_PLAN.md").is_file()
     assert "CAPABILITY_PLAN.md" in report
-    assert "Noch kein natives Agentenwerkzeug ist ohne offenen Datensatz nutzbar" in report
+    assert "Ohne offenen Datensatz ist nur `get_application_state` freigegeben" in report
 
 
 @pytest.mark.parametrize("field,value", [("symbols", "BorgVRCommand.newOperation"),

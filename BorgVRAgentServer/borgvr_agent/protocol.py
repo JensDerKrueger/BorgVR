@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 MAX_RESULT_BYTES = 256 * 1024
@@ -25,6 +25,7 @@ ALLOWED_TOOLS = frozenset({
     "set_bounding_box", "set_screen_projection", "wait_until_rendered",
     "capture_screenshot",
 })
+APPLICATION_TOOLS = frozenset({"get_application_state"})
 
 
 class ProtocolError(ValueError):
@@ -49,12 +50,19 @@ class ExecutionLimits(Message):
 class Hello(Message):
     type: Literal["hello"]
     protocol: Literal[1]
-    dataset_id: str = Field(min_length=1, max_length=128)
+    dataset_id: str | None = Field(min_length=1, max_length=128)
+    application_session: bool = False
     context_id: str = Field(min_length=1, max_length=128)
     tools: list[ToolDefinition] = Field(max_length=32)
     execution_limits: ExecutionLimits | None = None
     collaboration: bool = False
     knowledge: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def require_dataset_for_legacy_session(self):
+        if self.dataset_id is None and not self.application_session:
+            raise ValueError("A dataset-free session requires application_session")
+        return self
 
 
 class UserMessage(Message):
@@ -67,7 +75,7 @@ class ToolResult(Message):
     type: Literal["tool_result"]
     request_id: str
     call_id: str
-    dataset_id: str
+    dataset_id: str | None
     context_id: str
     result: Any = None
     error: str | None = Field(default=None, max_length=1024)
@@ -105,8 +113,9 @@ class Cancel(Message):
 
 class ContextChanged(Message):
     type: Literal["context_changed"]
-    dataset_id: str = Field(min_length=1, max_length=128)
+    dataset_id: str | None = Field(min_length=1, max_length=128)
     context_id: str = Field(min_length=1, max_length=128)
+    tools: list[ToolDefinition] | None = Field(default=None, max_length=32)
 
 
 def json_bytes(value: Any) -> bytes:

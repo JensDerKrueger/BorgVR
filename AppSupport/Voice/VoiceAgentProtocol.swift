@@ -15,11 +15,13 @@ enum VoiceAgentError: LocalizedError, Equatable {
   case configuration, protocolViolation, contextChanged, timedOut, imageTooLarge
   case permissions, speechUnavailable, connection, commandFailed
   case contextLimit, changesAppliedContextLimit, changesAppliedVerificationFailed, completionUncertain
+  case serverUpdateRequired
 
   var errorDescription: String? {
     let key: String
     switch self {
       case .configuration: key = "Check the HTTPS server address, access token and certificate."
+      case .serverUpdateRequired: key = "Update the agent server to use the app-wide assistant."
       case .protocolViolation: key = "The agent sent an invalid or unsupported message. The connection was closed."
       case .contextChanged: key = "The dataset or edit state changed. Start a new conversation."
       case .timedOut: key = "The agent did not respond in time. Start a new conversation."
@@ -88,11 +90,13 @@ enum VoiceAgentPolicy {
   ]
   static let reads: Set<String> = ["get_application_state", "get_transfer_function", "get_background",
                                     "wait_until_rendered", "capture_screenshot"]
+  static let applicationTools: Set<String> = ["get_application_state"]
 
   static func catalog(_ definitions: [[String: Any]], vision: Bool, transferFunctions: Bool,
-                      images: Bool) -> [[String: Any]] {
+                      images: Bool, datasetReady: Bool = true) -> [[String: Any]] {
     definitions.compactMap { original in
       guard let name = original["name"] as? String, allowed.contains(name) else { return nil }
+      if !datasetReady && !applicationTools.contains(name) { return nil }
       if vision && ["set_background", "set_screen_projection", "get_background"].contains(name) { return nil }
       if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_render_mode",
                                 "set_iso_value", "set_lighting"].contains(name) { return nil }

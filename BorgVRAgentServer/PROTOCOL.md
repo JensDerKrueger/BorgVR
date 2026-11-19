@@ -162,7 +162,7 @@ With a pending tool, cancellation/deadline expiry yields `requires_reconnect:tru
 server refuses further requests in that session. This deliberately avoids uncertain repeated
 mutations. Inspect/reconcile the app state before starting a new session.
 
-When the renderer/dataset/edit-state context changes, generate a **new context ID even if
+For legacy dataset-bound sessions, when the renderer/dataset/edit-state context changes, generate a **new context ID even if
 the same dataset UUID is reopened** and send:
 
 ```json
@@ -173,6 +173,31 @@ This cancels active work and clears history. `context_updated` acknowledges the 
 If it cancelled a pending tool, the uncertain-session rule still requires reconnecting.
 Changed capabilities require a fresh connection/handshake. Stale/mismatched tool results
 are rejected, not delivered to the model. On dataset close, disconnect the agent entirely.
+
+## Application session extension
+
+New clients send `application_session:true` in `hello` and require the same flag in `ready`.
+Only this negotiated mode permits `dataset_id:null`; the property itself is still required.
+It represents the start menu or another context without a render-ready dataset, never a
+synthetic dataset ID. Both sides filter the native catalog to `get_application_state` in
+this state. Text/speech interaction does not require a renderer or enable microphone recording.
+
+When **idle**, send a new `context_id`, the nullable dataset ID and the complete, current
+`tools` array in `context_changed`. The server validates the catalog again and acknowledges
+with `context_updated`, `context_id` and the accepted `tools` names. The client waits for
+this acknowledgement before allowing requests. State-read receipts, screenshots, visual
+notes, collaboration state and pending rule proposals are cleared. The server retains at
+most eight bounded text excerpts as untrusted historical conversation, not current dataset
+evidence or instructions. Native tool calls/results and images are not retained. The next
+request must read fresh state before any mutation. Reopening the same dataset UUID still
+requires a new context ID and a new catalog.
+
+An active request, pending command, uncertain completion or overlapping transition instead
+requires disconnecting and negotiating a fresh session; no request is replayed. The visible
+conversation and assistant window survive this disconnect, but server-side context starts
+fresh on the next explicit request. A server rejects an in-flight `context_changed` in app
+mode. Legacy sessions retain their original dataset-bound behavior. Existing clients can
+connect to the new server; app-wide clients require a server implementing this extension.
 
 ## Collaborative editing extension
 
@@ -209,7 +234,7 @@ Before dispatch the client rejects outdated calls or calls during manual activit
 `result:{"ok":false,"not_applied":true,"code":"user_changed_view"}` and the current revision.
 Such a response never counts as a committed mutation. Results of already dispatched tools
 finish normally; stale images are not supplied as current evidence. Dataset closure/reopening
-still disconnects. A user-initiated edit may update the edit-state ID within the same dataset
+still disconnects during active work (idle app sessions use the extension above). A user-initiated edit may update the edit-state ID within the same dataset
 opening; an unrelated edit-state/context switch still invalidates the session.
 
 The server can use an internal `ask_collaboration_feedback` tool to ask what an intervention

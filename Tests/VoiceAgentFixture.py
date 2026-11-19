@@ -18,6 +18,7 @@ import uvicorn
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "BorgVRAgentServer"))
 from configure import create_configuration
 from borgvr_agent.app import Settings, create_app
+from borgvr_agent.context import SUMMARY_MARKER
 from model_config import ModelConfig
 
 root = Path(sys.argv[1])
@@ -46,10 +47,20 @@ threading.Thread(target=catalog.serve_forever, daemon=True).start()
 
 
 async def model(messages, info):
+    latest = next((i for i in reversed(range(len(messages))) if any(
+        isinstance(part, UserPromptPart) and isinstance(part.content, str) and
+        not part.content.startswith(SUMMARY_MARKER) for part in messages[i].parts)), 0)
+    messages = messages[latest:]
     returned = [part for message in messages for part in message.parts if isinstance(part, ToolReturnPart)]
     user = next((part.content for message in messages for part in message.parts
-                 if isinstance(part, UserPromptPart) and isinstance(part.content, str)), "")
-    if user == "collaborate":
+                 if isinstance(part, UserPromptPart) and isinstance(part.content, str)
+                 and not part.content.startswith(SUMMARY_MARKER)), "")
+    if user == "application-state":
+        if not returned:
+            return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="app-state")])
+        state = returned[-1].content
+        return ModelResponse(parts=[TextPart("Dataset ready." if state["rendererReady"] else "Start menu ready.")])
+    elif user == "collaborate":
         resumed = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
                       '"current_state":{' in str(part.content) for message in messages for part in message.parts)
         names = [part.tool_name for part in returned]

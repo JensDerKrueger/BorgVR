@@ -129,7 +129,7 @@ def render(catalog, inventory):
         "Generiert aus `capabilities.json` und den Quellcode-Registern mit `python3 audit_capabilities.py --write`.",
         "Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nachweis ausgeführter Tests.",
         "Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.",
-        "Das Agentengespräch erfordert aktuell einen geöffneten, renderbereiten Datensatz. **Noch kein natives Agentenwerkzeug ist ohne offenen Datensatz nutzbar.** Der lokale Verbindungstest ist davon unabhängig.", "",
+        "Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz ist nur `get_application_state` freigegeben.** Renderer-Werkzeuge erfordern einen bereiten Datensatz; Katalogsuche und Import-/Fusionsjobs sind noch nicht freigeschaltet.", "",
         f"Erfasst: **{len(ops)} Funktionsgruppen**, **{len(inventory['mcp'])} MCP-Werkzeuge**, "
         f"**{len(inventory['agent'])} maximal erlaubte native Agentenwerkzeuge**, "
         f"**{len(inventory['symbols'])} Command-/UI-Registereinträge**, **{len(inventory['gsc'])} unterschiedliche GSC-Namen**.", "",
@@ -143,7 +143,7 @@ def render(catalog, inventory):
         allowed = set(op["mcp"]) & inventory["agent"]
         agent = "nein" if not allowed else ("ja*" if allowed == set(op["mcp"]) else "teilweise*")
         lines.append(f"| {labels[op['category']]} | [{op['label']}](#{op['id'].replace('.', '-')}) | {op['context']} | {status[op['core']]} | {'ja' if op['mcp'] else 'nein'} | {agent} |")
-    lines += ["", "* Nur innerhalb des bestehenden Renderer-Kontexts; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.", "",
+    lines += ["", "* Kontextabhängig: ohne Datensatz nur `get_application_state`, sonst der verfügbare Renderer-Kontext; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.", "",
               "## Interne Agentenwerkzeuge", "", "| Werkzeug | Zweck |", "|---|---|"]
     lines += [f"| `{tool['name']}` | {tool['purpose']} |" for tool in catalog["internal_agent_tools"]]
     lines += ["", "## Details", ""]

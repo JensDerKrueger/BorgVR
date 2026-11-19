@@ -6,6 +6,7 @@ struct ModeSelectionView: View {
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var serverController: BackgroundServerController
   @EnvironmentObject private var scriptRunner: BorgVRScriptRunner
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
   @State private var showingAbout = false
   @State private var scriptDropIsTargeted = false
 
@@ -118,6 +119,10 @@ struct ModeSelectionView: View {
         commandButton("modeselection_settings", systemImage: "gearshape") {
           appModel.navigationState = .settings
         }
+
+        VoiceAgentButton(agent: voiceAgent, fullWidth: true)
+          .controlSize(.large)
+          .frame(maxWidth: .infinity, alignment: .leading)
 
         if storedAppModel.enableDatasetServer {
           Divider()

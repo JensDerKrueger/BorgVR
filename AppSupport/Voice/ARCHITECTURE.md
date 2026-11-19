@@ -46,6 +46,28 @@ lokale Ausführungssicherung. `VoiceAgentPolicy` begrenzt Werkzeuge und Daten.
 besitzt Planung, Kontextpflege, Arbeitsbudget und Rückfragen; diese Logik liegt nicht im
 Renderer. `create_app(settings, model)` erlaubt einen unabhängig injizierbaren Modelladapter.
 
+## Appweite Sitzung
+
+Die drei App-Wurzeln besitzen je einen Controller; Startmenü und Render-Bedienelemente
+öffnen dieselbe Unterhaltung. Auf iOS liegt auch die Sheet-Präsentation an der App-Wurzel,
+auf macOS und visionOS ist es ein eigenes Fenster. Öffnen verbindet nach bewusster
+Aktivierung in den Einstellungen, startet aber weder Mikrofonaufnahme noch einen Auftrag.
+
+Der Bridge-Kontext ist ohne Datensatz wirklich `nil`. Im ausgehandelten Protokollzusatz
+`application_session` wird `dataset_id: null` übertragen. Ohne renderbereiten Datensatz
+geben Client und Server nur `get_application_state` frei. Katalogsuche, Öffnen/Schließen
+und Import-/Fusionsjobs sind noch nachfolgende Ausbauschritte, keine implizite Freigabe.
+
+Bei einem Wechsel im Leerlauf werden Kontext-ID und Werkzeugkatalog neu abgeglichen.
+Die Verbindung und der sichtbare Gesprächsverlauf bleiben erhalten. Der Server übernimmt
+nur begrenzte Textauszüge als historische Daten; Bilder, Zustände und Werkzeugfolgen des
+alten Datensatzes entfallen. Ein neuer Auftrag muss den aktuellen Zustand neu lesen.
+Bei laufendem Auftrag, noch ausstehendem Werkzeug, manueller Bearbeitung oder erneutem
+Wechsel während des Abgleichs wird stattdessen die Verbindung beendet. Fenster und
+Gesprächsverlauf bleiben bestehen; nur eine neue Nutzereingabe startet neue Arbeit.
+Alte Aufträge werden niemals automatisch fortgesetzt oder wiederholt. Ältere Server
+werden mit einem verständlichen Aktualisierungshinweis abgewiesen.
+
 ## Gemeinsame Bearbeitung
 
 Manuelle Änderungen erhöhen die lokale Ansichtsrevision und unterbrechen nur die noch
@@ -56,7 +78,7 @@ die Revision. Veraltete Aufrufe erhalten eine ausdrücklich nicht ausgeführte A
 
 Danach erhält der Agent den aktuellen Zustand und setzt denselben Auftrag fort. Alte
 Zustandsdetails und Bilder werden als überholt markiert, Ausführungsbelege bleiben erhalten.
-Ein Datensatzwechsel oder Schließen beendet weiterhin die Verbindung. Eine durch den
+Ein Datensatzwechsel während laufender Arbeit beendet die Verbindung. Eine durch den
 Benutzer angestoßene Bearbeitung darf den Editierstand innerhalb derselben Öffnung ändern.
 
 Rückfragen laufen als gesonderte Nachrichten im selben Auftrag, nicht als neuer Prompt.

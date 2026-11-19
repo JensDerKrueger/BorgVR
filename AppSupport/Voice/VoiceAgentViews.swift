@@ -4,33 +4,30 @@ import UniformTypeIdentifiers
 struct VoiceAgentButton: View {
   @EnvironmentObject private var agent: VoiceAgentController
   @ObservedObject private var settings: VoiceAgentSettings
-  #if os(iOS)
-  @State private var presented = false
-  #else
+  private let fullWidth: Bool
+  #if !os(iOS)
   @Environment(\.openWindow) private var openWindow
   #endif
 
-  init(agent: VoiceAgentController) { _settings = ObservedObject(wrappedValue: agent.settings) }
+  init(agent: VoiceAgentController, fullWidth: Bool = false) {
+    _settings = ObservedObject(wrappedValue: agent.settings)
+    self.fullWidth = fullWidth
+  }
 
   var body: some View {
     if settings.enabled {
       Button {
         #if os(iOS)
-        presented = true
+        agent.isPresented = true
         #else
         openWindow(id: VoiceAgentView.windowID)
         #endif
       } label: {
         Label(voiceAgentText("AI Assistant"), systemImage: "mic")
+          .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: fullWidth ? 32 : nil, alignment: .leading)
       }
       .buttonStyle(.bordered)
       .help(voiceAgentText("AI Assistant"))
-      #if os(iOS)
-      .sheet(isPresented: $presented) {
-        VoiceAgentView(agent: agent)
-          .environmentObject(agent)
-      }
-      #endif
     }
   }
 }
@@ -119,7 +116,7 @@ struct VoiceAgentView: View {
           .tint(speech.isRecording ? .red : .accentColor)
           .help(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
           .accessibilityLabel(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
-          .disabled(agent.interrupting || agent.connectionState == .connecting || !agent.hasDataset)
+          .disabled(agent.interrupting || agent.connectionState == .connecting || !agent.isAvailable)
           TextField(voiceAgentText(agent.collaborationQuestion == nil ? "Message" : "Reply"), text: $text, axis: .vertical)
             .lineLimit(1...4).textFieldStyle(.roundedBorder)
             .disabled(agent.interrupting || speech.isRecording)
@@ -132,7 +129,7 @@ struct VoiceAgentView: View {
           .help(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
           .accessibilityLabel(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
           .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 8192 || agent.interrupting ||
-                    speech.isRecording || agent.connectionState == .connecting || !agent.hasDataset)
+                    speech.isRecording || agent.connectionState == .connecting || !agent.isAvailable)
           Button { agent.cancel() } label: { Image(systemName: "xmark.circle").frame(width: 28, height: 28) }
             .buttonStyle(.bordered).help(voiceAgentText("Cancel"))
             .accessibilityLabel(voiceAgentText("Cancel"))
@@ -151,13 +148,8 @@ struct VoiceAgentView: View {
     #elseif os(visionOS)
     .frame(width: 600, height: 580)
     #endif
+    .task { await agent.connect() }
     .onDisappear { speech.cancel() }
-    .onChange(of: agent.datasetOpeningID, initial: true) { previous, current in
-      if current == nil || (previous != nil && previous != current) {
-        agent.cancel()
-        dismiss()
-      }
-    }
     .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
   }
 

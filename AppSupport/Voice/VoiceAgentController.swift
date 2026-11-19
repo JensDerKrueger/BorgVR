@@ -30,6 +30,7 @@ final class VoiceAgentController: ObservableObject {
   @Published private(set) var messages: [VoiceAgentMessage] = []
   @Published private(set) var status = voiceAgentText("Disconnected")
   @Published var errorText: String?
+  @Published var isPresented = false
   private var bridge: (any VoiceAgentApplicationBridge)?
   private var context: VoiceAgentContext?
   private var connectionIdentity: VoiceAgentConnectionIdentity?
@@ -64,6 +65,8 @@ final class VoiceAgentController: ObservableObject {
   private var manualOperations: Set<UUID> = []
   private var interventionTask: Task<Void, Never>?
   private var collaborationSendTask: Task<Void, Never>?
+  private var contextUpdateTask: Task<Void, Never>?
+  private var updatingContext = false
   private var lastActivity = Date()
 
   init(settings: VoiceAgentSettings? = nil) {
@@ -89,6 +92,7 @@ final class VoiceAgentController: ObservableObject {
     toolTask?.cancel()
     interventionTask?.cancel()
     collaborationSendTask?.cancel()
+    contextUpdateTask?.cancel()
     socket?.cancel(with: .goingAway, reason: nil)
     session?.invalidateAndCancel()
   }
@@ -103,15 +107,61 @@ final class VoiceAgentController: ObservableObject {
   }
 
   var hasDataset: Bool { bridge?.context != nil && bridge?.rendererReady == true }
+  var isAvailable: Bool { bridge != nil && settings.enabled }
 
   func invalidateContext() {
     let current = bridge?.context
     let editing = userIsInteracting && changedDomains.contains("volume") &&
       (current == nil || current?.openingID == context?.openingID) &&
       bridge?.datasetID == context?.datasetID
-    // Window ownership follows the dataset, independently of an agent connection.
     datasetOpeningID = bridge?.rendererReady == true ? (current?.openingID ?? (editing ? context?.openingID : nil)) : nil
-    if context != nil, context != current, !editing { disconnect(reason: VoiceAgentError.contextChanged) }
+    guard connectionIdentity != nil, context != current, !editing else { return }
+    // Never carry an in-flight command or goal into another dataset opening.
+    guard connectionState == .ready, !busy, pendingCallID == nil, !userIsInteracting else {
+      disconnect(reason: VoiceAgentError.contextChanged)
+      return
+    }
+    updateContext(current)
+  }
+
+  private func availableTools() -> [[String: Any]] {
+    guard let bridge else { return [] }
+    #if os(visionOS)
+    let vision = true
+    #else
+    let vision = false
+    #endif
+    return VoiceAgentPolicy.catalog(bridge.toolDefinitions, vision: vision,
+      transferFunctions: bridge.hasTransferFunctions, images: settings.sharesImages, datasetReady: hasDataset)
+  }
+
+  private var wireDatasetID: Any { context?.datasetID as Any? ?? NSNull() }
+
+  private func updateContext(_ current: VoiceAgentContext?) {
+    context = current
+    contextID = UUID().uuidString
+    catalog = availableTools()
+    readState = false
+    collaborationQuestion = nil
+    ruleProposals = []
+    viewRevision = 0
+    changedDomains = []
+    updatingContext = true
+    lastActivity = Date()
+    connectionState = .connecting
+    status = voiceAgentText("Connecting…")
+    speech.cancel()
+    let message: [String: Any] = ["type": "context_changed", "dataset_id": wireDatasetID,
+      "context_id": contextID, "tools": catalog]
+    let id = generation
+    let previousSend = collaborationSendTask
+    armDeadline(seconds: 15, generation: id)
+    contextUpdateTask = Task { @MainActor [weak self] in
+      await previousSend?.value
+      guard !Task.isCancelled, let self, self.generation == id else { return }
+      do { try await self.send(message) }
+      catch { if self.generation == id { self.disconnect(reason: VoiceAgentError.connection) } }
+    }
   }
 
   func disconnect(reason: Error? = nil) {
@@ -143,6 +193,9 @@ final class VoiceAgentController: ObservableObject {
     queuedPrompt = nil
     interventionTask?.cancel()
     collaborationSendTask?.cancel()
+    contextUpdateTask?.cancel()
+    contextUpdateTask = nil
+    updatingContext = false
     interventionTask = nil
     collaborationSendTask = nil
     collaborationQuestion = nil
@@ -215,8 +268,8 @@ final class VoiceAgentController: ObservableObject {
   }
 
   private func establishConnection(replacing: Bool = false) async throws {
-    guard settings.enabled, let bridge, let captured = bridge.context,
-          bridge.rendererReady else { throw VoiceAgentError.configuration }
+    guard settings.enabled, let bridge else { throw VoiceAgentError.configuration }
+    let captured = bridge.context
     if connectionState == .ready {
       guard context == captured else { throw VoiceAgentError.contextChanged }
       return
@@ -227,20 +280,13 @@ final class VoiceAgentController: ObservableObject {
     disconnect()
     interrupting = replacing
     errorText = nil
-    messages = []
     context = captured
     connectionIdentity = settings.identity
     contextID = UUID().uuidString
     readState = false
     turns = 0
     calls = 0
-    #if os(visionOS)
-    let vision = true
-    #else
-    let vision = false
-    #endif
-    catalog = VoiceAgentPolicy.catalog(bridge.toolDefinitions, vision: vision,
-      transferFunctions: bridge.hasTransferFunctions, images: settings.sharesImages)
+    catalog = availableTools()
     let transport = VoiceAgentTLS(endpoint: endpoint, anchor: settings.certificate)
     let session = transport.session(resourceTimeout: Double(settings.workMinutes * 60 + 120))
     self.session = session
@@ -257,12 +303,13 @@ final class VoiceAgentController: ObservableObject {
     socket.resume()
     armDeadline(seconds: 15, generation: id)
     do {
-    try await send(["type": "hello", "protocol": 1, "dataset_id": captured.datasetID,
+    try await send(["type": "hello", "protocol": 1, "dataset_id": wireDatasetID, "application_session": true,
                     "context_id": contextID, "tools": catalog,
                     "collaboration": true, "knowledge": settings.knowledgeRules.map(\.text),
                     "execution_limits": ["max_calls": settings.maximumCalls, "timeout_seconds": settings.workMinutes * 60]])
     let ready = try decode(await socket.receive())
     guard generation == id, bridge.context == captured else { throw CancellationError() }
+    guard ready["application_session"] as? Bool == true else { throw VoiceAgentError.serverUpdateRequired }
     guard ready["type"] as? String == "ready", let version = ready["protocol"] as? Int, version == 1,
           let sessionID = ready["session_id"] as? String, !sessionID.isEmpty, sessionID.utf8.count <= 128,
           let capabilities = ready["capabilities"] as? [String: Any],
@@ -420,8 +467,8 @@ final class VoiceAgentController: ObservableObject {
     let current = bridge?.context
     let editing = userIsInteracting && changedDomains.contains("volume") &&
       datasetOpeningID == context?.openingID && bridge?.datasetID == context?.datasetID
-    guard let context, current == context || editing, connectionIdentity == settings.identity,
-          settings.enabled, bridge?.rendererReady == true
+    guard bridge != nil, current == context || editing, connectionIdentity == settings.identity,
+          settings.enabled, context == nil || bridge?.rendererReady == true
     else { throw VoiceAgentError.contextChanged }
   }
 
@@ -429,6 +476,19 @@ final class VoiceAgentController: ObservableObject {
     try requireContext()
     guard event["session_id"] as? String == sessionID, let type = event["type"] as? String
     else { throw VoiceAgentError.protocolViolation }
+    if updatingContext {
+      guard type == "context_updated", event["context_id"] as? String == contextID,
+            let accepted = event["tools"] as? [String], accepted.count <= 32,
+            accepted.contains("get_application_state"), Set(accepted).count == accepted.count,
+            Set(accepted).isSubset(of: Set(catalog.compactMap { $0["name"] as? String }))
+      else { throw VoiceAgentError.protocolViolation }
+      catalog = catalog.filter { accepted.contains($0["name"] as? String ?? "") }
+      updatingContext = false
+      connectionState = .ready
+      deadline?.cancel()
+      status = voiceAgentText("Ready")
+      return
+    }
     events += 1
     guard events <= maximumCalls * 4 + 128 else { throw VoiceAgentError.protocolViolation }
     if type == "tool_call", interrupting, pendingCallID == nil {
@@ -494,7 +554,8 @@ final class VoiceAgentController: ObservableObject {
   }
 
   private func startTool(_ event: [String: Any]) throws {
-    guard let context, event["dataset_id"] as? String == context.datasetID,
+    guard event["dataset_id"] != nil, event["dataset_id"] as? String == context?.datasetID,
+          context != nil || event["dataset_id"] is NSNull,
           event["context_id"] as? String == contextID,
           let callID = event["call_id"] as? String, let name = event["name"] as? String,
           let arguments = event["arguments"] as? [String: Any],
@@ -561,7 +622,7 @@ final class VoiceAgentController: ObservableObject {
         guard self.generation == id, self.requestID == request else { return }
         try self.requireContext()
         var payload: [String: Any] = ["type": "tool_result", "request_id": request,
-          "call_id": callID, "dataset_id": context.datasetID, "context_id": self.contextID]
+          "call_id": callID, "dataset_id": self.wireDatasetID, "context_id": self.contextID]
         if self.collaborationEnabled { payload["view_revision"] = expectedRevision ?? 0 }
         if name == "capture_screenshot" {
           guard let contents = result["content"] as? [[String: Any]],
@@ -594,9 +655,9 @@ final class VoiceAgentController: ObservableObject {
   }
 
   private func rejectSupersededTool(callID: String) throws {
-    guard let context, let requestID else { throw VoiceAgentError.contextChanged }
+    guard let requestID else { throw VoiceAgentError.contextChanged }
     let payload: [String: Any] = ["type": "tool_result", "request_id": requestID, "call_id": callID,
-      "dataset_id": context.datasetID, "context_id": contextID, "view_revision": viewRevision,
+      "dataset_id": wireDatasetID, "context_id": contextID, "view_revision": viewRevision,
       "result": ["ok": false, "not_applied": true, "code": "user_changed_view"]]
     let reply = try VoiceAgentPolicy.encoded(payload)
     try ledger.finish(id: callID, reply: reply)
@@ -604,7 +665,7 @@ final class VoiceAgentController: ObservableObject {
   }
 
   private func observeCommand(_ event: VoiceAgentApplicationChange) {
-    guard collaborationEnabled, connectionState == .ready else { return }
+    guard collaborationEnabled, connectionState == .ready, context != nil else { return }
     let domain = event.domain
     viewRevision += 1
     changedDomains.insert(domain)

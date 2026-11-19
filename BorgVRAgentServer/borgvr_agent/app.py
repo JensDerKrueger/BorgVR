@@ -23,15 +23,19 @@ from model_config import ModelConfig
 
 from .budget import ControlBudget, MAX_MODEL_REQUESTS, MAX_NATIVE_CALLS, MAX_TOOL_CALLS
 from .collaboration import Collaboration, ReplanForUser
-from .context import ContextBudgetExceeded, ContextMaintenance, VLLMChatModel, bounded_history
+from .context import ContextBudgetExceeded, ContextMaintenance, VLLMChatModel, bounded_history, application_context_history
 from .protocol import (
-    Cancel, CollaborationFeedback, ContextChanged, Hello, MAX_RESULT_BYTES, RuleDecision, UserChange,
+    APPLICATION_TOOLS, Cancel, CollaborationFeedback, ContextChanged, Hello, MAX_RESULT_BYTES, RuleDecision, UserChange,
     ProtocolError, ToolResult, UserMessage, decode_image, decode_message,
     json_bytes, select_tools, validate_arguments,
 )
 
 logger = logging.getLogger("borgvr_agent")
 SYSTEM_PROMPT = """You are BorgVR's visualization assistant. Reply in the user's language.
+You can also help from BorgVR's start menu without an open dataset. Read application state
+to distinguish that situation from a ready renderer. Never invent dataset contents or use
+unavailable visualization tools. After a dataset context change, earlier text is historical
+conversation only: read fresh state and act only on the new user request, not on old goals.
 Use only the provided tools, with their documented coordinates, units and platform limitations.
 Tool arguments must match the advertised schema exactly. A tool with no properties takes
 exactly {}: never add reason, action, or other invented fields. Use report_progress for
@@ -162,6 +166,7 @@ class Session:
         self.seen_requests = set()
         self.history = []
         self.dataset_id = self.context_id = None
+        self.application_session = False
         self.tools = []
         self.state_seen = False
         self.uncertain = False
@@ -418,7 +423,8 @@ class Session:
             self.request_timeout = min(hello.execution_limits.timeout_seconds, self.settings.max_run_timeout)
             self.tool_call_limit = max(MAX_TOOL_CALLS, self.native_call_limit * 2)
             self.model_request_limit = self.tool_call_limit + 8
-        self.tools = select_tools(hello.tools)
+        self.application_session = hello.application_session
+        self.tools = self.context_tools(hello.tools, hello.dataset_id)
         if hello.collaboration:
             self.collaboration = Collaboration(self, hello.knowledge)
         self.dataset_id, self.context_id = hello.dataset_id, hello.context_id
@@ -427,6 +433,7 @@ class Session:
                          "capabilities": self.settings.capabilities(),
                          "execution_limits": {"max_calls": self.native_call_limit, "timeout_seconds": self.request_timeout},
                          "collaboration": self.collaboration is not None,
+                         "application_session": self.application_session,
                          "tools": [tool.name for tool in self.tools]})
         while True:
             receiving_timeout = (max(self.settings.idle_timeout, self.request_timeout + self.settings.tool_timeout)
@@ -482,12 +489,37 @@ class Session:
                     message = ContextChanged.model_validate(value)
                     if message.context_id == self.context_id:
                         raise ProtocolError("A new context must have a new ID")
+                    if self.application_session:
+                        if self.uncertain or self.pending is not None or (self.task is not None and not self.task.done()):
+                            raise ProtocolError("An active or uncertain request requires a fresh connection")
+                        if message.tools is None:
+                            raise ProtocolError("An app context change requires a fresh tool catalog")
+                        tools = self.context_tools(message.tools, message.dataset_id)
+                        self.history = application_context_history(self.history, system_prompt=SYSTEM_PROMPT)
+                        self.tools = tools
+                        self.dataset_id, self.context_id = message.dataset_id, message.context_id
+                        self.state_seen = False
+                        self.screenshot_count = 0
+                        self.visual_observations = []
+                        if self.collaboration is not None:
+                            self.collaboration = Collaboration(self, self.collaboration.knowledge)
+                        self.agent = self.build_agent()
+                        await self.send({"type": "context_updated", "context_id": self.context_id,
+                                         "tools": [tool.name for tool in self.tools]})
+                        continue
+                    if message.dataset_id is None or message.tools is not None:
+                        raise ProtocolError("Application sessions were not negotiated")
                     await self.stop()
                     self.history = []
                     self.dataset_id, self.context_id = message.dataset_id, message.context_id
                     await self.send({"type": "context_updated", "context_id": self.context_id})
                 case _:
                     raise ProtocolError("Unsupported message type")
+
+    @staticmethod
+    def context_tools(definitions, dataset_id):
+        tools = select_tools(definitions)
+        return tools if dataset_id is not None else [tool for tool in tools if tool.name in APPLICATION_TOOLS]
 
 
 def create_app(settings=None, model=None):

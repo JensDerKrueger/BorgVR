@@ -1,6 +1,13 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Update the agent server to use the app-wide assistant.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Update the agent server to use the app-wide assistant." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Aktualisiere den Agentenserver, um den appweiten Assistenten zu verwenden." } }
+      }
+    },
     "Paused for your changes": {
       "extractionState": "manual",
       "localizations": {

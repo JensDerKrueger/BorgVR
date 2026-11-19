@@ -37,8 +37,6 @@ struct RenderView: View {
   /// Dismisses auxiliary windows by identifier.
   @Environment(\.dismissWindow) private var dismissWindow
 
-  @EnvironmentObject private var voiceAgent: VoiceAgentController
-
   @State private var copiedWebGPUShareLink = false
   @State private var showLeaveSharePlayConfirmation = false
   @State private var pendingDatasetStateSave: DatasetStateSavePlan?
@@ -172,8 +170,6 @@ struct RenderView: View {
       dismissWindow(id: "MeasurementView")
       dismissWindow(id: "LightingEditorView")
       dismissWindow(id: "VolumeBrushEditorView")
-      dismissWindow(id: VoiceAgentView.windowID)
-      voiceAgent.disconnect()
     }
   }
 

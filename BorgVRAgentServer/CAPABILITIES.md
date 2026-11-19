@@ -3,7 +3,7 @@
 Generiert aus `capabilities.json` und den Quellcode-Registern mit `python3 audit_capabilities.py --write`.
 Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nachweis ausgeführter Tests.
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
-Das Agentengespräch erfordert aktuell einen geöffneten, renderbereiten Datensatz. **Noch kein natives Agentenwerkzeug ist ohne offenen Datensatz nutzbar.** Der lokale Verbindungstest ist davon unabhängig.
+Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz ist nur `get_application_state` freigegeben.** Renderer-Werkzeuge erfordern einen bereiten Datensatz; Katalogsuche und Import-/Fusionsjobs sind noch nicht freigeschaltet.
 
 Erfasst: **75 Funktionsgruppen**, **59 MCP-Werkzeuge**, **15 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
 
@@ -93,7 +93,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Fenster und Panels | [Render-, TF-, Iso-, Licht-, Objekt-, Mess- und Pinselpanel öffnen](#windows-panels) | dataset | nur UI | nein | nein |
 | Fenster und Panels | [Panels andocken, abdocken, formatieren und Layout speichern](#windows-layout) | dataset | nur UI | nein | nein |
 
-* Nur innerhalb des bestehenden Renderer-Kontexts; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.
+* Kontextabhängig: ohne Datensatz nur `get_application_state`, sonst der verfügbare Renderer-Kontext; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.
 
 ## Interne Agentenwerkzeuge
 
@@ -114,11 +114,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - MCP: fehlt
 - Native Agentenwerkzeuge: fehlen
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: Lokaler VoiceAgentController; Verbindungstest funktioniert ohne Datensatz.
-- Lücke: Gespräch, Mikrofon und Senden verlangen einen renderbereiten Datensatz; das Fenster wird beim Datensatzende geschlossen. Keine dauerhafte App-Sitzung.
-- Nächster Schritt: App-Sitzung, Auftrag und optionalen Datensatzkontext trennen; Startmenü-Einstieg und optionale Verbindung nach App-Start. Kein automatisches Mithören.
-- Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [macOSApp/ModeSelectionView.swift](../macOSApp/ModeSelectionView.swift), [iOSApp/ModeSelectionView.swift](../iOSApp/ModeSelectionView.swift), [VisionApp/ModeSelectionView.swift](../VisionApp/ModeSelectionView.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
+- Zustandsabfrage: Appweite Sitzung mit Startmenü-Einstieg, Text/Sprache und optionalem Datensatzkontext. Ohne Datensatz nur get_application_state; idle Kontextwechsel gleichen Werkzeuge ab und behalten begrenzte historische Textauszüge, niemals alte Bilder oder Werkzeugfolgen.
+- Lücke: Katalogsuche, fachliche App-Aufträge und Import-/Fusionsjobs folgen noch. Laufende Arbeit wird beim Kontextwechsel gestoppt statt automatisch fortgesetzt.
+- Nächster Schritt: Geplante, autorisierte Öffnungsübergänge und App-Werkzeuge ergänzen; Bridge-Trennung und keine automatische Mikrofonaufnahme beibehalten.
+- Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [macOSApp/ModeSelectionView.swift](../macOSApp/ModeSelectionView.swift), [iOSApp/ModeSelectionView.swift](../iOSApp/ModeSelectionView.swift), [VisionApp/ModeSelectionView.swift](../VisionApp/ModeSelectionView.swift), [BorgVRAgentServer/PROTOCOL.md](../BorgVRAgentServer/PROTOCOL.md)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_application_session.py](../BorgVRAgentServer/tests/test_application_session.py)
 
 <a id="app-script_input"></a>
 ### Textparameter für einen Skriptauftrag eingeben

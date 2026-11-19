@@ -17,6 +17,7 @@ struct VoiceAgentApplicationChange {
 /// The optional assistant depends only on this application-facing contract.
 @MainActor
 protocol VoiceAgentApplicationBridge: AnyObject {
+  // No dataset is a valid application context, not an unavailable assistant.
   var context: VoiceAgentContext? { get }
   var rendererReady: Bool { get }
   var datasetID: String? { get }

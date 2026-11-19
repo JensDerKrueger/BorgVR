@@ -7,6 +7,7 @@ struct ModeSelectionView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var appSettings: AppSettings
   @EnvironmentObject private var serverController: BackgroundServerController
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
   @State private var showingAbout = false
 
   var body: some View {
@@ -169,6 +170,8 @@ struct ModeSelectionView: View {
           .frame(maxWidth: .infinity, minHeight: 32)
       }
       .buttonStyle(.bordered)
+
+      VoiceAgentButton(agent: voiceAgent, fullWidth: true)
     }
     .controlSize(.large)
   }

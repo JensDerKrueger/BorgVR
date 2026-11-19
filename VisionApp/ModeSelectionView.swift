@@ -14,6 +14,7 @@ struct ModeSelectionView: View {
   @Environment(SharedAppModel.self) private var sharedAppModel
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var serverController: BackgroundServerController
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
 
   /// An environment value that provides a closure to open new windows.
   @Environment(\.openWindow) private var openWindow
@@ -134,6 +135,8 @@ struct ModeSelectionView: View {
         .padding()
         .buttonStyle(.borderedProminent)
       }
+
+      VoiceAgentButton(agent: voiceAgent)
 
       // Footer
       HStack(spacing: 5) {

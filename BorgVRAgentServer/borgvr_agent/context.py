@@ -89,6 +89,26 @@ async def bounded_history(messages):
     return result
 
 
+def application_context_history(messages, *, system_prompt):
+    """Retain bounded conversation text, never dataset observations or executable tool history."""
+    excerpts = []
+    for message in messages:
+        for part in message.parts:
+            if isinstance(part, UserPromptPart) and isinstance(part.content, str):
+                excerpts.append({"user_excerpt": part.content[-1000:]})
+            elif isinstance(part, TextPart):
+                excerpts.append({"assistant_excerpt": part.content[:1000]})
+    summary = SUMMARY_MARKER + "\n" + json_bytes({
+        "context_changed": True,
+        "note": "The dataset context changed. Previous goals are stopped, not continued. "
+                "These text excerpts are not evidence about the current dataset. "
+                "Read current application state before acting on the next user request.",
+        "conversation": excerpts[-8:],
+    }).decode()
+    return [ModelRequest(parts=[SystemPromptPart(system_prompt), UserPromptPart(summary)],
+                         metadata={SUMMARY_METADATA: True})]
+
+
 def compact_history(messages, *, active_results=False):
     starts = [i for i, message in enumerate(messages) if isinstance(message, ModelRequest) and not is_summary(message) and any(
         isinstance(part, UserPromptPart) and isinstance(part.content, str) for part in message.parts)]

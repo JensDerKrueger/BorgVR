@@ -121,6 +121,10 @@ struct VoiceAgentTests {
       "Server diagnostic catalog differs from the native tools")
     let names = Set(catalog.compactMap { $0["name"] as? String })
     try expect(names == VoiceAgentPolicy.allowed, "Safe tools differ from the actual MCP catalog")
+    let applicationCatalog = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: false,
+      transferFunctions: true, images: true, datasetReady: false)
+    try expect(Set(applicationCatalog.compactMap { $0["name"] as? String }) == VoiceAgentPolicy.applicationTools,
+               "Renderer commands exposed without a dataset")
     let screenshot = catalog.first { $0["name"] as? String == "capture_screenshot" }!["inputSchema"] as! [String: Any]
     try rejects { try VoiceAgentPolicy.validate(["output_path": "/tmp/forbidden.png"], schema: screenshot) }
     try rejects { try VoiceAgentPolicy.validate(["include_alpha": 1], schema: screenshot) }
@@ -193,6 +197,17 @@ struct VoiceAgentTests {
     try settings.importCertificate(cert)
     try settings.setToken(String(contentsOf: fixture.appendingPathComponent("runtime/secrets/agent_token"), encoding: .utf8))
     try expect(!String(describing: defaults.dictionaryRepresentation()).contains(try settings.token()), "Token leaked to preferences")
+    let emptyApp = AppModel()
+    let emptySession = ScreenBorgVRSession.screen(appModel: emptyApp,
+      renderingParameters: RenderingParameters(), appSettings: AppSettings())
+    let startAgent = VoiceAgentController(settings: settings)
+    startAgent.configure(service: BorgVRScreenCommandService(session: emptySession)) { nil }
+    await startAgent.submit("application-state")
+    try await wait { !startAgent.busy }
+    try expect(startAgent.errorText == nil && startAgent.messages.last?.text == "Start menu ready." &&
+               emptyApp.activeDataset == nil && !emptyApp.rendererHasActiveDataset && !startAgent.speech.isRecording,
+               "Startup assistant required a previously initialized renderer or started listening")
+    startAgent.cancel()
     let agent = VoiceAgentController(settings: settings)
     var context: VoiceAgentContext? = .init(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
     agent.configure(service: service) { context }
@@ -301,6 +316,35 @@ struct VoiceAgentTests {
     app.closeDataset(destination: .datasetSelection)
     agent.invalidateContext()
     try expect(agent.datasetOpeningID == nil, "Dataset closure did not notify an unconnected assistant window")
+    agent.newConversation()
+    try expect(agent.isAvailable && !agent.hasDataset, "Assistant unavailable in the start menu")
+    await agent.submit("application-state")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Start menu ready." &&
+               agent.connectionState == .ready, "Dataset-free app session failed: \(agent.errorText ?? "")")
+    let startMessages = agent.messages.count
+    app.openDataset(entry, automaticallyLoadState: false)
+    guard case .opening(_, let newOpening) = app.datasetSessionState else { fatalError() }
+    app.prepareDatasetRenderer(key: app.activeDatasetRenderKey, metadata: metadata, requestID: newOpening)
+    _ = app.markRenderedDataset(key: app.activeDatasetRenderKey, requestID: newOpening)
+    context = .init(datasetID: entry.uniqueId, openingID: newOpening, editStateID: nil)
+    agent.invalidateContext()
+    try await wait { agent.connectionState != .connecting }
+    try expect(agent.connectionState == .ready && agent.messages.count == startMessages && agent.errorText == nil,
+               "Opening a dataset lost the app conversation: \(agent.errorText ?? "")")
+    await agent.submit("application-state")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Dataset ready.", "Dataset context did not update")
+    context = nil
+    app.closeDataset(destination: .datasetSelection)
+    agent.invalidateContext()
+    try await wait { agent.connectionState != .connecting }
+    await agent.submit("application-state")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Start menu ready." &&
+               agent.messages.filter { $0.user }.count == 3, "Closing the dataset destroyed the app session")
+    agent.cancel()
+    try expect(agent.messages.count >= 6 && !agent.speech.isRecording, "Session cancellation cleared conversation or started the microphone")
     print("Voice agent tests passed: TLS/WSS, GSC roundtrip, generic Command events, user-priority collaboration, explicit local rules, long runs and safe cancellation")
   }
 

@@ -5,7 +5,7 @@
 Für die Weiterentwicklung: [Funktionskatalog und Lücken](CAPABILITIES.md) sowie
 [Plan für den appweiten Assistenten](CAPABILITY_PLAN.md). Der Katalog unterscheidet
 App-Commands, MCP-Werkzeuge und tatsächlich erlaubte Agentenwerkzeuge. Die geplante
-Nutzung im Startmenü, Themenabfragen, Import und Fusion sind noch nicht freigeschaltet.
+Die Nutzung im Startmenü ist verfügbar; Themenabfragen, Import und Fusion sind noch nicht freigeschaltet.
 Der statische Abgleich benötigt einen vollständigen Repository-Checkout und Python
 3.10 oder neuer, weder GPU noch ai1.
 
@@ -395,7 +395,11 @@ stattdessen deren Vertrauenskette wie im folgenden Abschnitt beschrieben einrich
 3. Das öffentliche Zertifikat importieren und die Datei `runtime/secrets/agent_token`
    importieren oder deren Inhalt als Zugangsschlüssel eingeben.
 4. Den Servertest in den Einstellungen ausführen. Dafür muss kein Datensatz geöffnet sein.
-5. Einen Datensatz öffnen und **KI-Assistent** in den Render-Bedienelementen wählen.
+5. **KI-Assistent** im Startmenü oder in den Render-Bedienelementen wählen. Ein geöffneter
+   Datensatz ist nicht erforderlich. Ohne Datensatz kann der Assistent Gespräche führen und
+   den App-Zustand abfragen; Katalogsuche und Import-/Fusionsjobs sind noch nicht angebunden.
+   Öffnen und Schließen eines Datensatzes lassen Assistentenfenster und Gespräch sichtbar.
+   Im Leerlauf wird der Kontext aktualisiert; laufende Arbeit wird ohne Befehlswiederholung gestoppt.
    Eine Textanfrage eingeben oder über das Mikrofon sprechen.
 
 **Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel

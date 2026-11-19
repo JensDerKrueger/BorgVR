@@ -7,11 +7,12 @@ Der Assistent soll nach bewusster Aktivierung bereits im Startmenü nutzbar sein
 Öffnen, Import, Registrierung/Fusion, Editing, Annotationen, Messungen und Export.
 Funktionsumfang und Erlaubnis für einen konkreten Auftrag sind getrennt.
 
-Dieser erste Schritt liefert den [Funktionskatalog](CAPABILITIES.md), seine
-[maschinenlesbare Grundlage](capabilities.json), den statischen Registerabgleich und
-die folgende Ausbaureihenfolge. Er aktiviert keine neuen Werkzeuge und verändert weder
-das laufende Protokoll noch den Server auf ai1. Die folgenden Schnittstellen und
-Werkzeugnamen sind Entwürfe, keine schon verfügbaren Funktionen.
+Verfügbar sind der [Funktionskatalog](CAPABILITIES.md), seine
+[maschinenlesbare Grundlage](capabilities.json), der statische Registerabgleich und die
+appweite Sitzung auf allen drei Plattformen. Das Startmenü erlaubt Gespräche und die
+Abfrage des App-Zustands ohne Renderer. Weitere Werkzeuge sowie Import-/Fusionsjobs in
+diesem Plan sind Entwürfe, keine schon verfügbaren Funktionen. Die Erweiterung erfordert
+einen aktualisierten Agentenserver, startet diesen aber nicht automatisch neu.
 
 ## Experimentelle Agentenlogik bleibt austauschbar
 
@@ -51,9 +52,10 @@ eingeführt. [Bisherige Grenzen](../AppSupport/Voice/ARCHITECTURE.md) gelten wei
   Die weiteren vier Modellwerkzeuge dienen nur dem Agentenablauf, nicht der App-Steuerung.
 - Marker, Messungen und Editing sind überwiegend bereits über Commands und MCP erreichbar.
   Hier fehlen vor allem vollständige Agentenverträge, Freigaben und End-to-End-Tests.
-- Katalogabfrage und Öffnen/Schließen existieren über MCP. Die KI-Verbindung verlangt
-  trotzdem einen renderbereiten Datensatz; Schließen beziehungsweise Kontextwechsel
-  beendet heute die Verbindung und teilweise das Assistentenfenster.
+- Katalogabfrage und Öffnen/Schließen existieren über MCP, sind aber noch nicht für den
+  Agenten freigeschaltet. Die KI-Verbindung funktioniert ohne Datensatz; im Leerlauf
+  werden beim Wechsel Kontext und Werkzeuge neu abgeglichen. Laufende Arbeit wird
+  beendet, das Assistentenfenster bleibt bestehen.
 - Die Katalogeinträge enthalten bereits verfügbare Metadaten und Provenance. Eine
   begrenzte Themen-/Filterabfrage mit belegten Treffern ist noch kein eigenes Werkzeug.
 - Import, Bildsequenzen und Fusion besitzen gemeinsame Konvertierungsalgorithmen, aber
