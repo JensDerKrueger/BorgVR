@@ -454,8 +454,10 @@ as described in the next section.
 1. In BorgVR, enable the assistant under **Settings > AI Assistant**.
 2. Enter the server's HTTPS address, for example `https://ai.example.org:8766`, or the IP
    matching the certificate. `localhost` refers to the app device itself, not another computer.
-3. Import the public certificate, then import `runtime/secrets/agent_token` or enter its
-   contents as the access token.
+3. For a publicly trusted server certificate, choose **System certificate trust** and
+   remove any previously imported self-signed certificate. For private certificates,
+   follow the ATS requirements in section 6. Import `runtime/secrets/agent_token` or enter
+   its contents as the access token.
 4. Run the server test in Settings. No dataset needs to be open.
 5. Choose **AI Assistant** in the start menu or render controls. No dataset needs to be open.
    Without a dataset, the assistant can chat, read application state, search metadata and open a chosen match.
@@ -580,12 +582,28 @@ with `--preserve-env=VLLM_BORGVR_API_KEY`. Do not put the secret in command argu
 does the launcher set vLLM's required `VLLM_API_KEY` from its private secret file.
 Other containers have independent environments.
 
-The generated self-signed certificate expires after 365 days. The native assistant can
-explicitly trust the imported public certificate while still verifying hostname/IP and validity.
-For managed deployments, use a certificate from your organization's trusted CA or a public CA;
-install your organization's CA on devices where necessary. Replace `server.crt`/`server.key` with a matching PEM full chain/key,
-retain the same ownership and key mode, and restart the agent. Certificate issuance/renewal
-and device trust provisioning are not automated by this script. Never disable TLS validation.
+The generated self-signed certificate expires after 365 days and is intended for local
+testing. Importing it into BorgVR does not override Apple's App Transport Security (ATS):
+for a public DNS name, ATS can reject the connection before the app's custom trust
+evaluation (`ATS failed system trust`, error -1200). A successful Python/curl or Swift
+command-line test does not prove that a signed app build will accept the same connection.
+
+For a public endpoint, use a certificate issued by a publicly trusted CA and select
+**System certificate trust** in BorgVR. An internal CA must also be trusted by the device's
+operating system; importing it only into BorgVR is not sufficient for ATS. Hostname/IP and
+validity checks still apply. See [Apple's ATS requirements](https://developer.apple.com/documentation/security/preventing-insecure-network-connections).
+Do not add a global ATS exception or disable TLS validation.
+
+A gateway can serve the public HTTPS certificate and forward WebSocket upgrades through
+a private SSH reverse tunnel. Bind that tunnel only to the gateway's loopback interface.
+When using TLS to the agent, also verify the backend certificate and its name; do not use
+`proxy_ssl_verify off`. The gateway terminates TLS in this design and must therefore be
+trusted to access requests, responses and render images. Do not import the internal
+self-signed backend certificate into clients. Access tokens and token validation remain active.
+
+Without a gateway, install a matching PEM full chain/key as `runtime/tls/server.crt` and
+`server.key`, retain the same ownership and key mode, and restart only the agent.
+Certificate issuance/renewal and device trust provisioning are not automated by setup.
 
 Keep 8766 on a private network/VPN. No firewall rules are changed without explicit opt-in.
 

@@ -473,7 +473,9 @@ stattdessen deren Vertrauenskette wie im folgenden Abschnitt beschrieben einrich
 2. Die HTTPS-Adresse des Servers eintragen, zum Beispiel `https://ai.example.org:8766`,
    oder die zum Zertifikat passende IP-Adresse. `localhost` verweist auf das jeweilige
    App-Gerät und ist für den Zugriff auf einen anderen Rechner nicht geeignet.
-3. Das öffentliche Zertifikat importieren und die Datei `runtime/secrets/agent_token`
+3. Bei einem öffentlich vertrauenswürdigen Serverzertifikat **Systemvertrauen verwenden**
+   wählen und ein zuvor importiertes selbstsigniertes Zertifikat entfernen. Für private
+   Zertifikate die ATS-Hinweise in Abschnitt 6 beachten. Die Datei `runtime/secrets/agent_token`
    importieren oder deren Inhalt als Zugangsschlüssel eingeben.
 4. Den Servertest in den Einstellungen ausführen. Dafür muss kein Datensatz geöffnet sein.
 5. **KI-Assistent** im Startmenü oder in den Render-Bedienelementen wählen. Ein geöffneter
@@ -602,12 +604,32 @@ schreiben oder in `.env` ablegen. Bei vorhandener Konfiguration bleibt der alte 
 Nur innerhalb des BorgVR-vLLM-Containers setzt der Starter aus der privaten Schlüsseldatei
 den von vLLM vorgeschriebenen Namen `VLLM_API_KEY`. Andere Container bleiben unabhängig.
 
-Das automatisch erzeugte, selbstsignierte Zertifikat gilt 365 Tage. Die native App kann
-ihm durch den ausdrücklichen Import des öffentlichen Zertifikats vertrauen; Hostname
-beziehungsweise IP und Gültigkeit werden weiterhin geprüft. Alternativ ein Zertifikat
-einer auf den Geräten vertrauten internen oder öffentlichen CA verwenden.
-Die Zertifikatsausstellung, Erneuerung und Einrichtung des CA-Vertrauens auf den Geräten
-sind nicht automatisiert. TLS-Prüfungen niemals abschalten.
+Das automatisch erzeugte, selbstsignierte Zertifikat gilt 365 Tage und ist für lokale
+Tests vorgesehen. Ein Import in BorgVR ersetzt nicht die Anforderungen von Apples App
+Transport Security (ATS): Bei einem öffentlichen DNS-Namen kann ATS die Verbindung schon
+vor der app-eigenen Vertrauensprüfung ablehnen (`ATS failed system trust`, Fehler -1200).
+Ein erfolgreicher Python-/curl-Test oder ein Swift-Kommandozeilentest beweist daher nicht,
+dass der signierte App-Build dieselbe Verbindung akzeptiert.
+
+Für einen öffentlichen Endpunkt ein Zertifikat einer öffentlich vertrauenswürdigen CA
+verwenden und in BorgVR **Systemvertrauen verwenden** wählen. Bei einer internen CA muss
+auch das Betriebssystem der Geräte dieser CA vertrauen; der Import nur in BorgVR genügt
+für ATS nicht. Hostname beziehungsweise IP und Gültigkeit werden weiterhin geprüft.
+[Apple dokumentiert diese ATS-Anforderungen](https://developer.apple.com/documentation/security/preventing-insecure-network-connections).
+Keine globale ATS-Ausnahme hinzufügen und TLS-Prüfungen niemals abschalten.
+
+Ein Gateway kann das öffentliche HTTPS-Zertifikat bereitstellen und WebSocket-Upgrades
+an einen privaten SSH-Reverse-Tunnel weiterleiten. Den Tunnel nur an die Loopback-Adresse
+des Gateways binden. Bei TLS zum Agenten das Backend-Zertifikat und seinen Namen ebenfalls
+prüfen, nicht `proxy_ssl_verify off` verwenden. Der Gateway terminiert in diesem Aufbau
+TLS und muss deshalb als vertrauenswürdiger Betreiber Zugriff auf Anfragen, Antworten
+und Renderbilder haben dürfen. Das interne selbstsignierte Backend-Zertifikat nicht in
+die Clients importieren. Zugangsschlüssel und deren Prüfung bleiben unverändert aktiv.
+
+Ohne Gateway ein passendes PEM-Zertifikat samt Kette und Schlüssel unter
+`runtime/tls/server.crt` und `server.key` installieren, Eigentümer und Schlüsselrechte
+beibehalten und nur den Agenten neu starten. Die Zertifikatsausstellung, Erneuerung und
+Einrichtung des CA-Vertrauens auf den Geräten sind nicht durch das Setup automatisiert.
 
 Der Dienst sollte im privaten Netz oder VPN bleiben. Ohne ausdrücklichen Schalter ändert
 das Skript keine Firewall-Regeln.
