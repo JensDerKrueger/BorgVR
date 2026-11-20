@@ -428,7 +428,10 @@ def enable(root, key_file):
     if any(not (root / name).is_file() for name in REQUIRED):
         raise ValueError("Development requires the complete agent source checkout/archive, not only the production deployment bundle")
     if DEV_ROOT.exists() or HELPER.exists() or marker(root).exists():
-        raise ValueError("Development setup already exists. Use dev push/status, or dev disable --remove before enabling again.")
+        raise ValueError("Development setup already exists (including when disabled). "
+                         "If active, use dev push/status. To enable again, first run "
+                         "sudo ./setup.sh dev disable --remove, then repeat dev enable --ssh-key-file <public-key.pub>. "
+                         "This removes only development files/account, not model cache, credentials or certificates.")
     try:
         pwd.getpwnam(ACCOUNT)
     except KeyError:

@@ -208,6 +208,26 @@ def test_setup_dev_is_available_on_client_without_docker():
     assert result.returncode == 0 and "--host" in result.stdout and "--ssh-key-file" in result.stdout
 
 
+def test_enable_retained_disabled_setup_explains_safe_recovery(tmp_path, monkeypatch):
+    source = tmp_path / "checkout"
+    source.mkdir()
+    for name in dev.REQUIRED | {".env"}:
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# test\n")
+    retained = tmp_path / "development"
+    retained.mkdir()
+    (retained / "installation.json").write_text(json.dumps({"enabled": False}))
+    monkeypatch.setattr(dev, "DEV_ROOT", retained)
+    monkeypatch.setattr(dev, "HELPER", tmp_path / "helper.py")
+    monkeypatch.setattr(dev, "require_admin", lambda: None)
+    monkeypatch.setattr(dev, "public_key", lambda path: "test-public-key")
+    with pytest.raises(ValueError, match="sudo ./setup.sh dev disable --remove") as error:
+        dev.enable(source, tmp_path / "key.pub")
+    assert "not model cache, credentials or certificates" in str(error.value)
+    assert (retained / "installation.json").exists()
+
+
 @pytest.mark.parametrize("startup_fails,restore_fails", [(False, False), (True, False), (True, True)])
 def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monkeypatch, capsys, startup_fails, restore_fails):
     source = tmp_path / "checkout"

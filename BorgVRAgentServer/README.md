@@ -242,7 +242,11 @@ sudo ./setup.sh model qwen38-27b --gpu all --tensor-parallel-size 2
 
 Let an ongoing installation finish first. No uninstall, repeated host/port parameters,
 token replacement or certificate import is needed. If development mode is active, disable
-it with `sudo ./setup.sh dev disable` before changing the model, then enable it again.
+it with `sudo ./setup.sh dev disable --remove` before changing the model, then enable it
+again with `sudo ./setup.sh dev enable --ssh-key-file ~/borgvr-ai1-dev.pub` (adjust the
+public-key path as needed). If you previously used `dev disable` without `--remove`, run
+`dev disable --remove` before enabling again: disabling alone retains the installation.
+Removal affects only development files/account, not model cache, credentials or certificates.
 The switch interrupts active assistant requests. For a fresh installation:
 
 ```

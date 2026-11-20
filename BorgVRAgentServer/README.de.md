@@ -253,8 +253,13 @@ sudo ./setup.sh model qwen38-27b --gpu all --tensor-parallel-size 2
 
 Eine gerade laufende Installation zuerst fertig werden lassen. Deinstallation, erneute
 Host-/Port-Angabe oder neue Zertifikate sind nicht nötig. Falls der Entwicklungsmodus
-aktiviert ist, vor dem Modellwechsel `sudo ./setup.sh dev disable` ausführen und ihn danach
-wieder aktivieren. Modellwechsel unterbrechen laufende KI-Aufträge.
+aktiviert ist, vor dem Modellwechsel `sudo ./setup.sh dev disable --remove` ausführen und ihn
+danach mit `sudo ./setup.sh dev enable --ssh-key-file ~/borgvr-ai1-dev.pub` wieder aktivieren
+(gegebenenfalls den Pfad zum eigenen öffentlichen Schlüssel anpassen). Ein früheres
+`dev disable` ohne `--remove` behält die Einrichtung; in diesem Fall vor dem erneuten
+Aktivieren ebenfalls `dev disable --remove` ausführen. Dabei werden nur die Entwicklungsdateien
+und das Entwicklungskonto entfernt, nicht Modellcache, Zertifikate oder Zugangsschlüssel.
+Modellwechsel unterbrechen laufende KI-Aufträge.
 
 Bei einer neuen Installation beide Optionen direkt an `install` anhängen:
 
