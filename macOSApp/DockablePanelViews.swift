@@ -35,6 +35,7 @@ struct BorgVRUtilityWindow<Content: View>: Scene {
 
 private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
   let name: String
+  let didAttach: (NSWindow) -> Void
   let didClose: () -> Void
 
   final class AccessorView: NSView {
@@ -47,6 +48,7 @@ private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
 
   @MainActor final class Coordinator: NSObject {
     weak var window: NSWindow?
+    var didAttach: (NSWindow) -> Void = { _ in }
     var didClose: () -> Void = {}
 
     func attach(to window: NSWindow?, name: String) {
@@ -54,6 +56,7 @@ private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
       NotificationCenter.default.removeObserver(self)
       self.window = window
       guard let window else { return }
+      didAttach(window)
       window.tabbingMode = .disallowed
       DispatchQueue.main.async { [weak self, weak window] in
         guard let window, self?.window === window, window.frameAutosaveName != name else { return }
@@ -72,6 +75,7 @@ private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
 
   func makeNSView(context: Context) -> AccessorView {
     let view = AccessorView(frame: .zero)
+    context.coordinator.didAttach = didAttach
     context.coordinator.didClose = didClose
     view.movedToWindow = { [weak coordinator = context.coordinator] window in
       coordinator?.attach(to: window, name: name)
@@ -80,6 +84,7 @@ private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
   }
 
   func updateNSView(_ nsView: AccessorView, context: Context) {
+    context.coordinator.didAttach = didAttach
     context.coordinator.didClose = didClose
     context.coordinator.attach(to: nsView.window, name: name)
   }
@@ -90,8 +95,10 @@ private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
 }
 
 private extension View {
-  func windowFrameAutosaveName(_ name: String, didClose: @escaping () -> Void) -> some View {
-    background(WindowFrameAutosaveAccessor(name: name, didClose: didClose).frame(width: 0, height: 0))
+  func windowFrameAutosaveName(_ name: String, didAttach: @escaping (NSWindow) -> Void,
+                               didClose: @escaping () -> Void) -> some View {
+    background(WindowFrameAutosaveAccessor(name: name, didAttach: didAttach, didClose: didClose)
+      .frame(width: 0, height: 0))
   }
 }
 
@@ -158,7 +165,9 @@ struct DetachedDockablePanel<Content: View>: View {
           .frame(width: 1, height: 1)
       }
     }
-    .windowFrameAutosaveName(panel.windowFrameAutosaveName) {
+    .windowFrameAutosaveName(panel.windowFrameAutosaveName, didAttach: { window in
+      docking.trackDetachedWindowVisibility(panel) { [weak window] in window?.isVisible == true }
+    }) {
       docking.detachedWindowDidDisappear(panel)
     }
   }

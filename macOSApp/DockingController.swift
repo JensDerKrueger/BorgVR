@@ -146,6 +146,7 @@ final class DockingController: ObservableObject {
   @Published private(set) var commandRequest: MacCommandRequest? = nil
   private var datasetLifecycleClosingPanels: Set<DockablePanelID> = []
   private var transientClosingPanels: Set<DockablePanelID> = []
+  private var detachedWindowVisibility: [DockablePanelID: () -> Bool] = [:]
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
@@ -250,7 +251,7 @@ final class DockingController: ObservableObject {
   }
 
   func close(_ panel: DockablePanelID) {
-    if isDetached(panel) { transientClosingPanels.insert(panel) }
+    if isDetached(panel) { markDetachedWindowTemporarilyClosed(panel) }
     hide(panel)
     detachedPanels.remove(panel)
     persistLayout()
@@ -259,7 +260,10 @@ final class DockingController: ObservableObject {
   func resetForDatasetClose() {
     showsLog = false
     showsDatasetInfo = false
-    datasetLifecycleClosingPanels.formUnion(detachedPanels.intersection(visiblePanels))
+    // Mode-incompatible editors keep their layout but may already have no open window.
+    datasetLifecycleClosingPanels.formUnion(detachedPanels.filter {
+      detachedWindowVisibility[$0]?() ?? isVisible($0)
+    })
     detachedPanels.removeAll()
     visiblePanels.removeAll()
   }
@@ -288,12 +292,9 @@ final class DockingController: ObservableObject {
   }
 
   func detachedWindowDidDisappear(_ panel: DockablePanelID) {
-    if datasetLifecycleClosingPanels.remove(panel) != nil {
-      return
-    }
-    if transientClosingPanels.remove(panel) != nil {
-      return
-    }
+    let wasDatasetClose = datasetLifecycleClosingPanels.remove(panel) != nil
+    let wasTemporaryClose = transientClosingPanels.remove(panel) != nil
+    if wasDatasetClose || wasTemporaryClose { return }
     guard isDetached(panel) else { return }
     visiblePanels.remove(panel)
     detachedPanels.remove(panel)
@@ -378,7 +379,12 @@ final class DockingController: ObservableObject {
   }
 
   func markDetachedWindowTemporarilyClosed(_ panel: DockablePanelID) {
+    guard detachedWindowVisibility[panel]?() ?? isVisible(panel) else { return }
     transientClosingPanels.insert(panel)
+  }
+
+  func trackDetachedWindowVisibility(_ panel: DockablePanelID, isVisible: @escaping () -> Bool) {
+    detachedWindowVisibility[panel] = isVisible
   }
 
   func showEditor(for renderMode: RenderMode) {

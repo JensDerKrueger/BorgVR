@@ -176,6 +176,37 @@ struct DockingControllerTests {
     precondition(!docking.isVisible(.transferFunctionEditor),
       "A window hidden before dataset close must not leave a stale close callback for the next dataset")
 
+    let lifecycle = DockingController(defaults: defaults)
+    var nativeTFIsVisible = true
+    lifecycle.trackDetachedWindowVisibility(.transferFunctionEditor) { nativeTFIsVisible }
+    lifecycle.detach(.transferFunctionEditor)
+    lifecycle.markDetachedWindowTemporarilyClosed(.transferFunctionEditor)
+    nativeTFIsVisible = false
+    lifecycle.detachedWindowDidDisappear(.transferFunctionEditor)
+    lifecycle.markDetachedWindowTemporarilyClosed(.transferFunctionEditor)
+    lifecycle.closeDatasetPanels { id in
+      if id != DockablePanelID.transferFunctionEditor.windowID,
+         let panel = DockablePanelID.allCases.first(where: { $0.windowID == id }) {
+        lifecycle.detachedWindowDidDisappear(panel)
+      }
+    }
+    lifecycle.restoreForDatasetOpen()
+    nativeTFIsVisible = true
+    lifecycle.detachedWindowDidDisappear(.transferFunctionEditor)
+    precondition(!lifecycle.isVisible(.transferFunctionEditor) && !lifecycle.isDetached(.transferFunctionEditor),
+      "Mode-suspended windows must not leave temporary or dataset-close flags behind")
+
+    lifecycle.detach(.transferFunctionEditor)
+    lifecycle.markDetachedWindowTemporarilyClosed(.transferFunctionEditor)
+    lifecycle.resetForDatasetClose()
+    nativeTFIsVisible = false
+    lifecycle.detachedWindowDidDisappear(.transferFunctionEditor)
+    lifecycle.restoreForDatasetOpen()
+    nativeTFIsVisible = true
+    lifecycle.detachedWindowDidDisappear(.transferFunctionEditor)
+    precondition(!lifecycle.isVisible(.transferFunctionEditor),
+      "One native close must clear both temporary and dataset-close reasons when they overlap")
+
     let container = CGSize(width: 1200, height: 800)
     let size = CGSize(width: 380, height: 400)
     docking.move(.markerEditor, to: CGPoint(x: 210, y: 160), panelSize: size, containerSize: container)
