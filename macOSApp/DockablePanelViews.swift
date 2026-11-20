@@ -291,6 +291,26 @@ private struct DockablePanelTitleBar: View {
   }
 }
 
+struct DockablePanelCanvas<Content: View>: View {
+  // Membership is a value input, not a model read deferred into GeometryReader's closure.
+  let panels: [DockablePanelID]
+  @ViewBuilder var content: (DockablePanelID) -> Content
+
+  var body: some View {
+    GeometryReader { geometry in
+      ZStack(alignment: .topLeading) {
+        ForEach(panels) { panel in
+          PositionedDockablePanel(panel: panel, containerSize: geometry.size) {
+            content(panel)
+          }
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      .coordinateSpace(name: "dockablePanelCanvas")
+    }
+  }
+}
+
 struct PositionedDockablePanel<Content: View>: View {
   @EnvironmentObject private var docking: DockingController
   let panel: DockablePanelID

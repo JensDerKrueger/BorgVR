@@ -68,16 +68,8 @@ struct RenderView: View {
 
       measurementLabels
 
-      GeometryReader { geometry in
-        ZStack(alignment: .topLeading) {
-          ForEach(inlinePanels) { panel in
-            PositionedDockablePanel(panel: panel, containerSize: geometry.size) {
-              panelContent(panel)
-            }
-          }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .coordinateSpace(name: "dockablePanelCanvas")
+      DockablePanelCanvas(panels: inlinePanels) { panel in
+        panelContent(panel)
       }
 
       HStack {
