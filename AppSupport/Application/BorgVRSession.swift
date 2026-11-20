@@ -488,7 +488,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     defer { if isRecorded, id == recordingID { pendingRecordedActions -= 1 } }
     do {
       let result = try await BorgVRCommandExecutionContext.$executingAction.withValue(true) {
-        try await BorgVRCommandExecutionContext.$source.withValue(source, operation: operation)
+        try await BorgVRCommandExecutionContext.$source.withValue(source) { try await operation() }
       }
       publishCommandEvent(.action(action), source: source, id: activityID)
       return result
@@ -543,7 +543,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     defer { if eventID != nil, id == recordingID { pendingRecordedActions -= 1 } }
     do {
       let result = try await BorgVRCommandExecutionContext.$executingAction.withValue(true) {
-        try await BorgVRCommandExecutionContext.$source.withValue(source, operation: operation)
+        try await BorgVRCommandExecutionContext.$source.withValue(source) { try await operation() }
       }
       publishCommandEvent(.action(result), source: source, id: activityID)
       if id == recordingID, let eventID,

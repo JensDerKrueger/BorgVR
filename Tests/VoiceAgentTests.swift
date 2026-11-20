@@ -125,7 +125,13 @@ struct VoiceAgentTests {
     let lifecycleStart = commandEvents.count
     do {
       try await session.performAction(.discardVolumeEdits, source: .userInterface) { () async throws -> Void in
+        MainActor.preconditionIsolated()
+        try expect(BorgVRCommandExecutionContext.executingAction && BorgVRCommandExecutionContext.source == .userInterface,
+                   "Async action lost its task-local command context")
         await Task.yield()
+        MainActor.preconditionIsolated()
+        try expect(BorgVRCommandExecutionContext.executingAction && BorgVRCommandExecutionContext.source == .userInterface,
+                   "Async action lost its command context after suspension")
         throw Failure.failed("Synthetic edit failure")
       }
       throw Failure.failed("Failed action was swallowed")
@@ -135,6 +141,23 @@ struct VoiceAgentTests {
     let lifecycle = Array(commandEvents.dropFirst(lifecycleStart))
     try expect(lifecycle.count == 2 && lifecycle[0].phase == .began && lifecycle[1].phase == .failed &&
                lifecycle[0].id == lifecycle[1].id, "Manual async action did not publish a paired lifecycle")
+    let resolvedStart = commandEvents.count
+    try await session.performResolvedAction(.discardVolumeEdits, source: .mcp) {
+      MainActor.preconditionIsolated()
+      try expect(BorgVRCommandExecutionContext.executingAction && BorgVRCommandExecutionContext.source == .mcp,
+                 "Resolved action lost its task-local command context")
+      await Task.yield()
+      MainActor.preconditionIsolated()
+      try expect(BorgVRCommandExecutionContext.executingAction && BorgVRCommandExecutionContext.source == .mcp,
+                 "Resolved action lost its command context after suspension")
+      return .discardVolumeEdits
+    }
+    let resolvedLifecycle = Array(commandEvents.dropFirst(resolvedStart))
+    try expect(resolvedLifecycle.count == 2 && resolvedLifecycle[0].phase == .began &&
+               resolvedLifecycle[1].phase == .committed && resolvedLifecycle[0].id == resolvedLifecycle[1].id &&
+               resolvedLifecycle.allSatisfy { $0.source == .mcp }, "Resolved action lost its lifecycle or source")
+    try expect(!BorgVRCommandExecutionContext.executingAction && BorgVRCommandExecutionContext.source == .userInterface,
+               "Async action leaked task-local context to its caller")
     let before = session.currentSnapshot().transform
     do {
       _ = try await router.callTool(name: "rotate_view", arguments: ["axis": [0, 1, 0], "degrees": 30],
