@@ -17,6 +17,13 @@ enum VoiceAgentAnnotationPolicy {
                       "limit": ["type": "integer", "minimum": 1, "maximum": 64]]
       case "set_annotation_visibility":
         properties = ["objects": ["type": "boolean"], "measurements": ["type": "boolean"]]
+      case "remove_object", "remove_measurement":
+        properties = ["id": id]
+        required = ["id"]
+      case "clear_annotations":
+        properties = ["scope": ["type": "string", "enum": ["all", "markers", "measurements"]],
+                      "confirm": ["type": "boolean"]]
+        required = ["confirm"]
       case "upsert_sphere_marker":
         properties.merge(["position": position, "color": color,
           "radius": ["type": "number", "minimum": 0.005, "maximum": 1],
@@ -49,6 +56,9 @@ enum VoiceAgentAnnotationPolicy {
       return "Use the advertised annotation schema and bounded dataset-local coordinates."
     }
     if name == "set_annotation_visibility", arguments.isEmpty { return "Specify objects and/or measurements visibility." }
+    if name == "clear_annotations", arguments["confirm"] as? Bool != true {
+      return "Explicit confirmation is required; the app will separately ask the user before deletion."
+    }
     if let id = arguments["id"] as? String, UUID(uuidString: id) == nil { return "Use a listed UUID, or omit id to create an annotation." }
     if name == "upsert_sphere_marker", arguments["shows_direction"] as? Bool == true, arguments["direction_origin"] == nil {
       return "A directional marker requires direction_origin."

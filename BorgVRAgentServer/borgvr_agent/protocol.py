@@ -18,7 +18,7 @@ MAX_RESULT_BYTES = 256 * 1024
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_HISTORY_BYTES = 8 * 1024 * 1024
 
-# Native allowlist: annotation upserts are allowed; deletes, exports and voxel edits are not.
+# Annotation bulk deletion still requires local approval in the native client.
 ALLOWED_TOOLS = frozenset({
     "search_datasets", "open_dataset",
     "get_application_state", "get_transfer_function", "get_background",
@@ -28,6 +28,7 @@ ALLOWED_TOOLS = frozenset({
     "capture_screenshot",
     "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
     "list_measurements", "upsert_measurement", "set_annotation_visibility",
+    "remove_object", "remove_measurement", "clear_annotations",
 })
 APPLICATION_TOOLS = frozenset({"get_application_state", "search_datasets", "open_dataset"})
 

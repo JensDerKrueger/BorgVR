@@ -48,12 +48,13 @@ eingeführt. [Bisherige Grenzen](../AppSupport/Voice/ARCHITECTURE.md) gelten wei
 
 ## Befund des Funktionsabgleichs
 
-- 60 native MCP-Werkzeuge sind definiert; maximal 23 davon sind im nativen Agenten
+- 61 native MCP-Werkzeuge sind definiert; maximal 26 davon sind im nativen Agenten
   auf beiden Seiten erlaubt. Plattform, RGB/RGBA und Bildfreigabe reduzieren sie weiter.
   Die weiteren vier Modellwerkzeuge dienen nur dem Agentenablauf, nicht der App-Steuerung.
 - Marker und Messungen sind über Commands, MCP und den begrenzten Annotation-Vertrag
   des Agenten erreichbar, einschließlich Anlegen, Bearbeiten, Sichtbarkeit und getesteter
-  physischer Skalierung. Löschen, Mesh-Platzierung und Editing bleiben weitere Schritte.
+  physischer Skalierung und Löschen. Sammellöschen benötigt lokale Bestätigung und schützt
+  platzierte Meshes. Mesh-Platzierung und Editing bleiben weitere Schritte.
 - Katalogabfrage und Öffnen/Schließen existieren über MCP. Der Agent erhält eine begrenzte
   Metadatensuche und das autorisierte Öffnen eines kürzlich gelieferten Treffers. Schließen
   ist noch nicht freigeschaltet. Die KI-Verbindung funktioniert ohne Datensatz; im Leerlauf

@@ -860,6 +860,23 @@ final class BorgVRMCPToolRouter {
       case "clear_measurements":
         try service.clearMeasurements()
         return structuredToolResult(service.listMeasurements())
+      case "clear_annotations":
+        guard try optionalBool("confirm", in: arguments) == true else {
+          throw BorgVRMCPCommandError.invalidArgument("Explicit confirm: true is required to clear annotations.")
+        }
+        let scope = try optionalString("scope", in: arguments) ?? "all"
+        guard ["all", "markers", "measurements"].contains(scope) else {
+          throw BorgVRMCPCommandError.invalidArgument("Use scope all, markers or measurements.")
+        }
+        if scope != "measurements" {
+          let markers = service.listObjects().compactMap { object -> UUID? in
+            if case .marker(let marker) = object { return marker.id }
+            return nil
+          }
+          for id in markers { try service.removeObject(id: id) }
+        }
+        if scope != "markers" { try service.clearMeasurements() }
+        return structuredToolResult(service.applicationState())
       case "reset_state":
         let rawScope = arguments["scope"] as? String ?? BorgVRMCPResetScope.all.rawValue
         guard let scope = BorgVRMCPResetScope(rawValue: rawScope) else {
@@ -1113,6 +1130,10 @@ final class BorgVRMCPToolRouter {
         required: ["id"]
       ),
       tool("clear_measurements", "Remove all measurements."),
+      tool("clear_annotations", "Remove all markers and/or measurements in the current dataset, preserving placed meshes. Requires explicit confirmation. The native AI client additionally requires a fresh local human approval; a model-supplied confirm flag is not human approval.", properties: [
+        "scope": ["type": "string", "enum": ["all", "markers", "measurements"]],
+        "confirm": ["type": "boolean", "enum": [true]]
+      ], required: ["confirm"]),
       tool("reset_state", "Reset a visualization state group.", properties: [
         "scope": ["type": "string", "enum": BorgVRMCPResetScope.allCases.map(\.rawValue)]
       ]),

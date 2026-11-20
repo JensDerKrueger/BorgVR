@@ -79,12 +79,17 @@ struct VoiceAgentPolicyTests {
     try check(VoiceAgentAnnotationPolicy.validationError(name: "upsert_measurement",
       arguments: ["kind": "length", "points": [["id": pointID, "position": [0, 0, 0]],
         ["id": pointID, "position": [1, 0, 0]]]]) != nil, "Duplicate point IDs accepted")
-    for name in ["list_objects", "list_measurements", "upsert_sphere_marker", "upsert_stroke_marker", "upsert_measurement"] {
+    for name in ["list_objects", "list_measurements", "upsert_sphere_marker", "upsert_stroke_marker", "upsert_measurement",
+                 "remove_object", "remove_measurement", "clear_annotations"] {
       try check(VoiceAgentPolicy.allowed.contains(name), "Annotation capability missing")
     }
-    for name in ["remove_object", "clear_objects", "remove_measurement", "clear_measurements", "upsert_mesh_instance"] {
+    for name in ["clear_objects", "clear_measurements", "upsert_mesh_instance"] {
       try check(!VoiceAgentPolicy.allowed.contains(name), "Annotation capability gained destructive/mesh operations")
     }
+    try check(VoiceAgentAnnotationPolicy.validationError(name: "clear_annotations", arguments: ["confirm": false]) != nil,
+              "Bulk deletion accepted a false confirmation flag")
+    try check(VoiceAgentAnnotationPolicy.validationError(name: "remove_object", arguments: ["id": "guessed"]) != nil,
+              "Deletion accepted an invalid UUID")
     try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: false, completionUncertain: false) == .contextLimit,
               "Context overflow without a mutation was misreported")
     try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: true, completionUncertain: false) == .changesAppliedContextLimit,

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 
 /// All knowledge of BorgVR commands, MCP routing and source attribution stays here.
 @MainActor
@@ -10,6 +11,7 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   private let readinessProvider: () -> Bool
   private let origin = BorgVRCommandSource.controller(UUID().uuidString)
   private var searchResults: [String: Date] = [:]
+  private var deletionPreview: (value: VoiceAgentAnnotationDeletion, context: VoiceAgentContext, digest: Data, expires: Date)?
 
   init(service: any BorgVRMCPCommandService, isReady: @escaping () -> Bool = { true },
        context: @escaping () -> VoiceAgentContext?) {
@@ -47,6 +49,10 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
 
   func executeTool(name: String, arguments: [String: Any], validateContext: @escaping () throws -> Void) async throws -> [String: Any] {
     try validateContext()
+    if name == "clear_annotations" {
+      return ["structuredContent": ["ok": false, "not_applied": true, "code": "confirmation_required",
+        "note": "Bulk annotation deletion requires a fresh local human approval; confirm: true alone is insufficient."]]
+    }
     if let error = VoiceAgentAnnotationPolicy.validationError(name: name, arguments: arguments) {
       return annotationRejection(error)
     }
@@ -55,6 +61,24 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
     }
     if name == "list_measurements" {
       return try annotationList(service.listMeasurements(), key: "measurements", arguments: arguments, encode: measurementResult)
+    }
+    if name == "remove_object" {
+      guard let rawID = arguments["id"] as? String, let id = UUID(uuidString: rawID),
+            let object = service.listObjects().first(where: { $0.id == id }), case .marker = object else {
+        return annotationRejection("The marker ID is not present in this dataset. Mesh deletion is not available; list objects again.")
+      }
+      if annotationDeletionCounts(scope: "markers").0 == 1 {
+        return ["structuredContent": ["ok": false, "not_applied": true, "code": "confirmation_required"]]
+      }
+    }
+    if name == "remove_measurement" {
+      guard let rawID = arguments["id"] as? String, let id = UUID(uuidString: rawID),
+            service.listMeasurements().contains(where: { $0.id == id }) else {
+        return annotationRejection("The measurement ID is not present in this dataset. List measurements again.")
+      }
+      if service.listMeasurements().count == 1 {
+        return ["structuredContent": ["ok": false, "not_applied": true, "code": "confirmation_required"]]
+      }
     }
     if ["upsert_sphere_marker", "upsert_stroke_marker"].contains(name), let rawID = arguments["id"] as? String {
       guard let id = UUID(uuidString: rawID), let object = service.listObjects().first(where: { $0.id == id }),
@@ -106,6 +130,12 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
        let state = service.listMeasurements().first(where: { $0.id == id }) {
       return ["structuredContent": try measurementResult(state)]
     }
+    if name == "remove_object" {
+      return try annotationList(service.listObjects(), key: "objects", arguments: [:], encode: annotationJSON)
+    }
+    if name == "remove_measurement" {
+      return try annotationList(service.listMeasurements(), key: "measurements", arguments: [:], encode: measurementResult)
+    }
     if name == "search_datasets", let payload = result["structuredContent"] as? [String: Any],
        let matches = payload["matches"] as? [[String: Any]] {
       searchResults = searchResults.filter { $0.value > Date() }
@@ -123,6 +153,68 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
 
   private func annotationRejection(_ message: String) -> [String: Any] {
     ["structuredContent": ["ok": false, "not_applied": true, "code": "invalid_annotation", "error": message]]
+  }
+
+  func prepareAnnotationDeletion(scope: String, targetID: String?) throws -> VoiceAgentAnnotationDeletion? {
+    guard ["all", "markers", "measurements"].contains(scope), let context else { throw VoiceAgentError.contextChanged }
+    let counts = annotationDeletionCounts(scope: scope)
+    if let targetID {
+      guard let id = UUID(uuidString: targetID) else { return nil }
+      if scope == "markers" {
+        guard counts.0 == 1, service.listObjects().contains(where: { object in
+          if case .marker(let marker) = object { return marker.id == id }; return false
+        }) else { return nil }
+      } else {
+        guard counts.1 == 1, service.listMeasurements().contains(where: { $0.id == id }) else { return nil }
+      }
+    }
+    let preview = VoiceAgentAnnotationDeletion(id: UUID(), scope: scope, markerCount: counts.0, measurementCount: counts.1)
+    deletionPreview = (preview, context, try annotationDeletionDigest(scope: scope), Date().addingTimeInterval(300))
+    return preview
+  }
+
+  func executeAnnotationDeletion(_ confirmation: VoiceAgentAnnotationDeletion,
+                                validateContext: @escaping () throws -> Void) async throws -> [String: Any] {
+    guard let preview = deletionPreview, preview.value.id == confirmation.id else {
+      return annotationRejection("Deletion approval is missing or has already been consumed.")
+    }
+    deletionPreview = nil
+    guard preview.context == context, preview.expires > Date() else {
+      return annotationRejection("The dataset changed or deletion approval expired; nothing was deleted.")
+    }
+    do {
+      return try await BorgVRCommandExecutionContext.$originOverride.withValue(origin) {
+        try await router.callTool(name: "clear_annotations", arguments: ["scope": preview.value.scope, "confirm": true],
+          validateContext: {
+            do {
+              try validateContext()
+              guard preview.context == self.context,
+                    try self.annotationDeletionDigest(scope: preview.value.scope) == preview.digest else { throw DeletionPreviewChanged() }
+            } catch { throw DeletionPreviewChanged() }
+          })
+      }
+    } catch is DeletionPreviewChanged {
+      return ["structuredContent": ["ok": false, "not_applied": true, "code": "user_changed_view",
+        "note": "The context or annotation snapshot changed after the question; nothing was deleted."]]
+    }
+  }
+
+  private struct DeletionPreviewChanged: Error {}
+
+  private func annotationDeletionCounts(scope: String) -> (Int, Int) {
+    let markers = scope == "measurements" ? 0 : service.listObjects().filter { if case .marker = $0 { return true }; return false }.count
+    return (markers, scope == "markers" ? 0 : service.listMeasurements().count)
+  }
+
+  private func annotationDeletionDigest(scope: String) throws -> Data {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    var data = Data(scope.utf8)
+    if scope != "measurements" {
+      data.append(try encoder.encode(service.listObjects().filter { if case .marker = $0 { return true }; return false }))
+    }
+    if scope != "markers" { data.append(try encoder.encode(service.listMeasurements())) }
+    return Data(SHA256.hash(data: data))
   }
 
   private var measurementExtent: SIMD3<Float>? {

@@ -1,6 +1,60 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Delete all annotations?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete all annotations?" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Alle Annotationen löschen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer toutes les annotations ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar todas las anotaciones?" } }
+      }
+    },
+    "Delete all markers?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete all markers?" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Alle Marker löschen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer tous les marqueurs ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar todos los marcadores?" } }
+      }
+    },
+    "Delete all measurements?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete all measurements?" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Alle Messungen löschen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer toutes les mesures ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar todas las mediciones?" } }
+      }
+    },
+    "Delete annotations": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Delete annotations" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Annotationen löschen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer les annotations" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Eliminar anotaciones" } }
+      }
+    },
+    "Markers: %lld. Measurements: %lld. Placed meshes are kept.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Markers: %lld. Measurements: %lld. Placed meshes are kept." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Marker: %lld. Messungen: %lld. Platzierte Meshes bleiben erhalten." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Marqueurs : %lld. Mesures : %lld. Les maillages placés sont conservés." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Marcadores: %lld. Mediciones: %lld. Se conservan las mallas colocadas." } }
+      }
+    },
+    "Waiting for deletion approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Waiting for deletion approval" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Wartet auf Löschbestätigung" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "En attente de confirmation de suppression" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Esperando confirmación de eliminación" } }
+      }
+    },
     "Request is being processed.": {
       "extractionState": "manual",
       "localizations": {

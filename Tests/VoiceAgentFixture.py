@@ -109,6 +109,33 @@ async def model(messages, info):
             assert [point["id"] for point in lengths[0]["points"]] == [point["id"] for point in lengths[1]["points"]]
             assert all(row["value"] > 0 and row["physicalExtentAvailable"] for row in returned[-1].content["measurements"])
             return ModelResponse(parts=[TextPart("Agent annotations created, edited and verified.")])
+    elif user == "annotation-delete-one":
+        objects = next((part.content["objects"] for part in returned if part.tool_name == "list_objects"), [])
+        measurements = next((part.content["measurements"] for part in returned if part.tool_name == "list_measurements"), [])
+        marker_id = objects[0]["marker"]["id"] if objects else ""
+        measurement_id = measurements[0]["id"] if measurements else ""
+        steps = [("get_application_state", {}), ("list_objects", {}), ("list_measurements", {}),
+                 ("remove_object", {"id": marker_id}), ("remove_measurement", {"id": measurement_id}),
+                 ("list_objects", {}), ("list_measurements", {})]
+        if len(returned) >= len(steps):
+            assert len(returned[-2].content["objects"]) == 1
+            assert len(returned[-1].content["measurements"]) == 2
+            return ModelResponse(parts=[TextPart("Target annotations deleted and verified.")])
+    elif user == "annotation-delete-all":
+        steps = [("get_application_state", {}), ("list_objects", {}), ("list_measurements", {}),
+                 ("clear_annotations", {"scope": "all", "confirm": True}),
+                 ("list_objects", {}), ("list_measurements", {})]
+        cleared = next((part.content for part in returned if part.tool_name == "clear_annotations"), None)
+        if cleared is not None and cleared.get("code") == "user_declined":
+            attempted_bypass = [part for part in returned if part.tool_name == "remove_object"]
+            if not attempted_bypass:
+                marker_id = next(part.content["objects"][0]["marker"]["id"] for part in returned if part.tool_name == "list_objects")
+                return ModelResponse(parts=[ToolCallPart("remove_object", {"id": marker_id}, tool_call_id="decline-bypass")])
+            assert attempted_bypass[-1].content["code"] == "user_declined"
+            return ModelResponse(parts=[TextPart("Deletion declined safely.")])
+        if len(returned) >= len(steps):
+            assert returned[-2].content["objects"] == [] and returned[-1].content["measurements"] == []
+            return ModelResponse(parts=[TextPart("All annotations deleted and verified.")])
     elif user == "catalog-search":
         steps = [("get_application_state", {}), ("search_datasets", {"query": "bone"})]
         if len(returned) >= 2:

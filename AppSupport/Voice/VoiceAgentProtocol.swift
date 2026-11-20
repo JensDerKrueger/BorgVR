@@ -89,6 +89,7 @@ enum VoiceAgentPolicy {
     "set_background", "set_transfer_function", "set_bounding_box", "set_screen_projection",
     "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
     "list_measurements", "upsert_measurement", "set_annotation_visibility",
+    "remove_object", "remove_measurement", "clear_annotations",
     "wait_until_rendered", "capture_screenshot"
   ]
   static let reads: Set<String> = ["search_datasets", "get_application_state", "get_transfer_function", "get_background",
@@ -107,7 +108,13 @@ enum VoiceAgentPolicy {
       var value = original
       if let schema = VoiceAgentAnnotationPolicy.schema(for: name) {
         value["inputSchema"] = schema
-        value["description"] = (original["description"] as? String ?? "") + VoiceAgentAnnotationPolicy.guidance
+        if name == "remove_object" {
+          value["description"] = "Remove one listed sphere, directional or stroke marker by UUID, never a mesh. Read application state and list_objects first. The app confirms deleting the last marker. Only delete on explicit user request."
+        } else if name == "remove_measurement" || name == "clear_annotations" {
+          value["description"] = (original["description"] as? String ?? "") + " Read state and the relevant annotation lists first. Bulk deletion and deletion of the last item require local human approval; a model-supplied confirm flag cannot grant permission. Never bypass a declined deletion with individual calls."
+        } else {
+          value["description"] = (original["description"] as? String ?? "") + VoiceAgentAnnotationPolicy.guidance
+        }
       }
       if ["get_transfer_function", "set_transfer_function"].contains(name) {
         value["description"] = (original["description"] as? String ?? "") +

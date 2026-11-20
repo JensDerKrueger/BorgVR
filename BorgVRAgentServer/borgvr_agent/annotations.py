@@ -2,7 +2,8 @@
 
 from uuid import UUID
 
-ANNOTATION_WRITES = frozenset({"upsert_sphere_marker", "upsert_stroke_marker", "upsert_measurement"})
+ANNOTATION_DELETES = frozenset({"remove_object", "remove_measurement", "clear_annotations"})
+ANNOTATION_WRITES = frozenset({"upsert_sphere_marker", "upsert_stroke_marker", "upsert_measurement"}) | ANNOTATION_DELETES
 ANNOTATION_PROMPT = """
 You can create/edit sphere, directional and stroke markers and length/area/volume measurements
 using the offered annotation tools. Read application state and list_objects/list_measurements
@@ -13,22 +14,32 @@ Upsert replaces the complete item: preserve unmodified fields and measurement po
 Follow pagination, never replace a detailsOmitted summary, and list again after changes.
 Report BorgVR's returned values/units and missing physical calibration, not image-derived sizes.
 Length is a polyline, area a planar polygon, volume a convex hull, NOT segmented organ volume.
-Correct rejected geometry instead of claiming success. Visibility is not deletion; deletes
-and mesh placement are unavailable. Do not refuse tools merely because old sessions lacked them.
+Correct rejected geometry instead of claiming success. Delete only on explicit user request,
+never as rendering cleanup. Use listed UUIDs for individual deletion. For bulk deletion use
+clear_annotations with scope all/markers/measurements and confirm true; that flag does NOT
+replace the app's local human confirmation. The app also confirms deleting the last item.
+If the user declines, stop deleting and do not bypass the decision with individual calls.
+Placed meshes are preserved. Mesh placement remains unavailable.
 """
 
 
-def annotation_list_for(name):
-    if name in {"upsert_sphere_marker", "upsert_stroke_marker"}:
-        return "list_objects"
-    if name == "upsert_measurement":
-        return "list_measurements"
-    return None
+def annotation_lists_for(name, arguments):
+    if name in {"upsert_sphere_marker", "upsert_stroke_marker", "remove_object"}:
+        return {"list_objects"}
+    if name in {"upsert_measurement", "remove_measurement"}:
+        return {"list_measurements"}
+    if name == "clear_annotations":
+        scope = arguments.get("scope", "all")
+        return ({"list_objects"} if scope == "markers" else {"list_measurements"} if scope == "measurements"
+                else {"list_objects", "list_measurements"})
+    return set()
 
 
 def validate_annotation_arguments(name, arguments):
     if name not in ANNOTATION_WRITES:
         return
+    if name == "clear_annotations" and arguments.get("confirm") is not True:
+        raise ValueError("Explicit confirm true is required; the app will separately ask the user before deletion.")
     ids = [arguments["id"]] if "id" in arguments else []
     points = arguments.get("points", [])
     if name == "upsert_measurement":

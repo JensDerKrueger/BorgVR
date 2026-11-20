@@ -5,7 +5,7 @@ Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nach
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
 Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets` und `open_dataset` verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
 
-Erfasst: **75 Funktionsgruppen**, **60 MCP-Werkzeuge**, **23 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
+Erfasst: **75 Funktionsgruppen**, **61 MCP-Werkzeuge**, **26 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
@@ -64,9 +64,9 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Marker, Objekte und Messungen | [Objekte, Messungen und Punkte auswählen sowie Projektionswerkzeuge konfigurieren](#annotations-selection) | dataset | nur UI | nein | nein |
 | Marker, Objekte und Messungen | [Kugel-, Richtungs- und Strichmarker erstellen und bearbeiten](#annotations-markers) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Mesh-Assets auswählen und Instanzen platzieren oder transformieren](#annotations-mesh) | dataset | vorhanden | ja | nein |
-| Marker, Objekte und Messungen | [Einzelne oder alle Marker und Objekte entfernen](#annotations-delete) | dataset | vorhanden | ja | nein |
+| Marker, Objekte und Messungen | [Einzelne oder alle Marker und Objekte entfernen](#annotations-delete) | dataset | vorhanden | ja | teilweise* |
 | Marker, Objekte und Messungen | [Längen-, Flächen- und Volumenmessungen anlegen und korrigieren](#annotations-measure) | dataset | vorhanden | ja | ja* |
-| Marker, Objekte und Messungen | [Einzelne oder alle Messungen entfernen](#annotations-measure_delete) | dataset | vorhanden | ja | nein |
+| Marker, Objekte und Messungen | [Einzelne oder alle Messungen entfernen](#annotations-measure_delete) | dataset | vorhanden | ja | teilweise* |
 | Marker, Objekte und Messungen | [Objekte und Messungen sichtbar oder unsichtbar schalten](#annotations-visibility) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Marker, Objekte und Messungen laden, zusammenführen und speichern](#annotations-files) | dataset | teilweise | nein | nein |
 | Speichern und Automatisierung | [Darstellungszustand speichern und laden](#state-picture) | dataset | vorhanden | ja | nein |
@@ -769,14 +769,14 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 
 - Kennung: `annotations.delete`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Annotationen löschen.
 - Register: `BorgVRCommand.removeObject`, `BorgVRCommand.clearObjects`
-- MCP: `remove_object`, `clear_objects`
-- Native Agentenwerkzeuge: fehlen
+- MCP: `remove_object`, `clear_objects`, `clear_annotations`
+- Native Agentenwerkzeuge: `clear_annotations`, `remove_object`
 - Benannte GSC-Befehle (macOS): `removemarker`, `clearmarkers`, `removeobject`, `clearobjects`
-- Zustandsabfrage: list_objects vor/nach der Änderung.
-- Lücke: Agent gesperrt; Löschumfang und Auswirkungen auf SharePlay brauchen lokale Freigaben.
-- Nächster Schritt: Nach stabiler ID arbeiten; Sammellöschen gesondert bestätigen und Ergebnis prüfen.
-- Quellen: [VisionApp/MarkerView.swift](../VisionApp/MarkerView.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
+- Zustandsabfrage: list_objects vor/nach der Änderung; lokale Löschvorschau mit exakten Anzahlen und Snapshot-Freigabe.
+- Lücke: Agent darf Marker, aber keine Meshes löschen. clear_annotations und das Löschen des letzten Markers erfordern lokale Zustimmung; clear_objects bleibt im Agenten gesperrt.
+- Nächster Schritt: Freigaben für weitere destruktive Fähigkeiten getrennt ergänzen; kein Wiederverwenden oder Umgehen einer abgelehnten Freigabe.
+- Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [VisionApp/MarkerView.swift](../VisionApp/MarkerView.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
 
 <a id="annotations-measure"></a>
 ### Längen-, Flächen- und Volumenmessungen anlegen und korrigieren
@@ -797,14 +797,14 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 
 - Kennung: `annotations.measure_delete`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Messdaten löschen.
 - Register: `BorgVRCommand.removeMeasurement`, `BorgVRCommand.clearMeasurements`
-- MCP: `remove_measurement`, `clear_measurements`
-- Native Agentenwerkzeuge: fehlen
+- MCP: `remove_measurement`, `clear_measurements`, `clear_annotations`
+- Native Agentenwerkzeuge: `clear_annotations`, `remove_measurement`
 - Benannte GSC-Befehle (macOS): `removemeasurement`, `clearmeasurements`
-- Zustandsabfrage: list_measurements vor/nach der Änderung.
-- Lücke: Agent gesperrt; Sammellöschen benötigt gesonderte Freigabe.
-- Nächster Schritt: Messungs-IDs und Ergebnisprüfung mit lokalen Bestätigungen verbinden.
-- Quellen: [VisionApp/MeasurementView.swift](../VisionApp/MeasurementView.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: kein spezifischer Test zugeordnet
+- Zustandsabfrage: list_measurements vor/nach der Änderung; Snapshot-gebundene lokale Bestätigung für Sammellöschen.
+- Lücke: Agent darf gezielt löschen; Sammellöschen oder die letzte Messung benötigen lokale Zustimmung. clear_measurements bleibt im Agenten gesperrt.
+- Nächster Schritt: Weitere destruktive Fähigkeiten nur mit eigenen Freigaben; Kontextwechsel, Abbruch und Snapshot-Änderungen entwerten die Zustimmung.
+- Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [VisionApp/MeasurementView.swift](../VisionApp/MeasurementView.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
 
 <a id="annotations-visibility"></a>
 ### Objekte und Messungen sichtbar oder unsichtbar schalten

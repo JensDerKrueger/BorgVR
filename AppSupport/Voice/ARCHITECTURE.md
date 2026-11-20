@@ -112,7 +112,12 @@ Details werden ausdrücklich markiert und dürfen nicht als vollständiger Upser
 Die physische Messgröße berechnet BorgVR mit der Datensatzskalierung; ohne diese gibt es
 keinen behaupteten Messwert. Volumen ist die konvexe Hülle der Punkte, keine Segmentierung.
 Sichere Validierungsablehnungen liefern `not_applied`; echte Ungewissheit führt weiterhin
-zum Abbruch ohne Wiederholung. Löschen, Sammellöschen und Mesh-Platzierung bleiben gesperrt.
+zum Abbruch ohne Wiederholung. Einzelnes Löschen nutzt vorhandene Commands. Sammellöschen
+und das letzte Element einer Annotationsart benötigen eine lokale UI-Bestätigung mit
+Anzahl der betroffenen Elemente. Die einmalige Freigabe ist an Datensatz und Inhalt
+gebunden und verfällt nach 300 Sekunden. Ablehnung sperrt weitere Löschversuche desselben
+Auftrags auf beiden Seiten. Der generische Bestätigungsvertrag enthält keine BorgVR-Typen;
+Meshes bleiben geschützt und Mesh-Platzierung bleibt gesperrt.
 
 ## Gemeinsame Bearbeitung
 

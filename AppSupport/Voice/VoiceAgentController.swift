@@ -24,6 +24,7 @@ final class VoiceAgentController: ObservableObject {
   @Published private(set) var busy = false
   @Published private(set) var interrupting = false
   @Published private(set) var collaborationQuestion: VoiceAgentQuestion?
+  @Published private(set) var annotationDeletion: VoiceAgentAnnotationDeletion?
   @Published private(set) var ruleProposals: [VoiceAgentQuestion] = []
   @Published private(set) var userIsInteracting = false
   @Published private(set) var model = ""
@@ -40,6 +41,8 @@ final class VoiceAgentController: ObservableObject {
   private var sessionID: String?
   private var requestID: String?
   private var acknowledgedRequestID: String?
+  private var deletionReply: CheckedContinuation<Bool, Never>?
+  private var declinedDeletionRequestID: String?
   private let diagnosticLog = Logger(subsystem: "de.uni-due.BorgVR", category: "VoiceAgent")
   private var catalog: [[String: Any]] = []
   private var ledger = VoiceAgentCallLedger()
@@ -93,6 +96,7 @@ final class VoiceAgentController: ObservableObject {
   }
 
   deinit {
+    deletionReply?.resume(returning: false)
     receiver?.cancel()
     heartbeat?.cancel()
     deadline?.cancel()
@@ -193,6 +197,7 @@ final class VoiceAgentController: ObservableObject {
   }
 
   func disconnect(reason: Error? = nil) {
+    if let annotationDeletion { resolveAnnotationDeletion(id: annotationDeletion.id, accepted: false) }
     var reportedReason = reason
     if busy, let error = reason as? VoiceAgentError,
        [.connection, .timedOut, .commandFailed].contains(error), changesApplied || pendingMutation {
@@ -433,6 +438,7 @@ final class VoiceAgentController: ObservableObject {
       interrupting = true
       status = voiceAgentText("Interrupting…")
       speech.stopSpeaking()
+      if let annotationDeletion { resolveAnnotationDeletion(id: annotationDeletion.id, accepted: false) }
       resumeQueuedPromptIfSafe()
       return
     }
@@ -502,6 +508,24 @@ final class VoiceAgentController: ObservableObject {
 
   /// Closing the socket also cancels the server run; no uncertain action is retried.
   func cancel() { disconnect() }
+
+  func resolveAnnotationDeletion(id: UUID, accepted: Bool) {
+    guard annotationDeletion?.id == id else { return }
+    annotationDeletion = nil
+    let continuation = deletionReply
+    deletionReply = nil
+    if !accepted { declinedDeletionRequestID = requestID }
+    status = voiceAgentText("Working…")
+    continuation?.resume(returning: accepted)
+  }
+
+  private func requestAnnotationDeletion(_ preview: VoiceAgentAnnotationDeletion) async -> Bool {
+    await withCheckedContinuation { continuation in
+      deletionReply = continuation
+      annotationDeletion = preview
+      status = voiceAgentText("Waiting for deletion approval")
+    }
+  }
 
   private func requireContext() throws {
     if let openingContext {
@@ -642,7 +666,8 @@ final class VoiceAgentController: ObservableObject {
     }
     guard VoiceAgentPolicy.reads.contains(name) || readState else { throw VoiceAgentError.protocolViolation }
     pendingCallID = callID
-    pendingMutation = !VoiceAgentPolicy.reads.contains(name)
+    let deletionTool = ["clear_annotations", "remove_object", "remove_measurement"].contains(name)
+    pendingMutation = !VoiceAgentPolicy.reads.contains(name) && !deletionTool
     if name == "open_dataset" {
       openingPreviousContext = bridge?.applicationDatasetContext
       openingTarget = arguments["id"] as? String
@@ -650,7 +675,7 @@ final class VoiceAgentController: ObservableObject {
     let id = generation
     let request = requestID!
     toolDeadline = Task { @MainActor [weak self] in
-      do { try await Task.sleep(for: .seconds(name == "open_dataset" ? 330 : name == "search_datasets" ? 75 : 40)) } catch { return }
+      do { try await Task.sleep(for: .seconds(name == "open_dataset" ? 330 : deletionTool ? 300 : name == "search_datasets" ? 75 : 40)) } catch { return }
       if self?.generation == id { self?.disconnect(reason: VoiceAgentError.timedOut) }
     }
     toolTask = Task { @MainActor [weak self] in
@@ -675,7 +700,27 @@ final class VoiceAgentController: ObservableObject {
             }
           }
         let result: [String: Any]
-        if name == "open_dataset", let target = self.openingTarget {
+        if deletionTool, self.declinedDeletionRequestID == request {
+          result = ["structuredContent": ["ok": false, "not_applied": true, "code": "user_declined",
+            "note": "The user declined deletion in this request. Do not bypass that decision with other deletion tools."]]
+        } else if deletionTool {
+          let scope = name == "remove_object" ? "markers" : name == "remove_measurement" ? "measurements" : arguments["scope"] as? String ?? "all"
+          if let preview = try bridge.prepareAnnotationDeletion(scope: scope, targetID: name == "clear_annotations" ? nil : arguments["id"] as? String) {
+            if preview.markerCount + preview.measurementCount == 0 {
+              result = ["structuredContent": ["ok": true, "not_applied": true, "code": "no_annotations"]]
+            } else if !(await self.requestAnnotationDeletion(preview)) {
+              result = ["structuredContent": ["ok": false, "not_applied": true, "code": "user_declined",
+                "note": "The user did not approve deletion. Do not ask again or delete items individually to bypass that decision."]]
+            } else {
+              guard self.generation == id, self.requestID == request, !Task.isCancelled else { return }
+              self.pendingMutation = true
+              result = try await bridge.executeAnnotationDeletion(preview, validateContext: validate)
+            }
+          } else {
+            self.pendingMutation = true
+            result = try await bridge.executeTool(name: name, arguments: arguments, validateContext: validate)
+          }
+        } else if name == "open_dataset", let target = self.openingTarget {
           result = try await bridge.openDataset(id: target, validateContext: validate, didBegin: { opened in
             guard self.generation == id, self.requestID == request, self.openingTarget == opened.datasetID,
                   self.openingContext == nil || self.openingContext?.hasSameOpening(as: opened) == true else { throw VoiceAgentError.contextChanged }

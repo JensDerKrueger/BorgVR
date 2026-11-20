@@ -57,7 +57,7 @@ struct VoiceAgentView: View {
         HStack {
           Label(agent.status, systemImage: agent.connectionState == .ready ? "checkmark.shield" : "network")
           Spacer()
-          if (agent.busy && agent.collaborationQuestion == nil && !agent.userIsInteracting) || agent.connectionState == .connecting {
+          if (agent.busy && agent.collaborationQuestion == nil && agent.annotationDeletion == nil && !agent.userIsInteracting) || agent.connectionState == .connecting {
             ProgressView().controlSize(.small)
           }
           Button { agent.newConversation() } label: { Image(systemName: "arrow.counterclockwise") }
@@ -164,13 +164,37 @@ struct VoiceAgentView: View {
     .frame(width: 600, height: 580)
     #endif
     .task { await agent.connect() }
-    .onDisappear { speech.cancel() }
+    .alert(voiceAgentText(deletionTitle), isPresented: Binding(
+      get: { agent.annotationDeletion != nil },
+      set: { visible in
+        if !visible, let preview = agent.annotationDeletion { agent.resolveAnnotationDeletion(id: preview.id, accepted: false) }
+      }), presenting: agent.annotationDeletion) { preview in
+        Button(voiceAgentText("Delete annotations"), role: .destructive) {
+          agent.resolveAnnotationDeletion(id: preview.id, accepted: true)
+        }
+        Button(voiceAgentText("Cancel"), role: .cancel) { agent.resolveAnnotationDeletion(id: preview.id, accepted: false) }
+      } message: { preview in
+        Text(String(format: voiceAgentText("Markers: %lld. Measurements: %lld. Placed meshes are kept."),
+                    Int64(preview.markerCount), Int64(preview.measurementCount)))
+      }
+    .onDisappear {
+      speech.cancel()
+      if let preview = agent.annotationDeletion { agent.resolveAnnotationDeletion(id: preview.id, accepted: false) }
+    }
     .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
   }
 
   private var canSendMessage: Bool {
     !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && text.count <= 8192 &&
       !agent.interrupting && !speech.isRecording && agent.connectionState != .connecting && agent.isAvailable
+  }
+
+  private var deletionTitle: String {
+    switch agent.annotationDeletion?.scope {
+      case "markers": return "Delete all markers?"
+      case "measurements": return "Delete all measurements?"
+      default: return "Delete all annotations?"
+    }
   }
 
   private func sendMessage() {

@@ -27,7 +27,19 @@ checks that the configured model is actually listed by vLLM. It returns 503 if u
 With a ready dataset, updated peers can negotiate `list_objects`, `upsert_sphere_marker`,
 `upsert_stroke_marker`, `list_measurements`, `upsert_measurement` and
 `set_annotation_visibility`. No protocol version change is needed; older peers intersect
-their catalogs as before. Deletes, bulk deletes and mesh placement remain excluded.
+their catalogs as before. `remove_object` (markers only), `remove_measurement` and
+`clear_annotations` add deletion; mesh placement and raw object/measurement clear tools
+remain excluded.
+
+Deletion requires fresh state and matching lists in the current turn. `clear_annotations`
+accepts `scope` (`all`, `markers`, `measurements`) and `confirm: true`, but this model-supplied
+flag cannot authorize deletion: the native client must obtain local UI approval. The same
+approval is required before deleting the last item of either annotation family. The dialog
+shows both counts; meshes are always preserved. Approval is single-use, expires after
+300 seconds and is bound to the dataset and a digest of the affected annotations. Changed
+annotations, cancellation or a declined dialog cannot delete anything. After a decline,
+both client and server block further deletion attempts in that turn, including individual
+deletes. Client/server tool deadlines are 300/310 seconds to allow a human response.
 
 Annotation upserts require a successful `get_application_state` and the matching list call
 in the current turn. Replanning after a user intervention clears these read prerequisites.
@@ -102,8 +114,10 @@ the tool/image path with a synthetic image; this is not a guarantee of anatomica
 Every server event contains `session_id`. Tool names can include the current application
 state, TF/background inspection and adjustment, transforms, clipping, lighting, rendering
 mode, ISO, bounding box, screen projection, render completion and screenshot capture.
-Opening/closing datasets, file paths, edits, deletion, exports, settings and arbitrary GSC
-are excluded. `capture_screenshot` is narrowed to `include_alpha` only, even if the app's MCP
+Catalog search and opening an authorized search result are available without a dataset;
+annotation operations are described above. Closing datasets, arbitrary file paths, voxel
+edits, exports, settings and arbitrary GSC are excluded. `capture_screenshot` is narrowed
+to `include_alpha` only, even if the app's MCP
 definition also permits saving a file. There is no shell, code execution or web-browsing tool.
 If any visualization-changing tool is advertised, `get_application_state` must also be
 available; the server enforces a successful state read before each turn's first change.

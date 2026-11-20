@@ -416,6 +416,23 @@
     "name" : "upsert_stroke_marker"
   },
   {
+    "description" : "Remove one listed sphere, directional or stroke marker by UUID, never a mesh. Read application state and list_objects first. The app confirms deleting the last marker. Only delete on explicit user request.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "remove_object"
+  },
+  {
     "description" : "List all length, area, and volume measurements. Read application state and list existing annotations before changes. Coordinates are dataset-local [x,y,z] in [0,1], not pixels, world positions or patient axes. Omit id when creating; use a listed UUID when editing. Upsert replaces the complete item: preserve unmodified fields and measurement point IDs. Colors are normalized RGBA in [0,1], not bytes. Lists are paginated; check totalCount and truncated. Never invent anatomical orientation or precise 3D points from an ambiguous 2D view.",
     "inputSchema" : {
       "additionalProperties" : false,
@@ -495,6 +512,47 @@
       "type" : "object"
     },
     "name" : "upsert_measurement"
+  },
+  {
+    "description" : "Remove one measurement by UUID. Read state and the relevant annotation lists first. Bulk deletion and deletion of the last item require local human approval; a model-supplied confirm flag cannot grant permission. Never bypass a declined deletion with individual calls.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "remove_measurement"
+  },
+  {
+    "description" : "Remove all markers and\/or measurements in the current dataset, preserving placed meshes. Requires explicit confirmation. The native AI client additionally requires a fresh local human approval; a model-supplied confirm flag is not human approval. Read state and the relevant annotation lists first. Bulk deletion and deletion of the last item require local human approval; a model-supplied confirm flag cannot grant permission. Never bypass a declined deletion with individual calls.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "confirm" : {
+          "type" : "boolean"
+        },
+        "scope" : {
+          "enum" : [
+            "all",
+            "markers",
+            "measurements"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "confirm"
+      ],
+      "type" : "object"
+    },
+    "name" : "clear_annotations"
   },
   {
     "description" : "Wait for a frame newer than the supplied frame number.",

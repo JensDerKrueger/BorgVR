@@ -497,7 +497,10 @@ Positionen liegen in normierten Datensatzkoordinaten `[0,1]`, Farben in normiert
 Messwerte stammen aus BorgVRs physischer Datensatzskalierung; Volumen ist die konvexe Hülle
 der Punkte, nicht segmentiertes Organvolumen. Aus einem mehrdeutigen Screenshot folgt keine
 präzise anatomische Position. Listen sind paginiert, Upserts auf 256 Punkte begrenzt.
-Löschen und Mesh-Platzierung bleiben gesperrt. Für neue Werkzeuge müssen App und Agentenserver
+Einzelne Marker und Messungen können gelöscht werden. Vor Sammellöschungen und dem letzten
+Element einer Annotationsart fragt die App lokal nach; ein Modellargument ersetzt diese
+Bestätigung nicht. Ablehnung verhindert weitere Löschversuche im selben Auftrag. Platzierte
+Meshes bleiben erhalten, Mesh-Platzierung bleibt gesperrt. Für neue Werkzeuge müssen App und Agentenserver
 aktualisiert und das KI-Gespräch neu verbunden werden.
 
 **Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel

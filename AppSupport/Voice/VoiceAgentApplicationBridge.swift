@@ -18,6 +18,13 @@ struct VoiceAgentApplicationChange {
   let phase: Phase
 }
 
+struct VoiceAgentAnnotationDeletion: Identifiable {
+  let id: UUID
+  let scope: String
+  let markerCount: Int
+  let measurementCount: Int
+}
+
 /// The optional assistant depends only on this application-facing contract.
 @MainActor
 protocol VoiceAgentApplicationBridge: AnyObject {
@@ -31,6 +38,15 @@ protocol VoiceAgentApplicationBridge: AnyObject {
   var changes: AnyPublisher<VoiceAgentApplicationChange, Never> { get }
   func stateSnapshot() throws -> [String: Any]
   func executeTool(name: String, arguments: [String: Any], validateContext: @escaping () throws -> Void) async throws -> [String: Any]
+  func prepareAnnotationDeletion(scope: String, targetID: String?) throws -> VoiceAgentAnnotationDeletion?
+  func executeAnnotationDeletion(_ confirmation: VoiceAgentAnnotationDeletion,
+                                validateContext: @escaping () throws -> Void) async throws -> [String: Any]
   func openDataset(id: String, validateContext: @escaping () throws -> Void,
                    didBegin: @escaping (VoiceAgentContext) throws -> Void) async throws -> [String: Any]
+}
+
+extension VoiceAgentApplicationBridge {
+  func prepareAnnotationDeletion(scope: String, targetID: String?) throws -> VoiceAgentAnnotationDeletion? { throw VoiceAgentError.commandFailed }
+  func executeAnnotationDeletion(_ confirmation: VoiceAgentAnnotationDeletion,
+                                validateContext: @escaping () throws -> Void) async throws -> [String: Any] { throw VoiceAgentError.commandFailed }
 }

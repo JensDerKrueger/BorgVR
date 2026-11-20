@@ -22,7 +22,7 @@ from pydantic_ai.usage import RunUsage
 from model_config import ModelConfig
 
 from .budget import ControlBudget, MAX_MODEL_REQUESTS, MAX_NATIVE_CALLS, MAX_TOOL_CALLS
-from .annotations import ANNOTATION_PROMPT, ANNOTATION_WRITES, annotation_list_for
+from .annotations import ANNOTATION_PROMPT, ANNOTATION_WRITES, ANNOTATION_DELETES, annotation_lists_for
 from .collaboration import Collaboration, ReplanForUser
 from .datasets import DatasetTransitions, ReplanForDataset
 from .context import ContextBudgetExceeded, ContextMaintenance, VLLMChatModel, bounded_history, application_context_history
@@ -191,6 +191,7 @@ class Session:
         self.state_seen = False
         self.uncertain = False
         self.annotation_reads = set()
+        self.deletion_declined = False
         self.changes_applied = False
         self.agent = None
         self.screenshot_count = 0
@@ -227,9 +228,11 @@ class Session:
             raise ModelRetry(str(error)) from error
         if (definition.name.startswith("set_") or definition.name in {"rotate_view", "open_dataset"} or definition.name in ANNOTATION_WRITES) and not self.state_seen:
             raise ModelRetry("Read get_application_state before changing the view")
-        required_list = annotation_list_for(definition.name)
-        if required_list is not None and required_list not in self.annotation_reads:
-            raise ModelRetry(f"Read {required_list} before creating or editing annotations; preserve existing fields and IDs.")
+        if definition.name in ANNOTATION_DELETES and self.deletion_declined:
+            return {"ok": False, "not_applied": True, "code": "user_declined", "note": "The user declined deletion. Finish without deleting or asking again."}
+        missing_lists = annotation_lists_for(definition.name, arguments) - self.annotation_reads
+        if missing_lists:
+            raise ModelRetry(f"Read {', '.join(sorted(missing_lists))} before changing annotations; preserve existing fields and IDs.")
         if definition.name == "open_dataset":
             if not self.dataset_opening or self.opened_this_turn:
                 raise ModelRetry("A dataset can be opened at most once per user request.")
@@ -251,7 +254,7 @@ class Session:
             if self.collaboration is not None:
                 outgoing["view_revision"] = self.collaboration.revision
             await self.send(outgoing)
-            timeout = max(self.settings.tool_timeout, 330 if definition.name == "open_dataset" else 75 if definition.name == "search_datasets" else 0)
+            timeout = max(self.settings.tool_timeout, 330 if definition.name == "open_dataset" else 310 if definition.name in ANNOTATION_DELETES else 75 if definition.name == "search_datasets" else 0)
             async with asyncio.timeout(timeout):
                 response = await future
             if response.error is not None:
@@ -264,6 +267,8 @@ class Session:
                     self.collaboration.changed.set()
                 return response.result
             if isinstance(response.result, dict) and response.result.get("not_applied") is True:
+                if definition.name in ANNOTATION_DELETES and response.result.get("code") == "user_declined":
+                    self.deletion_declined = True
                 return response.result
             if definition.name == "search_datasets" and isinstance(response.result, dict):
                 self.search_results = {key: expiry for key, expiry in self.search_results.items() if expiry > time.monotonic()}
@@ -385,6 +390,7 @@ class Session:
     async def run(self, message):
         self.state_seen = False
         self.annotation_reads = set()
+        self.deletion_declined = False
         self.changes_applied = False
         self.screenshot_count = 0
         self.visual_observations = []

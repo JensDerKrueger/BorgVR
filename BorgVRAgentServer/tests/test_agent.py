@@ -85,6 +85,8 @@ def open_session(client, tools=None):
     ("upsert_sphere_marker", {"position": [0.2, 0.3, 0.4]}, "list_objects"),
     ("upsert_stroke_marker", {"points": [{"position": [0.2, 0.3, 0.4], "radius": 0.002}]}, "list_objects"),
     ("upsert_measurement", {"kind": "length", "points": [{"position": [0, 0, 0]}, {"position": [1, 0, 0]}]}, "list_measurements"),
+    ("remove_object", {"id": "00000000-0000-0000-0000-000000000001"}, "list_objects"),
+    ("remove_measurement", {"id": "00000000-0000-0000-0000-000000000001"}, "list_measurements"),
 ])
 def test_annotation_writes_require_fresh_state_and_list_before_dispatch(name, arguments, list_name, missing):
     catalog = json.loads((Path(__file__).resolve().parents[1] / "diagnostic_catalog.json").read_text())
@@ -114,6 +116,8 @@ def test_annotation_writes_require_fresh_state_and_list_before_dispatch(name, ar
     ("upsert_measurement", {"kind": "volume", "points": [{"position": [0, 0, 0]}] * 3}),
     ("upsert_measurement", {"kind": "length", "points": [{"position": [0, 0, 0], "id": "00000000-0000-0000-0000-000000000001"}] * 2}),
     ("list_objects", {"limit": 65}),
+    ("clear_annotations", {"confirm": False}),
+    ("remove_object", {"id": "guessed"}),
 ])
 def test_annotation_arguments_rejected_before_any_client_call(name, arguments):
     catalog = json.loads((Path(__file__).resolve().parents[1] / "diagnostic_catalog.json").read_text())
@@ -122,10 +126,31 @@ def test_annotation_arguments_rejected_before_any_client_call(name, arguments):
         validate_arguments(tool, arguments)
 
 
-def test_annotation_deletes_and_mesh_placement_stay_unavailable():
+def test_raw_annotation_bulk_deletes_and_mesh_placement_stay_unavailable():
     selected = select_tools([ToolDefinition.model_validate(definition(name)) for name in
-                             ("remove_object", "clear_objects", "remove_measurement", "clear_measurements", "upsert_mesh_instance")])
+                             ("clear_objects", "clear_measurements", "upsert_mesh_instance")])
     assert selected == []
+
+
+def test_bulk_deletion_decline_cannot_be_bypassed_by_individual_or_bulk_tools():
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "diagnostic_catalog.json").read_text())
+    names = {"get_application_state", "list_objects", "list_measurements", "clear_annotations", "remove_object"}
+    model = model_steps(("get_application_state", {}), ("list_objects", {}), ("list_measurements", {}),
+                        ("clear_annotations", {"scope": "all", "confirm": True}),
+                        ("remove_object", {"id": "00000000-0000-0000-0000-000000000001"}),
+                        ("clear_annotations", {"scope": "all", "confirm": True}), "Declined safely")
+    with connection(model) as client, open_session(client) as ws:
+        ws.send_json(hello([item for item in catalog if item["name"] in names]))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        for name in ("get_application_state", "list_objects", "list_measurements", "clear_annotations"):
+            call = ws.receive_json()
+            assert call["name"] == name
+            ws.send_json(reply(call, result={"ok": False, "not_applied": True, "code": "user_declined"})
+                         if name == "clear_annotations" else reply(call))
+        assert ws.receive_json()["text"] == "Declined safely"  # No bypass call reached the app.
+        assert ws.receive_json()["type"] == "completed"
 
 
 def test_confirmed_annotation_is_reported_as_applied_on_later_model_failure():

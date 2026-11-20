@@ -434,8 +434,99 @@ struct VoiceAgentTests {
     try await service.replayCommandRecording(Data(annotationGSC.utf8))
     try expect(service.listObjects() == objects && service.listMeasurements() == measurements,
                "Annotation Command/GSC roundtrip changed identities, points or geometry")
+    agent.newConversation()
+    session.startCommandRecording()
+    try await session.waitForRecordingPreparation()
+    await agent.submit("annotation-delete-one")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.annotationDeletion == nil &&
+               agent.messages.last?.text == "Target annotations deleted and verified.", "Individual annotation deletion failed")
+    let remainingObjects = service.listObjects(), remainingMeasurements = service.listMeasurements()
+    try expect(remainingObjects == Array(objects.dropFirst()) && remainingMeasurements == Array(measurements.dropFirst()),
+               "Individual deletion removed unrelated annotations")
+    try await session.finishCommandRecording()
+    let individualDeletionGSC = try session.recordedGSCScript()
     try service.clearObjects()
     try service.clearMeasurements()
+    try await service.replayCommandRecording(Data(individualDeletionGSC.utf8))
+    try expect(service.listObjects() == remainingObjects && service.listMeasurements() == remainingMeasurements,
+               "Individual deletion GSC roundtrip changed remaining annotations")
+    let directBulk = try await activeAgentBridge.executeTool(name: "clear_annotations",
+      arguments: ["scope": "all", "confirm": true], validateContext: {})
+    try expect((directBulk["structuredContent"] as? [String: Any])?["code"] as? String == "confirmation_required" &&
+               service.listObjects() == remainingObjects, "A model confirmation flag bypassed local approval")
+    do {
+      _ = try await router.callTool(name: "clear_annotations", arguments: [:])
+      throw Failure.failed("MCP bulk deletion accepted missing confirmation")
+    } catch BorgVRMCPCommandError.invalidArgument { }
+    try expect(service.listObjects() == remainingObjects && service.listMeasurements() == remainingMeasurements,
+               "Missing MCP confirmation changed annotations")
+    let directLastMarker = try await activeAgentBridge.executeTool(name: "remove_object",
+      arguments: ["id": remainingObjects[0].id.uuidString], validateContext: {})
+    try expect((directLastMarker["structuredContent"] as? [String: Any])?["code"] as? String == "confirmation_required",
+               "Individual calls bypassed confirmation when removing the last marker")
+    agent.newConversation()
+    await agent.submit("annotation-delete-all")
+    try await wait { agent.annotationDeletion != nil }
+    let declinedPreview = agent.annotationDeletion!
+    try expect(declinedPreview.markerCount == 1 && declinedPreview.measurementCount == 2 &&
+               service.listObjects() == remainingObjects && service.listMeasurements() == remainingMeasurements,
+               "Bulk deletion happened before human approval or showed incorrect counts")
+    agent.resolveAnnotationDeletion(id: declinedPreview.id, accepted: false)
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Deletion declined safely." &&
+               service.listObjects() == remainingObjects && service.listMeasurements() == remainingMeasurements,
+               "Declined deletion changed annotations or was bypassed")
+    let stalePreview = try activeAgentBridge.prepareAnnotationDeletion(scope: "all", targetID: nil)!
+    if case .marker(var changed) = remainingObjects[0] {
+      changed.name = "Changed after preview"
+      try service.upsertObject(.marker(changed))
+      let staleResult = try await activeAgentBridge.executeAnnotationDeletion(stalePreview, validateContext: {})
+      try expect((staleResult["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+                 service.listObjects()[0] == .marker(changed), "Stale approval deleted edited annotations")
+      try service.upsertObject(remainingObjects[0])
+    }
+    let replayedApproval = try await activeAgentBridge.executeAnnotationDeletion(stalePreview, validateContext: {})
+    try expect((replayedApproval["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true,
+               "Consumed approval could be replayed")
+    agent.newConversation()
+    await agent.submit("annotation-delete-all")
+    try await wait { agent.annotationDeletion != nil }
+    agent.cancel()
+    try expect(agent.annotationDeletion == nil && service.listObjects() == remainingObjects &&
+               service.listMeasurements() == remainingMeasurements, "Cancelling a question deleted annotations")
+    agent.newConversation()
+    session.startCommandRecording()
+    try await session.waitForRecordingPreparation()
+    await agent.submit("annotation-delete-all")
+    try await wait { agent.annotationDeletion != nil }
+    let acceptedPreview = agent.annotationDeletion!
+    agent.resolveAnnotationDeletion(id: acceptedPreview.id, accepted: true)
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "All annotations deleted and verified." &&
+               service.listObjects().isEmpty && service.listMeasurements().isEmpty, "Approved bulk deletion failed")
+    try await session.finishCommandRecording()
+    let bulkDeletionGSC = try session.recordedGSCScript()
+    try await service.replayCommandRecording(Data(bulkDeletionGSC.utf8))
+    try expect(service.listObjects().isEmpty && service.listMeasurements().isEmpty, "Bulk deletion GSC roundtrip failed")
+    // The fixture mesh needs no GPU asset: deletion must preserve even non-rendered instances.
+    let fixtureMesh = SceneMeshInstance(name: "Keep this mesh", asset: SceneMeshReference(assetID: UUID(),
+      name: "Fixture", assetDescription: "Test only", boundsMinimum: .zero, boundsMaximum: .one))
+    app.sceneMeshInstances = [fixtureMesh]
+    try service.upsertObject(objects[0])
+    try service.upsertMeasurement(measurements[0])
+    let markerOnly = try activeAgentBridge.prepareAnnotationDeletion(scope: "markers", targetID: nil)!
+    _ = try await activeAgentBridge.executeAnnotationDeletion(markerOnly, validateContext: {})
+    try expect(app.sceneMeshInstances == [fixtureMesh] && service.listMeasurements() == [measurements[0]],
+               "Marker deletion removed a mesh or a measurement")
+    let measurementOnly = try activeAgentBridge.prepareAnnotationDeletion(scope: "measurements", targetID: nil)!
+    _ = try await activeAgentBridge.executeAnnotationDeletion(measurementOnly, validateContext: {})
+    try expect(service.listMeasurements().isEmpty && app.sceneMeshInstances == [fixtureMesh],
+               "Measurement deletion removed a mesh")
+    let removeMesh = try await activeAgentBridge.executeTool(name: "remove_object", arguments: ["id": fixtureMesh.id.uuidString], validateContext: {})
+    try expect((removeMesh["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+               app.sceneMeshInstances == [fixtureMesh], "Agent removed a mesh through marker deletion")
+    app.sceneMeshInstances = []
     agent.newConversation()
     await agent.submit("collaborate")
     try await wait { agent.messages.contains { $0.text == "Waiting for manual edit." } }
