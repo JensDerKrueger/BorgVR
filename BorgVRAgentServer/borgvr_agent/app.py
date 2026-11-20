@@ -22,6 +22,7 @@ from pydantic_ai.usage import RunUsage
 from model_config import ModelConfig
 
 from .budget import ControlBudget, MAX_MODEL_REQUESTS, MAX_NATIVE_CALLS, MAX_TOOL_CALLS
+from .annotations import ANNOTATION_PROMPT, ANNOTATION_WRITES, annotation_list_for
 from .collaboration import Collaboration, ReplanForUser
 from .datasets import DatasetTransitions, ReplanForDataset
 from .context import ContextBudgetExceeded, ContextMaintenance, VLLMChatModel, bounded_history, application_context_history
@@ -42,6 +43,7 @@ never a guessed ID, file path or URL. Read application state before open_dataset
 After a verified opening receipt, do not reopen the dataset or repeat completed operations;
 read fresh state and continue the unfinished request using the new renderer capabilities.
 """
+
 SYSTEM_PROMPT = """You are BorgVR's visualization assistant. Reply in the user's language.
 You can also help from BorgVR's start menu without an open dataset. Read application state
 to distinguish that situation from a ready renderer. Never invent dataset contents or use
@@ -188,6 +190,7 @@ class Session:
         self.tools = []
         self.state_seen = False
         self.uncertain = False
+        self.annotation_reads = set()
         self.changes_applied = False
         self.agent = None
         self.screenshot_count = 0
@@ -222,8 +225,11 @@ class Session:
             validate_arguments(definition, arguments)
         except (ValueError, TypeError) as error:
             raise ModelRetry(str(error)) from error
-        if (definition.name.startswith("set_") or definition.name in {"rotate_view", "open_dataset"}) and not self.state_seen:
+        if (definition.name.startswith("set_") or definition.name in {"rotate_view", "open_dataset"} or definition.name in ANNOTATION_WRITES) and not self.state_seen:
             raise ModelRetry("Read get_application_state before changing the view")
+        required_list = annotation_list_for(definition.name)
+        if required_list is not None and required_list not in self.annotation_reads:
+            raise ModelRetry(f"Read {required_list} before creating or editing annotations; preserve existing fields and IDs.")
         if definition.name == "open_dataset":
             if not self.dataset_opening or self.opened_this_turn:
                 raise ModelRetry("A dataset can be opened at most once per user request.")
@@ -267,7 +273,9 @@ class Session:
                             self.search_results.pop(next(iter(self.search_results)))
                         self.search_results[item["id"]] = time.monotonic() + 300
             self.operation_receipts.append({"tool": definition.name, "dataset_id": outgoing["dataset_id"], "result_received": True})
-            if definition.name.startswith("set_") or definition.name in {"rotate_view", "open_dataset"}:
+            if definition.name in {"list_objects", "list_measurements"}:
+                self.annotation_reads.add(definition.name)
+            if definition.name.startswith("set_") or definition.name in {"rotate_view", "open_dataset"} or definition.name in ANNOTATION_WRITES:
                 self.changes_applied = True
             if definition.name == "get_application_state":
                 self.state_seen = (self.collaboration is None or
@@ -371,10 +379,12 @@ class Session:
                      capabilities=capabilities, name="BorgVR-Agent")
 
     def system_prompt(self):
-        return SYSTEM_PROMPT + (CATALOG_POLICY if any(tool.name == "search_datasets" for tool in self.tools) else "")
+        return (SYSTEM_PROMPT + (CATALOG_POLICY if any(tool.name == "search_datasets" for tool in self.tools) else "")
+                + (ANNOTATION_PROMPT if any(tool.name in ANNOTATION_WRITES for tool in self.tools) else ""))
 
     async def run(self, message):
         self.state_seen = False
+        self.annotation_reads = set()
         self.changes_applied = False
         self.screenshot_count = 0
         self.visual_observations = []
@@ -406,6 +416,7 @@ class Session:
                                 raise ReplanForUser()
                         break
                     except ReplanForDataset:
+                        self.annotation_reads.clear()
                         history = self.dataset_control.resume_history(self.system_prompt())
                         self.dataset_control.history = []
                         self.dataset_transition = None
@@ -415,6 +426,7 @@ class Session:
                         self.agent = self.build_agent()
                         prompt = message.text
                     except ReplanForUser:
+                        self.annotation_reads.clear()
                         await self.send({"type": "collaboration_paused", "request_id": message.request_id})
                         await self.collaboration.idle.wait()
                         self.collaboration.changed.clear()

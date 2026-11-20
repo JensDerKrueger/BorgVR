@@ -62,6 +62,29 @@ struct VoiceAgentPolicyTests {
     try check(VoiceAgentPolicy.allowed.contains("open_dataset") && VoiceAgentPolicy.reads.contains("search_datasets") &&
               !VoiceAgentPolicy.allowed.contains("edit_volume") &&
               !VoiceAgentPolicy.allowed.contains("load_settings"), "Agent gained unsafe capabilities")
+    let sphereSchema = VoiceAgentAnnotationPolicy.schema(for: "upsert_sphere_marker")!
+    try VoiceAgentPolicy.validate(["position": [0.2, 0.3, 0.4], "radius": 0.01], schema: sphereSchema)
+    for arguments: [String: Any] in [["position": [-0.1, 0.3, 0.4]], ["position": [0.2, 1.1, 0.4]],
+      ["position": [0.2, 0.3, 0.4], "radius": -1], ["position": [0.2, 0.3, 0.4], "color": [255, 0, 0, 255]]] {
+      try rejects { try VoiceAgentPolicy.validate(arguments, schema: sphereSchema) }
+    }
+    try check(VoiceAgentAnnotationPolicy.validationError(name: "upsert_sphere_marker",
+      arguments: ["position": [0.2, 0.3, 0.4], "shows_direction": true]) != nil, "Direction origin not required")
+    try check(VoiceAgentAnnotationPolicy.validationError(name: "upsert_sphere_marker",
+      arguments: ["id": "invented", "position": [0.2, 0.3, 0.4]]) != nil, "Invalid annotation UUID accepted")
+    try check(VoiceAgentAnnotationPolicy.validationError(name: "upsert_measurement",
+      arguments: ["kind": "area", "points": [["position": [0, 0, 0]], ["position": [1, 0, 0]]]]) != nil,
+      "Incomplete area accepted")
+    let pointID = UUID().uuidString
+    try check(VoiceAgentAnnotationPolicy.validationError(name: "upsert_measurement",
+      arguments: ["kind": "length", "points": [["id": pointID, "position": [0, 0, 0]],
+        ["id": pointID, "position": [1, 0, 0]]]]) != nil, "Duplicate point IDs accepted")
+    for name in ["list_objects", "list_measurements", "upsert_sphere_marker", "upsert_stroke_marker", "upsert_measurement"] {
+      try check(VoiceAgentPolicy.allowed.contains(name), "Annotation capability missing")
+    }
+    for name in ["remove_object", "clear_objects", "remove_measurement", "clear_measurements", "upsert_mesh_instance"] {
+      try check(!VoiceAgentPolicy.allowed.contains(name), "Annotation capability gained destructive/mesh operations")
+    }
     try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: false, completionUncertain: false) == .contextLimit,
               "Context overflow without a mutation was misreported")
     try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: true, completionUncertain: false) == .changesAppliedContextLimit,

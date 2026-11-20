@@ -98,6 +98,22 @@ verwirft den alten Werkzeugplan einschließlich weiterer Aufrufe aus demselben M
 des ursprünglichen Auftrags mit frischer Zustandsabfrage neu. Keine Agententypen gelangen
 in Katalog, Renderer, App-Modelle oder Command-Ausführung.
 
+## Annotationen
+
+`VoiceAgentAnnotationPolicy` definiert ausschließlich die begrenzten Agentenschemas.
+Nur der Bridge-Adapter kennt BorgVRs Marker-, Messungs- und Geometrietypen. Er leitet
+Änderungen an den vorhandenen Command-Service weiter; MCP und GSC bleiben unabhängig.
+Der Controller enthält keine Annotationstypen oder direkte Modellmutation.
+
+Der Server verlangt vor Upserts eine aktuelle Zustands- und Listenabfrage. Der Adapter
+prüft Edit-IDs im aktuellen Datensatz, Markerarten, normierte Koordinaten, Punktzahlen
+und Messgeometrie vor der Ausführung. Listen sind paginiert und bytebegrenzt; ausgelassene
+Details werden ausdrücklich markiert und dürfen nicht als vollständiger Upsert dienen.
+Die physische Messgröße berechnet BorgVR mit der Datensatzskalierung; ohne diese gibt es
+keinen behaupteten Messwert. Volumen ist die konvexe Hülle der Punkte, keine Segmentierung.
+Sichere Validierungsablehnungen liefern `not_applied`; echte Ungewissheit führt weiterhin
+zum Abbruch ohne Wiederholung. Löschen, Sammellöschen und Mesh-Platzierung bleiben gesperrt.
+
 ## Gemeinsame Bearbeitung
 
 Manuelle Änderungen erhöhen die lokale Ansichtsrevision und unterbrechen nur die noch

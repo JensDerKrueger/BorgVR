@@ -80,6 +80,82 @@ def open_session(client, tools=None):
     return client.websocket_connect("/v1/session", headers=AUTH)
 
 
+@pytest.mark.parametrize("missing", ["state", "list"])
+@pytest.mark.parametrize("name,arguments,list_name", [
+    ("upsert_sphere_marker", {"position": [0.2, 0.3, 0.4]}, "list_objects"),
+    ("upsert_stroke_marker", {"points": [{"position": [0.2, 0.3, 0.4], "radius": 0.002}]}, "list_objects"),
+    ("upsert_measurement", {"kind": "length", "points": [{"position": [0, 0, 0]}, {"position": [1, 0, 0]}]}, "list_measurements"),
+])
+def test_annotation_writes_require_fresh_state_and_list_before_dispatch(name, arguments, list_name, missing):
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "diagnostic_catalog.json").read_text())
+    tools = [item for item in catalog if item["name"] in {"get_application_state", name, list_name}]
+    prefix = [(name, arguments), ("get_application_state", {})] if missing == "state" else [("get_application_state", {}), (name, arguments)]
+    model = model_steps(*prefix, (list_name, {}), (name, arguments), "Annotation ready")
+    with connection(model) as client, open_session(client) as ws:
+        ws.send_json(hello(tools))
+        assert set(ws.receive_json()["tools"]) == {"get_application_state", name, list_name}
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        for expected in ("get_application_state", list_name, name):
+            call = ws.receive_json()
+            assert call["name"] == expected  # The premature write was not forwarded.
+            ws.send_json(reply(call))
+        assert ws.receive_json()["text"] == "Annotation ready"
+        assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("name,arguments", [
+    ("upsert_sphere_marker", {"position": [2, 0, 0]}),
+    ("upsert_sphere_marker", {"position": [0, 0, 0], "radius": -1}),
+    ("upsert_sphere_marker", {"id": "invented", "position": [0, 0, 0]}),
+    ("upsert_sphere_marker", {"position": [0, 0, 0], "color": [255, 0, 0, 255]}),
+    ("upsert_sphere_marker", {"position": [0, 0, 0], "shows_direction": True}),
+    ("upsert_stroke_marker", {"points": [{"position": [0, 0, 0], "radius": 1}]}),
+    ("upsert_measurement", {"kind": "volume", "points": [{"position": [0, 0, 0]}] * 3}),
+    ("upsert_measurement", {"kind": "length", "points": [{"position": [0, 0, 0], "id": "00000000-0000-0000-0000-000000000001"}] * 2}),
+    ("list_objects", {"limit": 65}),
+])
+def test_annotation_arguments_rejected_before_any_client_call(name, arguments):
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "diagnostic_catalog.json").read_text())
+    tool = ToolDefinition.model_validate(next(item for item in catalog if item["name"] == name))
+    with pytest.raises(ProtocolError):
+        validate_arguments(tool, arguments)
+
+
+def test_annotation_deletes_and_mesh_placement_stay_unavailable():
+    selected = select_tools([ToolDefinition.model_validate(definition(name)) for name in
+                             ("remove_object", "clear_objects", "remove_measurement", "clear_measurements", "upsert_mesh_instance")])
+    assert selected == []
+
+
+def test_confirmed_annotation_is_reported_as_applied_on_later_model_failure():
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "diagnostic_catalog.json").read_text())
+    tools = [item for item in catalog if item["name"] in {"get_application_state", "list_objects", "upsert_sphere_marker"}]
+    count = 0
+
+    async def function(messages, info):
+        nonlocal count
+        steps = [("get_application_state", {}), ("list_objects", {}), ("upsert_sphere_marker", {"position": [0, 0, 0]})]
+        if count == len(steps):
+            raise RuntimeError("Synthetic model failure after confirmed annotation")
+        name, arguments = steps[count]
+        count += 1
+        return ModelResponse(parts=[ToolCallPart(name, arguments, tool_call_id=f"annotation-{count}")])
+
+    with connection(FunctionModel(function)) as client, open_session(client) as ws:
+        ws.send_json(hello(tools))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        for name in ("get_application_state", "list_objects", "upsert_sphere_marker"):
+            call = ws.receive_json()
+            assert call["name"] == name
+            ws.send_json(reply(call))
+        error = ws.receive_json()
+        assert error["type"] == "error" and error["changes_applied"] is True
+        assert error["requires_reconnect"] is False
+
+
 def test_real_agent_loop_with_external_tools_and_image():
     calls = []
 

@@ -87,10 +87,12 @@ enum VoiceAgentPolicy {
     "get_application_state", "get_transfer_function", "get_background", "set_render_mode",
     "set_transform", "rotate_view", "set_iso_value", "set_clipping", "set_lighting",
     "set_background", "set_transfer_function", "set_bounding_box", "set_screen_projection",
+    "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
+    "list_measurements", "upsert_measurement", "set_annotation_visibility",
     "wait_until_rendered", "capture_screenshot"
   ]
   static let reads: Set<String> = ["search_datasets", "get_application_state", "get_transfer_function", "get_background",
-                                    "wait_until_rendered", "capture_screenshot"]
+                                    "wait_until_rendered", "capture_screenshot", "list_objects", "list_measurements"]
   static let applicationTools: Set<String> = ["get_application_state", "search_datasets", "open_dataset"]
 
   static func catalog(_ definitions: [[String: Any]], vision: Bool, transferFunctions: Bool,
@@ -103,6 +105,10 @@ enum VoiceAgentPolicy {
                                 "set_iso_value", "set_lighting"].contains(name) { return nil }
       if !images && name == "capture_screenshot" { return nil }
       var value = original
+      if let schema = VoiceAgentAnnotationPolicy.schema(for: name) {
+        value["inputSchema"] = schema
+        value["description"] = (original["description"] as? String ?? "") + VoiceAgentAnnotationPolicy.guidance
+      }
       if ["get_transfer_function", "set_transfer_function"].contains(name) {
         value["description"] = (original["description"] as? String ?? "") +
           " Returned samples are a uniformly spaced preview across [0,1], at most 256 entries. " +

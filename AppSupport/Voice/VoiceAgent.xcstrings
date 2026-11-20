@@ -1,6 +1,15 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Request is being processed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Request is being processed." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Anfrage wird bearbeitet." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Traitement de la demande en cours." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Procesando la solicitud." } }
+      }
+    },
     "Copy response": {
       "extractionState": "manual",
       "localizations": {

@@ -5,7 +5,7 @@ Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nach
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
 Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets` und `open_dataset` verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
 
-Erfasst: **75 Funktionsgruppen**, **60 MCP-Werkzeuge**, **17 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
+Erfasst: **75 Funktionsgruppen**, **60 MCP-Werkzeuge**, **23 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
@@ -62,12 +62,12 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Volumenbearbeitung | [Editierstände auswählen, erzeugen, duplizieren, umbenennen und löschen](#edit-states) | dataset | vorhanden | ja | nein |
 | Volumenbearbeitung | [Bearbeiteten Datensatz exportieren und Export abbrechen](#edit-export) | job | vorhanden | ja | nein |
 | Marker, Objekte und Messungen | [Objekte, Messungen und Punkte auswählen sowie Projektionswerkzeuge konfigurieren](#annotations-selection) | dataset | nur UI | nein | nein |
-| Marker, Objekte und Messungen | [Kugel-, Richtungs- und Strichmarker erstellen und bearbeiten](#annotations-markers) | dataset | vorhanden | ja | nein |
+| Marker, Objekte und Messungen | [Kugel-, Richtungs- und Strichmarker erstellen und bearbeiten](#annotations-markers) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Mesh-Assets auswählen und Instanzen platzieren oder transformieren](#annotations-mesh) | dataset | vorhanden | ja | nein |
 | Marker, Objekte und Messungen | [Einzelne oder alle Marker und Objekte entfernen](#annotations-delete) | dataset | vorhanden | ja | nein |
-| Marker, Objekte und Messungen | [Längen-, Flächen- und Volumenmessungen anlegen und korrigieren](#annotations-measure) | dataset | vorhanden | ja | nein |
+| Marker, Objekte und Messungen | [Längen-, Flächen- und Volumenmessungen anlegen und korrigieren](#annotations-measure) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Einzelne oder alle Messungen entfernen](#annotations-measure_delete) | dataset | vorhanden | ja | nein |
-| Marker, Objekte und Messungen | [Objekte und Messungen sichtbar oder unsichtbar schalten](#annotations-visibility) | dataset | vorhanden | ja | nein |
+| Marker, Objekte und Messungen | [Objekte und Messungen sichtbar oder unsichtbar schalten](#annotations-visibility) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Marker, Objekte und Messungen laden, zusammenführen und speichern](#annotations-files) | dataset | teilweise | nein | nein |
 | Speichern und Automatisierung | [Darstellungszustand speichern und laden](#state-picture) | dataset | vorhanden | ja | nein |
 | Speichern und Automatisierung | [Command-Aufzeichnung starten, beenden und als GSC speichern](#state-record) | application | vorhanden | ja | nein |
@@ -742,13 +742,13 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `annotations.markers`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Annotationen und ggf. SharePlay-Zustand ändern.
 - Register: `BorgVRCommand.upsertObject`
 - MCP: `list_objects`, `upsert_sphere_marker`, `upsert_stroke_marker`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `list_objects`, `upsert_sphere_marker`, `upsert_stroke_marker`
 - Benannte GSC-Befehle (macOS): `addspheremarker`, `adddirectionalmarker`, `addstrokemarker`, `setspheremarker`, `setstrokemarker`
-- Zustandsabfrage: list_objects mit stabilen IDs, Namen, Farben und Geometrie.
-- Lücke: MCP vorhanden, Agent gesperrt. Radius/Position sind normierte Volumenkoordinaten, nicht die Meter des Edit-Pinsels.
-- Nächster Schritt: Annotation-Capability mit Zustandsabfrage, lokaler Freigabe und getesteter Koordinatenumrechnung freigeben.
-- Quellen: [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [VisionApp/MarkerView.swift](../VisionApp/MarkerView.swift)
-- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
+- Zustandsabfrage: Agent: paginiertes list_objects mit stabilen IDs, Namen, Farben und Geometrie; höchstens 64 Einträge pro Seite.
+- Lücke: Agent-Upserts sind auf 256 Punkte, gültige vorhandene Edit-IDs und normierte Koordinaten begrenzt. Keine präzise anatomische Zuordnung aus einem einzelnen Screenshot.
+- Nächster Schritt: Optional einen expliziten Bildpunkt-zu-Volumen-Projektionsvertrag ergänzen; Lösch- und Mesh-Capabilities bleiben getrennt.
+- Quellen: [AppSupport/Voice/VoiceAgentAnnotationPolicy.swift](../AppSupport/Voice/VoiceAgentAnnotationPolicy.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_agent/annotations.py](../BorgVRAgentServer/borgvr_agent/annotations.py), [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [VisionApp/MarkerView.swift](../VisionApp/MarkerView.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 
 <a id="annotations-mesh"></a>
 ### Mesh-Assets auswählen und Instanzen platzieren oder transformieren
@@ -784,13 +784,13 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `annotations.measure`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: wissenschaftliche Messdaten ändern.
 - Register: `BorgVRCommand.upsertMeasurement`
 - MCP: `list_measurements`, `upsert_measurement`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `list_measurements`, `upsert_measurement`
 - Benannte GSC-Befehle (macOS): `setmeasurement`
-- Zustandsabfrage: list_measurements mit Punkt-IDs, normierten Koordinaten und berechneten Werten.
-- Lücke: Agent gesperrt. Benötigt physische Skalierung, Geometrievalidierung und keine erfundenen anatomischen Punkte.
-- Nächster Schritt: Mess-Capability einschließlich Punktbearbeitung durch Upsert anbieten und gegen bekannte Geometrien prüfen.
-- Quellen: [VisionApp/MeasurementView.swift](../VisionApp/MeasurementView.swift), [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
+- Zustandsabfrage: Agent: list_measurements liefert Punkt-IDs, normierte Koordinaten, BorgVR-Messwerte in m/m^2/m^3 und physicalExtentAvailable.
+- Lücke: Höchstens 256 Punkte. Degenerierte Geometrie wird ohne Änderung abgelehnt; Volumen bezeichnet die konvexe Hülle, nicht segmentiertes Organvolumen. Physische Genauigkeit hängt von der Datensatzkalibrierung ab.
+- Nächster Schritt: Bildpunktprojektion und explizite Genauigkeits-/Kalibrierungsangaben weiter ausbauen; keine erfundenen anatomischen Messpunkte.
+- Quellen: [AppSupport/Voice/VoiceAgentAnnotationPolicy.swift](../AppSupport/Voice/VoiceAgentAnnotationPolicy.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_agent/annotations.py](../BorgVRAgentServer/borgvr_agent/annotations.py), [VisionApp/MeasurementView.swift](../VisionApp/MeasurementView.swift), [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 
 <a id="annotations-measure_delete"></a>
 ### Einzelne oder alle Messungen entfernen
@@ -812,13 +812,13 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `annotations.visibility`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: reversible lokale Anzeige.
 - Register: `BorgVRCommand.setAnnotationVisibility`
 - MCP: `set_annotation_visibility`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `set_annotation_visibility`
 - Benannte GSC-Befehle (macOS): `hideobjects`, `hidemeasurements`
 - Zustandsabfrage: get_application_state.annotationVisibility.
-- Lücke: Vorhandener einfacher MCP-Setter im Agenten nicht freigegeben.
-- Nächster Schritt: Als Darstellungscapability freigeben; Sichtbarkeit nicht mit Löschung verwechseln.
-- Quellen: [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Application/BorgVRSession.swift](../AppSupport/Application/BorgVRSession.swift)
-- Vorhandene Testquellen: kein spezifischer Test zugeordnet
+- Lücke: Agent darf die vollständige Objekt- oder Messungsanzeige umschalten; keine separate Sichtbarkeit pro Marker.
+- Nächster Schritt: Sichtbarkeit pro Element bei Bedarf separat ergänzen; Sichtbarkeit ist keine Löschung.
+- Quellen: [AppSupport/Voice/VoiceAgentAnnotationPolicy.swift](../AppSupport/Voice/VoiceAgentAnnotationPolicy.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Application/BorgVRSession.swift](../AppSupport/Application/BorgVRSession.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="annotations-files"></a>
 ### Marker, Objekte und Messungen laden, zusammenführen und speichern

@@ -254,6 +254,249 @@
     "name" : "set_lighting"
   },
   {
+    "description" : "Show or hide object annotations (markers, strokes, and placed meshes) or the complete measurement visualization (points, lines, surfaces, and labels) without deleting them. Read application state and list existing annotations before changes. Coordinates are dataset-local [x,y,z] in [0,1], not pixels, world positions or patient axes. Omit id when creating; use a listed UUID when editing. Upsert replaces the complete item: preserve unmodified fields and measurement point IDs. Colors are normalized RGBA in [0,1], not bytes. Lists are paginated; check totalCount and truncated. Never invent anatomical orientation or precise 3D points from an ambiguous 2D view.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "measurements" : {
+          "type" : "boolean"
+        },
+        "objects" : {
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+
+      ],
+      "type" : "object"
+    },
+    "name" : "set_annotation_visibility"
+  },
+  {
+    "description" : "List sphere markers, stroke markers, and placed mesh instances. Read application state and list existing annotations before changes. Coordinates are dataset-local [x,y,z] in [0,1], not pixels, world positions or patient axes. Omit id when creating; use a listed UUID when editing. Upsert replaces the complete item: preserve unmodified fields and measurement point IDs. Colors are normalized RGBA in [0,1], not bytes. Lists are paginated; check totalCount and truncated. Never invent anatomical orientation or precise 3D points from an ambiguous 2D view.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "maximum" : 64,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "maximum" : 1000000,
+          "minimum" : 0,
+          "type" : "integer"
+        }
+      },
+      "required" : [
+
+      ],
+      "type" : "object"
+    },
+    "name" : "list_objects"
+  },
+  {
+    "description" : "Create or replace a sphere marker. Positions and radii use normalized volume coordinates. Read application state and list existing annotations before changes. Coordinates are dataset-local [x,y,z] in [0,1], not pixels, world positions or patient axes. Omit id when creating; use a listed UUID when editing. Upsert replaces the complete item: preserve unmodified fields and measurement point IDs. Colors are normalized RGBA in [0,1], not bytes. Lists are paginated; check totalCount and truncated. Never invent anatomical orientation or precise 3D points from an ambiguous 2D view.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "color" : {
+          "items" : {
+            "maximum" : 1,
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "maxItems" : 4,
+          "minItems" : 4,
+          "type" : "array"
+        },
+        "direction_origin" : {
+          "items" : {
+            "maximum" : 1,
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        },
+        "name" : {
+          "maxLength" : 128,
+          "type" : "string"
+        },
+        "position" : {
+          "items" : {
+            "maximum" : 1,
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "radius" : {
+          "maximum" : 1,
+          "minimum" : 0.0050000000000000001,
+          "type" : "number"
+        },
+        "shows_direction" : {
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "position"
+      ],
+      "type" : "object"
+    },
+    "name" : "upsert_sphere_marker"
+  },
+  {
+    "description" : "Create or replace a stroke marker from normalized volume points. Read application state and list existing annotations before changes. Coordinates are dataset-local [x,y,z] in [0,1], not pixels, world positions or patient axes. Omit id when creating; use a listed UUID when editing. Upsert replaces the complete item: preserve unmodified fields and measurement point IDs. Colors are normalized RGBA in [0,1], not bytes. Lists are paginated; check totalCount and truncated. Never invent anatomical orientation or precise 3D points from an ambiguous 2D view.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "color" : {
+          "items" : {
+            "maximum" : 1,
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "maxItems" : 4,
+          "minItems" : 4,
+          "type" : "array"
+        },
+        "id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        },
+        "name" : {
+          "maxLength" : 128,
+          "type" : "string"
+        },
+        "points" : {
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "position" : {
+                "items" : {
+                  "maximum" : 1,
+                  "minimum" : 0,
+                  "type" : "number"
+                },
+                "maxItems" : 3,
+                "minItems" : 3,
+                "type" : "array"
+              },
+              "radius" : {
+                "maximum" : 0.25,
+                "minimum" : 0.00020000000000000001,
+                "type" : "number"
+              }
+            },
+            "required" : [
+              "position",
+              "radius"
+            ],
+            "type" : "object"
+          },
+          "maxItems" : 256,
+          "minItems" : 1,
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "points"
+      ],
+      "type" : "object"
+    },
+    "name" : "upsert_stroke_marker"
+  },
+  {
+    "description" : "List all length, area, and volume measurements. Read application state and list existing annotations before changes. Coordinates are dataset-local [x,y,z] in [0,1], not pixels, world positions or patient axes. Omit id when creating; use a listed UUID when editing. Upsert replaces the complete item: preserve unmodified fields and measurement point IDs. Colors are normalized RGBA in [0,1], not bytes. Lists are paginated; check totalCount and truncated. Never invent anatomical orientation or precise 3D points from an ambiguous 2D view.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "maximum" : 64,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "maximum" : 1000000,
+          "minimum" : 0,
+          "type" : "integer"
+        }
+      },
+      "required" : [
+
+      ],
+      "type" : "object"
+    },
+    "name" : "list_measurements"
+  },
+  {
+    "description" : "Create or replace a measurement from normalized volume points. Read application state and list existing annotations before changes. Coordinates are dataset-local [x,y,z] in [0,1], not pixels, world positions or patient axes. Omit id when creating; use a listed UUID when editing. Upsert replaces the complete item: preserve unmodified fields and measurement point IDs. Colors are normalized RGBA in [0,1], not bytes. Lists are paginated; check totalCount and truncated. Never invent anatomical orientation or precise 3D points from an ambiguous 2D view.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        },
+        "kind" : {
+          "enum" : [
+            "length",
+            "area",
+            "volume"
+          ],
+          "type" : "string"
+        },
+        "name" : {
+          "maxLength" : 128,
+          "type" : "string"
+        },
+        "points" : {
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "id" : {
+                "maxLength" : 36,
+                "type" : "string"
+              },
+              "position" : {
+                "items" : {
+                  "maximum" : 1,
+                  "minimum" : 0,
+                  "type" : "number"
+                },
+                "maxItems" : 3,
+                "minItems" : 3,
+                "type" : "array"
+              }
+            },
+            "required" : [
+              "position"
+            ],
+            "type" : "object"
+          },
+          "maxItems" : 256,
+          "minItems" : 2,
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "kind",
+        "points"
+      ],
+      "type" : "object"
+    },
+    "name" : "upsert_measurement"
+  },
+  {
     "description" : "Wait for a frame newer than the supplied frame number.",
     "inputSchema" : {
       "additionalProperties" : false,

@@ -490,6 +490,16 @@ stattdessen deren Vertrauenskette wie im folgenden Abschnitt beschrieben einrich
    mit neuen Werkzeugen und frischer Zustandsabfrage fort. Ein fremder Wechsel stoppt laufende Arbeit.
    Eine Textanfrage eingeben oder über das Mikrofon sprechen.
 
+Bei geöffnetem Datensatz kann der Agent Kugel-, Richtungs- und Strichmarker sowie Längen-,
+Flächen- und Volumenmessungen anlegen und bearbeiten. Er liest zuerst Zustand und vorhandene
+Annotationen, verwendet stabile IDs und kann die Objekt-/Messungsanzeige umschalten.
+Positionen liegen in normierten Datensatzkoordinaten `[0,1]`, Farben in normiertem RGBA.
+Messwerte stammen aus BorgVRs physischer Datensatzskalierung; Volumen ist die konvexe Hülle
+der Punkte, nicht segmentiertes Organvolumen. Aus einem mehrdeutigen Screenshot folgt keine
+präzise anatomische Position. Listen sind paginiert, Upserts auf 256 Punkte begrenzt.
+Löschen und Mesh-Platzierung bleiben gesperrt. Für neue Werkzeuge müssen App und Agentenserver
+aktualisiert und das KI-Gespräch neu verbunden werden.
+
 **Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel
 landet im Geräte-Schlüsselbund. Nur auf vertrauenswürdige Geräte übertragen und
 Transferkopien nach dem Import entfernen.

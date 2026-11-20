@@ -70,6 +70,10 @@ struct VoiceAgentTests {
     app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
     let session = ScreenBorgVRSession.screen(appModel: app, renderingParameters: parameters, appSettings: appSettings)
     let service = BorgVRScreenCommandService(session: session)
+    let scaledMeasurement = BorgVRMeasurementCommandState(id: UUID(), name: "Anisotropic scale", kind: .length,
+      points: [.init(id: UUID(), position: .zero), .init(id: UUID(), position: SIMD3(0.25, 0.5, 0))])
+    let scaledValue = try scaledMeasurement.measurement(physicalExtent: SIMD3(2, 3, 4)).geometry.value
+    try expect(abs((scaledValue ?? -1) - sqrt(2.5)) < 1e-6, "Measurement scaling ignored anisotropic physical extents")
     var boneMetadata = BorgVRMCPDatasetMetadata(metadata)
     boneMetadata.longDescription = "Synthetic bone and skull test volume"
     boneMetadata.meta = "Knochen https://private.example/?token=secret /Users/private/scan.data"
@@ -136,6 +140,9 @@ struct VoiceAgentTests {
     let catalog = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: false, transferFunctions: true, images: true)
     let catalogURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent("BorgVRAgentServer/diagnostic_catalog.json")
+    if ProcessInfo.processInfo.environment["BORGVR_WRITE_AGENT_CATALOG"] == "1" {
+      try JSONSerialization.data(withJSONObject: catalog, options: [.sortedKeys, .prettyPrinted]).write(to: catalogURL)
+    }
     let diagnosticCatalog = try JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL))
     try expect(try JSONSerialization.data(withJSONObject: catalog, options: [.sortedKeys]) ==
       JSONSerialization.data(withJSONObject: diagnosticCatalog, options: [.sortedKeys]),
@@ -229,6 +236,20 @@ struct VoiceAgentTests {
                emptyApp.activeDataset == nil && !emptyApp.rendererHasActiveDataset && !startAgent.speech.isRecording,
                "Startup assistant required a previously initialized renderer or started listening")
     startAgent.cancel()
+    for turn in 1...2 {
+      let acknowledgement = voiceAgentText("Request is being processed.")
+      let before = startAgent.messages.filter { !$0.user && $0.text == acknowledgement }.count
+      await startAgent.submit("slow-acknowledgement")
+      try await wait { startAgent.messages.filter { !$0.user && $0.text == acknowledgement }.count > before }
+      try expect(startAgent.busy && startAgent.messages.last?.text == acknowledgement,
+                 "Acknowledgement waited for the slow model response")
+      try await wait { !startAgent.busy }
+      try expect(startAgent.errorText == nil && startAgent.messages.last?.text == "Slow request completed.",
+                 "Acknowledgement interfered with final response on turn \(turn)")
+      try expect(startAgent.messages.filter { !$0.user && $0.text == acknowledgement }.count == before + 1,
+                 "Request acknowledgement was duplicated")
+    }
+    startAgent.cancel()
     var openCount = 0
     var simulateReady = true
     var toolsReady = true
@@ -316,7 +337,11 @@ struct VoiceAgentTests {
     try expect(manualOpening == retainedOpening, "Manual opening identity was overwritten")
     let agent = VoiceAgentController(settings: settings)
     var context: VoiceAgentContext? = .init(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
-    agent.configure(service: service) { context }
+    let activeAgentBridge = BorgVRVoiceAgentBridge(service: service) { context }
+    agent.configure(bridge: activeAgentBridge)
+    var activeAgentUserChanges = 0
+    let activeAgentObservation = activeAgentBridge.changes.sink { _ in activeAgentUserChanges += 1 }
+    defer { activeAgentObservation.cancel() }
     try expect(agent.datasetOpeningID == openingID, "Unconnected assistant lost its dataset owner")
     agent.newConversation()
     try expect(agent.datasetOpeningID == openingID, "Disconnecting the agent changed dataset ownership")
@@ -346,6 +371,71 @@ struct VoiceAgentTests {
     try await service.replayCommandRecording(Data(gsc.utf8))
     try expect(session.currentSnapshot().transform == expected, "Agent transform GSC roundtrip changed state")
     try expect(try service.transferFunction(channel: 0).samples == expectedTF.samples, "Agent TF GSC roundtrip changed state")
+    agent.newConversation()
+    await agent.submit("invalid-clipping-recovery")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.connectionState == .ready &&
+               agent.messages.last?.text == "Clipping rejected safely and corrected.",
+               "Rejected clipping disconnected the assistant as an uncertain mutation: \(agent.errorText ?? "")")
+    try expect(abs(service.applicationState().clipMinimum[0] - 0.2) < 0.001 &&
+               abs(service.applicationState().clipMaximum[0] - 0.8) < 0.001, "Corrected clipping not applied")
+    agent.newConversation()
+    let annotationsBefore = service.listObjects().count + service.listMeasurements().count
+    let rejectedAnnotation = try await bridge.executeTool(name: "upsert_measurement", arguments: [
+      "kind": "area", "points": [["position": [0.1, 0.1, 0.1]], ["position": [0.2, 0.1, 0.1]],
+        ["position": [0.3, 0.1, 0.1]]]], validateContext: {})
+    try expect((rejectedAnnotation["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+               service.listObjects().count + service.listMeasurements().count == annotationsBefore,
+               "Degenerate annotation was applied or reported uncertain")
+    session.startCommandRecording()
+    try await session.waitForRecordingPreparation()
+    let manualChangesBeforeAnnotations = activeAgentUserChanges
+    await agent.submit("annotation-roundtrip")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Agent annotations created, edited and verified.",
+               "Native annotation capability failed: \(agent.errorText ?? "")")
+    try expect(activeAgentUserChanges == manualChangesBeforeAnnotations, "Agent annotations were reported as manual user changes")
+    let objects = service.listObjects(), measurements = service.listMeasurements()
+    try expect(objects.count == 2 && measurements.count == 3, "Edits created duplicates or lost annotations")
+    let physical = metadata.physicalExtentMeters
+    let expectedValues = ["length": Double(0.5 * physical.x), "area": Double(0.06 * physical.x * physical.y),
+                          "volume": Double(0.01 * physical.x * physical.y * physical.z)]
+    let page = try await bridge.executeTool(name: "list_measurements", arguments: ["limit": 2], validateContext: {})
+    let pageState = page["structuredContent"] as! [String: Any]
+    try expect(pageState["truncated"] as? Bool == true && pageState["nextOffset"] as? Int == 2,
+               "Annotation pagination lost completeness information")
+    let allMeasurements = try await bridge.executeTool(name: "list_measurements", arguments: [:], validateContext: {})
+    for measurement in (allMeasurements["structuredContent"] as! [String: Any])["measurements"] as! [[String: Any]] {
+      let kind = measurement["kind"] as! String
+      let expectedValue = expectedValues[kind]!
+      try expect(abs((measurement["value"] as! Double) - expectedValue) < max(1e-12, abs(expectedValue) * 1e-5),
+                 "Measurement does not use the dataset's physical scale")
+    }
+    try await session.finishCommandRecording()
+    let annotationGSC = try session.recordedGSCScript()
+    if case .marker(var oversized) = objects[0] {
+      oversized.name = String(repeating: "x", count: 100_000)
+      try service.upsertObject(.marker(oversized))
+      let summary = try await bridge.executeTool(name: "list_objects", arguments: ["limit": 1], validateContext: {})
+      let summaryRows = (summary["structuredContent"] as! [String: Any])["objects"] as! [[String: Any]]
+      try expect(summaryRows[0]["detailsOmitted"] as? Bool == true, "Large annotation was not explicitly summarized")
+      let unsafeReplacement = try await bridge.executeTool(name: "upsert_sphere_marker", arguments: [
+        "id": oversized.id.uuidString, "position": [0.1, 0.1, 0.1]], validateContext: {})
+      try expect((unsafeReplacement["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+                 service.listObjects()[0] == .marker(oversized), "A summary overwrote full annotation data")
+      try service.upsertObject(objects[0])
+    }
+    let unknownMarker = try await bridge.executeTool(name: "upsert_sphere_marker", arguments: [
+      "id": UUID().uuidString, "position": [0.1, 0.1, 0.1]], validateContext: {})
+    try expect((unknownMarker["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+               service.listObjects() == objects, "Unknown edit UUID created an unintended annotation")
+    try service.clearObjects()
+    try service.clearMeasurements()
+    try await service.replayCommandRecording(Data(annotationGSC.utf8))
+    try expect(service.listObjects() == objects && service.listMeasurements() == measurements,
+               "Annotation Command/GSC roundtrip changed identities, points or geometry")
+    try service.clearObjects()
+    try service.clearMeasurements()
     agent.newConversation()
     await agent.submit("collaborate")
     try await wait { agent.messages.contains { $0.text == "Waiting for manual edit." } }

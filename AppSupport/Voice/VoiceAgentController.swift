@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import ImageIO
 import UniformTypeIdentifiers
+import OSLog
 
 struct VoiceAgentMessage: Identifiable {
   let id = UUID()
@@ -38,6 +39,8 @@ final class VoiceAgentController: ObservableObject {
   private var contextID = ""
   private var sessionID: String?
   private var requestID: String?
+  private var acknowledgedRequestID: String?
+  private let diagnosticLog = Logger(subsystem: "de.uni-due.BorgVR", category: "VoiceAgent")
   private var catalog: [[String: Any]] = []
   private var ledger = VoiceAgentCallLedger()
   private var readState = false
@@ -380,6 +383,7 @@ final class VoiceAgentController: ObservableObject {
         }
       } catch {
         guard let self, self.generation == id else { return }
+        self.logFailure(error, operation: "receive")
         self.disconnect(reason: error is VoiceAgentError ? error : VoiceAgentError.connection)
       }
     }
@@ -406,6 +410,7 @@ final class VoiceAgentController: ObservableObject {
         }
       } catch {
         guard let self, self.generation == id else { return }
+        self.logFailure(error, operation: "heartbeat")
         self.disconnect(reason: error is VoiceAgentError ? error : VoiceAgentError.connection)
       }
     }
@@ -547,7 +552,14 @@ final class VoiceAgentController: ObservableObject {
     guard let requestID, event["request_id"] as? String == requestID else { throw VoiceAgentError.protocolViolation }
     lastActivity = Date()
     switch type {
-      case "started": break
+      case "started":
+        guard acknowledgedRequestID != requestID else { break }
+        acknowledgedRequestID = requestID
+        let text = voiceAgentText("Request is being processed.")
+        append(user: false, text: text)
+        if settings.speaks, !speech.isRecording, !interrupting {
+          speech.speak(text, rateMultiplier: settings.speechRateMultiplier)
+        }
       case "collaboration_paused":
         guard collaborationEnabled else { throw VoiceAgentError.protocolViolation }
         status = voiceAgentText("Paused for your changes")
@@ -731,10 +743,17 @@ final class VoiceAgentController: ObservableObject {
         self.resumeQueuedPromptIfSafe()
       } catch {
         guard self.generation == id else { return }
+        self.logFailure(error, operation: name)
         // A thrown mutation may already have committed. Terminate rather than invite a retry.
         self.disconnect(reason: error is VoiceAgentError ? error : VoiceAgentError.commandFailed)
       }
     }
+  }
+
+  private func logFailure(_ error: Error, operation: String) {
+    let kind = (error as? VoiceAgentError).map { String(describing: $0) } ?? String(reflecting: type(of: error))
+    let code = (error as NSError).code
+    diagnosticLog.error("Assistant failure: operation=\(operation, privacy: .public), kind=\(kind, privacy: .public), code=\(code), mutationPending=\(self.pendingMutation)")
   }
 
   private func rejectSupersededTool(callID: String) throws {

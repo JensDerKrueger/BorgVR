@@ -2,7 +2,9 @@
 
 This is a BorgVR application protocol, **not an MCP transport**. A shared native client is
 implemented for macOS, iOS and visionOS. Tool names and schemas come from
-the app's existing MCP/Command definitions rather than a second handwritten tool catalog.
+the app's existing MCP/Command definitions. Agent policy narrows annotation schemas and
+projects bounded results; execution still uses the existing Command service, not a second
+annotation implementation.
 
 ## Transport And Authentication
 
@@ -19,6 +21,37 @@ health; application inactivity still expires a session after five minutes.
 
 `GET /healthz` is unauthenticated liveness only. `GET /readyz` requires the bearer token and
 checks that the configured model is actually listed by vLLM. It returns 503 if unavailable.
+
+## Annotation capability
+
+With a ready dataset, updated peers can negotiate `list_objects`, `upsert_sphere_marker`,
+`upsert_stroke_marker`, `list_measurements`, `upsert_measurement` and
+`set_annotation_visibility`. No protocol version change is needed; older peers intersect
+their catalogs as before. Deletes, bulk deletes and mesh placement remain excluded.
+
+Annotation upserts require a successful `get_application_state` and the matching list call
+in the current turn. Replanning after a user intervention clears these read prerequisites.
+Positions/direction origins use dataset-local normalized `[x,y,z]` in `[0,1]`, colors use
+normalized RGBA, and radii use normalized volume units. Creation omits the top-level ID;
+edits use an existing UUID of the matching marker kind. Upsert replaces the full item,
+including fields the caller must preserve and stable measurement point IDs.
+
+The list tools accept optional `offset` (default 0) and `limit` (default 32, maximum 64).
+Results wrap arrays under `objects` or `measurements`, with `totalCount`, `returnedCount`,
+`truncated` and `nextOffset` (null on the last page). Each page has a 200 KiB detail budget.
+Individual records exceeding 64 KiB become explicit `detailsOmitted` summaries, never
+complete editable replacements. Upserts accept at most 256 points and names of 128 characters.
+
+Measurement records include `value`, `unit` (`m`, `m^2`, `m^3`), `physicalExtentAvailable`
+and `geometry` (`polyline`, `planar_polygon`, `convex_hull`). Values are calculated by BorgVR
+with the dataset's physical extent; absent scale or incomplete geometry gives null, not an
+invented physical result. New/updated measurements require nondegenerate geometry with
+at least 2/3/4 points respectively. Volume is not a segmented organ volume. An ambiguous
+2D screenshot does not establish a precise 3D anatomical measurement.
+
+Safe preflight failures return `ok: false`, `not_applied: true`, `code: invalid_annotation`
+and a corrective error. They do not imply uncertain completion. Exceptions after a command
+may have committed retain the existing stop-without-replay behavior.
 
 ## Handshake
 

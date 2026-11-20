@@ -58,7 +58,58 @@ async def model(messages, info):
     opening_receipt = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
                           '"opening_completed":true' in str(part.content)
                           for message in messages for part in message.parts)
-    if user == "catalog-search":
+    if user == "slow-acknowledgement":
+        await asyncio.sleep(1)
+        return ModelResponse(parts=[TextPart("Slow request completed.")])
+    elif user == "invalid-clipping-recovery":
+        if len(returned) >= 3:
+            assert returned[1].content["not_applied"] is True
+            assert returned[1].content["code"] == "invalid_clipping"
+            assert returned[0].content["clipMinimum"] == returned[2].content["clipMinimum"]
+            assert returned[0].content["clipMaximum"] == returned[2].content["clipMaximum"]
+        if len(returned) >= 4:
+            return ModelResponse(parts=[TextPart("Clipping rejected safely and corrected.")])
+        steps = [("get_application_state", {}),
+                 ("set_clipping", {"minimum": [0.8, 0, 0], "maximum": [0.2, 1, 1]}),
+                 ("get_application_state", {}),
+                 ("set_clipping", {"minimum": [0.2, 0, 0], "maximum": [0.8, 1, 1]})]
+    elif user == "annotation-roundtrip":
+        spheres = [part.content for part in returned if part.tool_name == "upsert_sphere_marker"]
+        strokes = [part.content for part in returned if part.tool_name == "upsert_stroke_marker"]
+        lengths = [part.content for part in returned if part.tool_name == "upsert_measurement" and part.content.get("kind") == "length"]
+        sphere_id = spheres[0]["marker"]["id"] if spheres else ""
+        stroke_id = strokes[0]["marker"]["id"] if strokes else ""
+        length_id = lengths[0]["id"] if lengths else ""
+        length_points = [dict(point) for point in lengths[0]["points"]] if lengths else []
+        if length_points:
+            length_points[1]["position"] = [0.6, 0.1, 0.1]
+        steps = [("get_application_state", {}), ("list_objects", {}), ("list_measurements", {}),
+                 ("upsert_sphere_marker", {"name": "Agent sphere", "position": [0.25, 0.5, 0.5], "radius": 0.01, "color": [0, 1, 0, 1]}),
+                 ("upsert_sphere_marker", {"id": sphere_id, "name": "Edited sphere", "position": [0.4, 0.5, 0.5], "radius": 0.01,
+                                           "color": [0, 1, 0, 1], "shows_direction": True, "direction_origin": [0.2, 0.5, 0.5]}),
+                 ("upsert_stroke_marker", {"name": "Agent stroke", "color": [1, 0, 0, 1], "points": [
+                     {"position": [0.1, 0.1, 0.1], "radius": 0.002}, {"position": [0.2, 0.1, 0.1], "radius": 0.002}]}),
+                 ("upsert_stroke_marker", {"id": stroke_id, "name": "Edited stroke", "color": [1, 0, 0, 1], "points": [
+                     {"position": [0.1, 0.1, 0.1], "radius": 0.002}, {"position": [0.2, 0.1, 0.1], "radius": 0.002},
+                     {"position": [0.3, 0.1, 0.1], "radius": 0.002}]}),
+                 ("upsert_measurement", {"name": "Agent length", "kind": "length", "points": [
+                     {"position": [0.1, 0.1, 0.1]}, {"position": [0.4, 0.1, 0.1]}]}),
+                 ("upsert_measurement", {"id": length_id, "name": "Edited length", "kind": "length", "points": length_points}),
+                 ("upsert_measurement", {"name": "Agent area", "kind": "area", "points": [
+                     {"position": [0.1, 0.1, 0.1]}, {"position": [0.4, 0.1, 0.1]}, {"position": [0.1, 0.5, 0.1]}]}),
+                 ("upsert_measurement", {"name": "Agent volume", "kind": "volume", "points": [
+                     {"position": [0.1, 0.1, 0.1]}, {"position": [0.4, 0.1, 0.1]}, {"position": [0.1, 0.5, 0.1]},
+                     {"position": [0.1, 0.1, 0.6]}]}),
+                 ("set_annotation_visibility", {"objects": True, "measurements": True}),
+                 ("list_objects", {}), ("list_measurements", {})]
+        if len(returned) >= len(steps):
+            assert len(returned[-2].content["objects"]) == 2
+            assert len(returned[-1].content["measurements"]) == 3
+            assert len(lengths) == 2 and lengths[0]["id"] == lengths[1]["id"]
+            assert [point["id"] for point in lengths[0]["points"]] == [point["id"] for point in lengths[1]["points"]]
+            assert all(row["value"] > 0 and row["physicalExtentAvailable"] for row in returned[-1].content["measurements"])
+            return ModelResponse(parts=[TextPart("Agent annotations created, edited and verified.")])
+    elif user == "catalog-search":
         steps = [("get_application_state", {}), ("search_datasets", {"query": "bone"})]
         if len(returned) >= 2:
             assert len(returned[-1].content["matches"]) == 1

@@ -470,6 +470,15 @@ as described in the next section.
    for the renderer, negotiates new tools, reads fresh state and continues unfinished work. Type a request or
    speak using the microphone.
 
+With a ready dataset, the agent can create and edit sphere, directional and stroke markers,
+and length, area and volume measurements. It first reads state and existing annotations,
+uses stable IDs and can toggle object/measurement visibility. Positions use normalized
+dataset-local coordinates `[0,1]`; colors use normalized RGBA. Measurements use BorgVR's
+physical dataset scale; volume is the convex hull of points, not segmented organ volume.
+An ambiguous screenshot does not establish an exact anatomical position. Lists are
+paginated and upserts are limited to 256 points. Deletion and mesh placement remain
+unavailable. Update both app and agent server and reconnect the conversation for new tools.
+
 **Never copy `server.key` or the internal `vllm_token` to devices.** The client token is
 stored in the device Keychain. Transfer it only to trusted devices and remove transfer
 copies after import.

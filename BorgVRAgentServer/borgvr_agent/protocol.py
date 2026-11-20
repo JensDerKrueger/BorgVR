@@ -11,13 +11,14 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from .annotations import ANNOTATION_WRITES, validate_annotation_arguments
 
 MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 MAX_RESULT_BYTES = 256 * 1024
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_HISTORY_BYTES = 8 * 1024 * 1024
 
-# No datasets can be opened/closed, edited, exported, or deleted by this agent.
+# Native allowlist: annotation upserts are allowed; deletes, exports and voxel edits are not.
 ALLOWED_TOOLS = frozenset({
     "search_datasets", "open_dataset",
     "get_application_state", "get_transfer_function", "get_background",
@@ -25,6 +26,8 @@ ALLOWED_TOOLS = frozenset({
     "set_clipping", "set_lighting", "set_background", "set_transfer_function",
     "set_bounding_box", "set_screen_projection", "wait_until_rendered",
     "capture_screenshot",
+    "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
+    "list_measurements", "upsert_measurement", "set_annotation_visibility",
 })
 APPLICATION_TOOLS = frozenset({"get_application_state", "search_datasets", "open_dataset"})
 
@@ -198,7 +201,7 @@ def select_tools(definitions: list[ToolDefinition]) -> list[ToolDefinition]:
             schema["properties"] = {"include_alpha": {"type": "boolean"}}
             schema.pop("required", None)
         selected.append(definition)
-    if any(d.name.startswith("set_") or d.name == "rotate_view" for d in selected):
+    if any(d.name.startswith("set_") or d.name == "rotate_view" or d.name in ANNOTATION_WRITES for d in selected):
         if "get_application_state" not in {d.name for d in selected}:
             raise ProtocolError("Visualization changes require get_application_state")
     return selected
@@ -223,6 +226,10 @@ def validate_arguments(definition: ToolDefinition, arguments: dict) -> None:
                             "Use only its declared properties, include required fields, and respect their types and bounds.")
     if definition.name == "capture_screenshot" and set(arguments) - {"include_alpha"}:
         raise ProtocolError("Saving screenshot files is not allowed")
+    try:
+        validate_annotation_arguments(definition.name, arguments)
+    except ValueError as error:
+        raise ProtocolError(str(error)) from error
 
 
 def decode_image(value: str) -> bytes:

@@ -14,8 +14,8 @@ def test_all_declared_commands_tools_gsc_ui_registries_and_settings_are_classifi
     catalog, inventory = current()
     assert audit.validate(catalog, inventory) == []
     assert inventory["agent"] < inventory["mcp"]
-    assert {"list_datasets", "edit_volume", "upsert_measurement", "upsert_sphere_marker"} <= inventory["mcp"] - inventory["agent"]
-    assert {"search_datasets", "open_dataset"} <= inventory["agent"]
+    assert {"list_datasets", "edit_volume", "remove_object", "clear_measurements", "upsert_mesh_instance"} <= inventory["mcp"] - inventory["agent"]
+    assert {"search_datasets", "open_dataset", "upsert_measurement", "upsert_sphere_marker", "upsert_stroke_marker"} <= inventory["agent"]
     assert inventory["settings"]["screen"] and inventory["settings"]["vision"]
 
 
