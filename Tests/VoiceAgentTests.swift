@@ -254,6 +254,22 @@ struct VoiceAgentTests {
       try expect(startAgent.messages.filter { !$0.user && $0.text == acknowledgement }.count == before + 1,
                  "Request acknowledgement was duplicated")
     }
+    for turn in 1...2 {
+      let before = startAgent.messages.filter { !$0.user && $0.text == "Repeated assistant answer." }.count
+      await startAgent.submit("duplicate-response")
+      try await wait { !startAgent.busy }
+      try expect(startAgent.errorText == nil &&
+                 startAgent.messages.filter { !$0.user && $0.text == "Repeated assistant answer." }.count == before + 1,
+                 "Repeated progress/final answer was not collapsed on turn \(turn)")
+      try expect(!startAgent.messages.contains { !$0.user && $0.text.hasPrefix("  Repeated assistant") },
+                 "Whitespace-only response variation was duplicated")
+    }
+    let distinctStart = startAgent.messages.count
+    await startAgent.submit("distinct-responses")
+    try await wait { !startAgent.busy }
+    let distinctReplies = startAgent.messages.dropFirst(distinctStart).filter { !$0.user }.map(\.text)
+    try expect(startAgent.errorText == nil && distinctReplies.contains("Distinct progress update.") &&
+               distinctReplies.contains("Distinct final answer."), "Different progress/final answers were suppressed")
     startAgent.cancel()
     var openCount = 0
     var simulateReady = true

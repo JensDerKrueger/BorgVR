@@ -61,6 +61,15 @@ async def model(messages, info):
     if user == "slow-acknowledgement":
         await asyncio.sleep(1)
         return ModelResponse(parts=[TextPart("Slow request completed.")])
+    elif user == "duplicate-response":
+        text = "Repeated assistant answer."
+        if len(returned) < 2:
+            return ModelResponse(parts=[ToolCallPart("report_progress", {"text": text if not returned else "  " + text + "\n"})])
+        return ModelResponse(parts=[TextPart(text)])
+    elif user == "distinct-responses":
+        if not returned:
+            return ModelResponse(parts=[ToolCallPart("report_progress", {"text": "Distinct progress update."})])
+        return ModelResponse(parts=[TextPart("Distinct final answer.")])
     elif user == "invalid-clipping-recovery":
         if len(returned) >= 3:
             assert returned[1].content["not_applied"] is True

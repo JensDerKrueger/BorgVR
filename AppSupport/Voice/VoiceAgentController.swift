@@ -41,6 +41,7 @@ final class VoiceAgentController: ObservableObject {
   private var sessionID: String?
   private var requestID: String?
   private var acknowledgedRequestID: String?
+  private var lastAssistantResponse: (requestID: String, messageID: UUID)?
   private var deletionReply: CheckedContinuation<Bool, Never>?
   private var declinedDeletionRequestID: String?
   private let diagnosticLog = Logger(subsystem: "de.uni-due.BorgVR", category: "VoiceAgent")
@@ -609,7 +610,13 @@ final class VoiceAgentController: ObservableObject {
       case "assistant_message":
         guard let text = event["text"] as? String, text.count <= 8192, event["final"] is Bool
         else { throw VoiceAgentError.protocolViolation }
+        if let previous = lastAssistantResponse, previous.requestID == requestID,
+           let last = messages.last, last.id == previous.messageID,
+           last.text.trimmingCharacters(in: .whitespacesAndNewlines) == text.trimmingCharacters(in: .whitespacesAndNewlines) {
+          break
+        }
         append(user: false, text: text)
+        if let last = messages.last { lastAssistantResponse = (requestID, last.id) }
         if settings.speaks, !speech.isRecording, !interrupting {
           speech.speak(text, rateMultiplier: settings.speechRateMultiplier)
         }

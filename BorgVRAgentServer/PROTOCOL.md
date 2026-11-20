@@ -140,6 +140,9 @@ The server emits `started`, zero or more `assistant_message` events with `final:
 tool calls/results as needed, then `assistant_message` with `final:true` and `completed`.
 Only `assistant_message.text` should be spoken. Progress updates are explicit, complete
 messages from the `report_progress` tool, not the model's hidden reasoning or partial JSON.
+The native client displays and speaks consecutive identical assistant messages only once
+within a request (ignoring surrounding whitespace), including a repeated progress/final
+answer. Different messages, intervening user replies and answers to later requests remain separate.
 
 Only one request may run per session; another receives `error` with code `busy`.
 Request IDs are unique for the connection and never replayed. A new connection starts a
