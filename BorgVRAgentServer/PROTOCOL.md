@@ -310,6 +310,8 @@ usage and absolute task deadline remain unchanged. Superseded state/images are i
 tool execution receipts remain. No commands are replayed. The latest user state replaces
 any earlier view-restoration baseline. A failed manual action is not proof of a useful edit:
 the final snapshot describes the actual resulting state and generalization requires feedback.
+Automatic state restoration is not reported as manual input. A failed action contributes
+no changed domain; it still pauses planning until the resulting state is available.
 
 Every negotiated `tool_call` and `tool_result` carries `view_revision` (initially 0).
 Before dispatch the client rejects outdated calls or calls during manual activity using
@@ -334,6 +336,10 @@ a single-purpose question from localized templates; the model cannot bundle seve
 into a generated yes/no question. Explanations belong in a separate progress message.
 Each purpose is available once per intervention per task, so help intent and permission
 can be answered separately. Replies retain the exact question and purpose in model context.
+`intervention_intent` requires a completed change with nonempty domains in the current task;
+startup state, active operations and interventions from previous tasks do not qualify.
+An ineligible attempt returns `not_asked:true, code:"no_user_intervention"` internally,
+without displaying a question. Help and view-change permission remain independently available.
 A yes to help intent never grants additional permissions or saves a rule. A no or conditional
 answer to `view_change` makes the task read-only; only an unconditional `Ja` or `Yes` to that
 permission question allows further mutations. Reads, render waits and screenshots remain

@@ -117,6 +117,11 @@ struct VoiceAgentTests {
     try expect(manualChanges.count == 2, "Legacy manual input was not observed")
     session.publishRenderSnapshot()
     try expect(manualChanges.count == 2, "Legacy mutation was reported twice")
+    var restoredTransform = session.currentSnapshot().transform
+    restoredTransform.translation.x += 0.02
+    try session.perform(.setTransform(restoredTransform), source: .stateRestore)
+    session.publishRenderSnapshot()
+    try expect(manualChanges.count == 2, "Automatic state restore was reported as a human intervention")
     let lifecycleStart = commandEvents.count
     do {
       try await session.performAction(.discardVolumeEdits, source: .userInterface) { () async throws -> Void in

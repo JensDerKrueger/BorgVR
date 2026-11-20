@@ -815,7 +815,7 @@ final class VoiceAgentController: ObservableObject {
     guard collaborationEnabled, connectionState == .ready, context != nil else { return }
     let domain = event.domain
     viewRevision += 1
-    changedDomains.insert(domain)
+    if event.phase == .committed { changedDomains.insert(domain) }
     readState = false
     if event.phase == .began {
       manualOperations.insert(event.id)

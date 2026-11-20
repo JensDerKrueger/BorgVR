@@ -31,7 +31,8 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   var changes: AnyPublisher<VoiceAgentApplicationChange, Never> {
     guard let executor = service.commandExecutor else { return Empty().eraseToAnyPublisher() }
     return executor.commandEvents.compactMap { [origin] event in
-      guard event.source != origin, let domain = Self.domain(event.command) else { return nil }
+      guard event.source != origin, event.source != .stateRestore,
+            let domain = Self.domain(event.command) else { return nil }
       let phase: VoiceAgentApplicationChange.Phase
       switch event.phase {
         case .began: phase = .began

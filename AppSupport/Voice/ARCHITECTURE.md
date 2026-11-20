@@ -126,6 +126,9 @@ nicht ausgeführte Modellplanung. Ereignisse werden bis zu 800 ms Bedienpause ge
 asynchrone Nutzeraktionen müssen zuerst enden. Bereits gestartete Werkzeuge werden nicht
 automatisch wiederholt oder zurückgesetzt. Vor dem nächsten Aufruf prüft die App erneut
 die Revision. Veraltete Aufrufe erhalten eine ausdrücklich nicht ausgeführte Antwort.
+Automatische Zustandswiederherstellung zählt nicht als manueller Eingriff. Begonnene oder
+fehlgeschlagene Aktionen pausieren zur Sicherheit, aber nur abgeschlossene Änderungen
+tragen einen geänderten Bereich bei.
 
 Danach erhält der Agent den aktuellen Zustand und setzt denselben Auftrag fort. Alte
 Zustandsdetails und Bilder werden als überholt markiert, Ausführungsbelege bleiben erhalten.
@@ -133,6 +136,9 @@ Ein Datensatzwechsel während laufender Arbeit beendet die Verbindung. Eine durc
 Benutzer angestoßene Bearbeitung darf den Editierstand innerhalb derselben Öffnung ändern.
 
 Rückfragen laufen als gesonderte Nachrichten im selben Auftrag, nicht als neuer Prompt.
+Die Frage nach der Hilfsabsicht setzt eine abgeschlossene manuelle Änderung im laufenden
+Auftrag voraus. Startzustand und Eingriffe aus früheren Aufträgen reichen nicht aus;
+Hilfsgesuche und Fragen nach weiteren Ansichtsänderungen bleiben unabhängig davon möglich.
 Regelvorschläge erfordern ausdrückliches Feedback und anschließend einen separaten
 Bestätigungsklick. Erst dann werden höchstens 16 Regeln à 500 Zeichen auf diesem Gerät
 gespeichert und künftigen Gesprächen mitgegeben. Sie sind fehlbare Präferenzen, keine

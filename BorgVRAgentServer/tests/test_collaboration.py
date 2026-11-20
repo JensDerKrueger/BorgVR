@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 
 from pydantic import ValidationError
@@ -136,18 +137,22 @@ def test_rejected_stale_command_is_not_claimed_as_applied_or_uncertain():
 def test_feedback_then_explicit_rule_approval_and_next_turn_knowledge():
     rule = "For this task, inspect cross-sections perpendicular to the viewing direction."
     count = 0
+    started = Event()
     async def model(messages, info):
         nonlocal count
         count += 1
         names = {tool.name for tool in info.function_tools}
         assert {"ask_collaboration_feedback", "propose_visualization_rule"} <= names
         if count == 1:
-            return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback", {"purpose": "intervention_intent", "language": "en"}, tool_call_id="q")])
+            started.set()
+            await asyncio.sleep(30)
         if count == 2:
+            return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback", {"purpose": "intervention_intent", "language": "en"}, tool_call_id="q")])
+        if count == 3:
             assert any(isinstance(part, ToolReturnPart) and part.content.get("user_feedback") == "Yes, inspect perpendicular sections."
                        for message in messages for part in message.parts if isinstance(part, ToolReturnPart))
             return ModelResponse(parts=[ToolCallPart("propose_visualization_rule", {"rule": rule}, tool_call_id="p")])
-        if count == 3:
+        if count == 4:
             return ModelResponse(parts=[TextPart("Rule proposed, not saved automatically.")])
         assert any(rule in str(part.content) for message in messages for part in message.parts if isinstance(part, UserPromptPart))
         return ModelResponse(parts=[TextPart("Approved preference received as task data.")])
@@ -156,6 +161,11 @@ def test_feedback_then_explicit_rule_approval_and_next_turn_knowledge():
         ws.receive_json()
         ws.send_json(user())
         ws.receive_json()
+        assert started.wait(2)
+        ws.send_json(change(active=True))
+        ws.send_json(change(revision=2))
+        assert ws.receive_json()["type"] == "collaboration_paused"
+        assert ws.receive_json()["type"] == "collaboration_resumed"
         question = ws.receive_json()
         assert question["type"] == "collaboration_question"
         ws.send_json({"type": "collaboration_feedback", "request_id": "turn-1", "question_id": question["question_id"],
@@ -193,13 +203,60 @@ def test_unconfirmed_rule_is_never_persisted_and_feedback_is_required():
     asyncio.run(check())
 
 
-def test_intent_and_view_permission_are_two_independent_questions_in_one_intervention():
+def test_intent_question_without_a_user_change_is_not_sent_to_the_app():
     count = 0
     async def model(messages, info):
         nonlocal count
         count += 1
-        if count <= 2:
-            purpose = "intervention_intent" if count == 1 else "view_change"
+        if count == 1:
+            assert any("No completed manual user change" in str(part.content)
+                       for message in messages for part in message.parts if isinstance(part, UserPromptPart))
+            return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback",
+                {"purpose": "intervention_intent", "language": "de"}, tool_call_id="unfounded")])
+        results = [part.content for message in messages for part in message.parts
+                   if isinstance(part, ToolReturnPart) and part.tool_name == "ask_collaboration_feedback"]
+        assert results[-1]["not_asked"] and results[-1]["code"] == "no_user_intervention"
+        return ModelResponse(parts=[TextPart("Continuing without a spurious question.")])
+    with connection(FunctionModel(model)) as client, open_session(client) as ws:
+        ws.send_json({**hello([STATE]), "collaboration": True})
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        assert ws.receive_json()["text"] == "Continuing without a spurious question."
+        assert ws.receive_json()["type"] == "completed"
+
+
+def test_intent_requires_a_completed_change_in_this_turn_not_activity_or_old_history():
+    async def check():
+        sent = []
+        async def send(event):
+            sent.append(event)
+        collaboration = Collaboration(SimpleNamespace(send=send, request_id="request", tools=[]), [])
+        ask = collaboration.tools()[0].function
+        assert (await ask("intervention_intent", "de"))["not_asked"]
+        collaboration.update(UserChange.model_validate(change(active=True)))
+        assert (await ask("intervention_intent", "de"))["not_asked"]
+        collaboration.update(UserChange.model_validate(change(revision=2, domains=[])))
+        assert (await ask("intervention_intent", "de"))["not_asked"]
+        collaboration.update(UserChange.model_validate(change(revision=3)))
+        assert collaboration.intent_revision == 3
+        collaboration.begin_turn()
+        assert (await ask("intervention_intent", "de"))["not_asked"]
+        assert sent == []
+    asyncio.run(check())
+
+
+def test_intent_and_view_permission_are_two_independent_questions_in_one_intervention():
+    count = 0
+    started = Event()
+    async def model(messages, info):
+        nonlocal count
+        count += 1
+        if count == 1:
+            started.set()
+            await asyncio.sleep(30)
+        if count <= 3:
+            purpose = "intervention_intent" if count == 2 else "view_change"
             return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback",
                 {"purpose": purpose, "language": "de"}, tool_call_id=f"q{count}")])
         answers = [part.content for message in messages for part in message.parts
@@ -215,6 +272,11 @@ def test_intent_and_view_permission_are_two_independent_questions_in_one_interve
         ws.receive_json()
         ws.send_json(user())
         ws.receive_json()
+        assert started.wait(2)
+        ws.send_json(change(active=True))
+        ws.send_json(change(revision=2))
+        assert ws.receive_json()["type"] == "collaboration_paused"
+        assert ws.receive_json()["type"] == "collaboration_resumed"
         for purpose, answer in [("intervention_intent", "Ja"), ("view_change", "Nein")]:
             question = ws.receive_json()
             assert question["type"] == "collaboration_question"
@@ -223,7 +285,7 @@ def test_intent_and_view_permission_are_two_independent_questions_in_one_interve
                           "question_id": question["question_id"], "text": answer})
         assert ws.receive_json()["text"].startswith("Ich untersuche")
         assert ws.receive_json()["type"] == "completed"
-    assert count == 3
+    assert count == 4
 
 
 @pytest.mark.parametrize("answer,allowed", [("Nein", False), ("No", False), ("Ja", True), ("yes", True),
@@ -243,6 +305,7 @@ def test_permission_is_scoped_and_conditional_answers_do_not_grant_unrestricted_
             collaboration.accept_feedback(CollaborationFeedback(type="collaboration_feedback",
                 request_id="request", question_id=event["question_id"], text=text))
             return await task
+        collaboration.update(UserChange.model_validate(change()))
         permission = await respond("view_change", answer)
         assert permission["view_changes_allowed"] is allowed
         assert collaboration.feedback is None, "Permission is not teaching feedback"
