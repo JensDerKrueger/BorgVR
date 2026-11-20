@@ -173,7 +173,11 @@ struct VisionApp: App {
     .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
     .onChange(of: scenePhase, initial: true) { _, phase in
       BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
-      if phase == .background { voiceAgent.disconnect(); saveOpenDatasetState() }
+      if phase == .background {
+        voiceAgent.pauseDemonstration()
+        voiceAgent.disconnect()
+        saveOpenDatasetState()
+      }
     }
     .onChange(of: runtimeAppModel.canOpenDataset) { _, available in
       if available { sharedAppModel.resumePendingDatasetLoad() }
@@ -446,11 +450,18 @@ struct VisionApp: App {
     voiceAgent.configure(service: service, isReady: {
       !runtimeAppModel.volumeBrush.isOpeningState && !runtimeAppModel.volumeBrush.isRestoringPersonalState &&
         !runtimeAppModel.volumeBrush.isWaitingForSharedState
+    }, beginImport: {
+      let id = try runtimeAppModel.beginImportWork()
+      return VoiceAgentImportLease(directory: URL.documentsDirectory,
+        brickSize: storedAppModel.brickSize, overlap: storedAppModel.brickOverlap,
+        compression: storedAppModel.enableCompression, borderMode: storedAppModel.borderMode,
+        quantize: storedAppModel.quantizeImportsTo8Bit, colorCompression: storedAppModel.importColorCompression,
+        filter: storedAppModel.dicomResamplingFilter, release: { runtimeAppModel.finishImportWork(id) })
     }) {
       switch runtimeAppModel.datasetSessionState {
         case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
           return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
-                                   editStateID: runtimeAppModel.volumeBrush.activeState?.id)
+                                   editStateID: runtimeAppModel.volumeBrush.editingContextID)
         default: return nil
       }
     }

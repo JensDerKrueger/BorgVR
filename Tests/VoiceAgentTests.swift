@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 import Security
 import AVFoundation
 import Combine
+import simd
 @testable import BorgVR
 
 private enum Failure: Error { case failed(String) }
@@ -158,6 +159,73 @@ struct VoiceAgentTests {
                resolvedLifecycle.allSatisfy { $0.source == .mcp }, "Resolved action lost its lifecycle or source")
     try expect(!BorgVRCommandExecutionContext.executingAction && BorgVRCommandExecutionContext.source == .userInterface,
                "Async action leaked task-local context to its caller")
+    let recorder = WorkflowDemonstrationRecorder()
+    let demonstrationContext = VoiceAgentContext(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
+    let demonstrationObservation = bridge.demonstrationActions.sink { action in
+      recorder.record(action, context: demonstrationContext)
+    }
+    defer { demonstrationObservation.cancel() }
+    recorder.start(goal: .inspectValues, context: demonstrationContext)
+    _ = try await bridge.executeTool(name: "rotate_view", arguments: ["axis": [0, 1, 0], "degrees": 1], validateContext: {})
+    try session.perform(.setTransform(session.currentSnapshot().transform), source: .stateRestore)
+    try await session.performAction(.discardVolumeEdits, source: .mcp) { () async throws -> Void in await Task.yield() }
+    do {
+      try await session.performAction(.discardVolumeEdits, source: .userInterface) { () async throws -> Void in
+        await Task.yield()
+        throw Failure.failed("Rejected demonstration action")
+      }
+    } catch Failure.failed("Rejected demonstration action") {}
+    recorder.finish()
+    try expect(recorder.completed == nil, "Demonstration captured an agent, restore, MCP or failed command")
+    recorder.start(goal: .inspectValues, context: demonstrationContext)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 1), source: .mouse)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 2), source: .userInterface)
+    recorder.finish(outcome: .reached)
+    guard let demonstration = recorder.completed else { throw Failure.failed("Manual demonstration was not recorded") }
+    let record = try JSONSerialization.jsonObject(with: JSONEncoder().encode(demonstration)) as? [String: Any]
+    try expect(demonstration.actions == [.transform] && demonstration.goal == .inspectValues &&
+               demonstration.outcome == .reached && Set(record?.keys.map { $0 } ?? []) ==
+                 ["version", "id", "goal", "actions", "outcome", "end"],
+               "Demonstration did not coalesce steps or exported private fields")
+    recorder.discard()
+    guard let viewBefore = bridge.workflowViewEvidence() else {
+      throw Failure.failed("Ready renderer did not expose allowed view settings")
+    }
+    let evidenceObservation = bridge.demonstrationEvidenceInvalidations.sink { recorder.invalidateEvidence() }
+    defer { evidenceObservation.cancel() }
+    recorder.start(goal: .exposeRegion, context: demonstrationContext, before: viewBefore)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 5), source: .mouse)
+    guard let viewAfter = bridge.workflowViewEvidence() else { throw Failure.failed("Missing final view settings") }
+    recorder.finish(after: viewAfter)
+    guard let detailed = recorder.completed else { throw Failure.failed("Missing opt-in demonstration") }
+    let detailRecord = try JSONSerialization.jsonObject(with: JSONEncoder().encode(detailed)) as? [String: Any]
+    let pair = detailRecord?["evidence"] as? [String: [String: Any]]
+    try expect(detailed.version == 2 && detailed.evidence?.before == viewBefore &&
+               detailed.evidence?.after == viewAfter && viewBefore != viewAfter &&
+               Set(pair?.keys.map { $0 } ?? []) == ["before", "after"] &&
+               Set(pair?["before"]?.keys.map { $0 } ?? []) == ["clip_minimum", "clip_maximum", "rotation"],
+               "Opt-in demonstration did not contain exactly the permitted view settings")
+    recorder.discard()
+    recorder.start(goal: .exposeRegion, context: demonstrationContext, before: viewBefore)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 5), source: .mouse)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 10), source: .mcp)
+    recorder.finish(after: bridge.workflowViewEvidence())
+    try expect(recorder.completed?.version == 1 && recorder.completed?.evidence == nil,
+               "Foreign command was included in the evidence pair")
+    recorder.discard()
+    recorder.start(goal: .exposeRegion, context: demonstrationContext, before: viewBefore)
+    recorder.record(.clipping, context: demonstrationContext)
+    recorder.record(.volume, context: nil)
+    try expect(!recorder.active && recorder.completed?.end == .interrupted &&
+               recorder.completed?.actions == [.clipping] && recorder.completed?.evidence == nil,
+               "Capture crossed a dataset boundary")
+    recorder.discard()
+    recorder.start(goal: .exposeRegion, context: demonstrationContext)
+    for index in 0...WorkflowDemonstrationRecorder.maximumActions {
+      recorder.record(index.isMultiple(of: 2) ? .transform : .clipping, context: demonstrationContext)
+    }
+    try expect(!recorder.active && recorder.completed?.end == .limit &&
+               recorder.completed?.actions.count == WorkflowDemonstrationRecorder.maximumActions, "Capture was unbounded")
     let before = session.currentSnapshot().transform
     do {
       _ = try await router.callTool(name: "rotate_view", arguments: ["axis": [0, 1, 0], "degrees": 30],
@@ -165,20 +233,24 @@ struct VoiceAgentTests {
       throw Failure.failed("Stale agent context was dispatched")
     } catch is VoiceAgentError {}
     try expect(session.currentSnapshot().transform == before, "Context check happened after mutation")
-    let catalog = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: false, transferFunctions: true, images: true)
+    let definitions = router.toolDefinitions + VoiceAgentPolicy.importCatalog
+    let catalog = VoiceAgentPolicy.catalog(definitions, vision: false, transferFunctions: true, images: true)
+    let applicationCatalog = VoiceAgentPolicy.catalog(definitions, vision: false,
+      transferFunctions: true, images: true, datasetReady: false)
+    let diagnosticTools = catalog + applicationCatalog.filter {
+      VoiceAgentPolicy.conversionTools.contains($0["name"] as? String ?? "")
+    }
     let catalogURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent("BorgVRAgentServer/diagnostic_catalog.json")
     if ProcessInfo.processInfo.environment["BORGVR_WRITE_AGENT_CATALOG"] == "1" {
-      try JSONSerialization.data(withJSONObject: catalog, options: [.sortedKeys, .prettyPrinted]).write(to: catalogURL)
+      try JSONSerialization.data(withJSONObject: diagnosticTools, options: [.sortedKeys, .prettyPrinted]).write(to: catalogURL)
     }
     let diagnosticCatalog = try JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL))
-    try expect(try JSONSerialization.data(withJSONObject: catalog, options: [.sortedKeys]) ==
+    try expect(try JSONSerialization.data(withJSONObject: diagnosticTools, options: [.sortedKeys]) ==
       JSONSerialization.data(withJSONObject: diagnosticCatalog, options: [.sortedKeys]),
       "Server diagnostic catalog differs from the native tools")
-    let names = Set(catalog.compactMap { $0["name"] as? String })
+    let names = Set(diagnosticTools.compactMap { $0["name"] as? String })
     try expect(names == VoiceAgentPolicy.allowed, "Safe tools differ from the actual MCP catalog")
-    let applicationCatalog = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: false,
-      transferFunctions: true, images: true, datasetReady: false)
     try expect(Set(applicationCatalog.compactMap { $0["name"] as? String }) == VoiceAgentPolicy.applicationTools,
                "Renderer commands exposed without a dataset")
     let screenshot = catalog.first { $0["name"] as? String == "capture_screenshot" }!["inputSchema"] as! [String: Any]
@@ -191,8 +263,20 @@ struct VoiceAgentTests {
     try rejects { try VoiceAgentPolicy.validate(["axis": [0, 1, 0], "degrees": Double.infinity], schema: rotate) }
     try rejects { try VoiceAgentPolicy.validate(["axis": [0, 1, 0], "degrees": 30, "path": "/secret"], schema: rotate) }
     let rgb = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: true, transferFunctions: false, images: false)
-    try expect(!rgb.contains { ["set_transfer_function", "set_render_mode", "capture_screenshot",
+    try expect(!rgb.contains { ["set_transfer_function", "set_render_mode", "capture_screenshot", "pick_screenshot_positions",
                                "set_screen_projection", "set_background"].contains($0["name"] as? String ?? "") }, "Unsupported tools exposed")
+    let rgbReset = rgb.first { $0["name"] as? String == "reset_state" }!["inputSchema"] as! [String: Any]
+    try VoiceAgentPolicy.validate(["scope": "clipping"], schema: rgbReset)
+    try rejects { try VoiceAgentPolicy.validate(["scope": "transfer_function"], schema: rgbReset) }
+    try rejects { try VoiceAgentPolicy.validate([String: Any](), schema: rgbReset) }
+    try session.perform(.setClipping(minimum: SIMD3(0.1, 0, 0), maximum: .one), source: .mouse)
+    _ = try await bridge.executeTool(name: "reset_state", arguments: ["scope": "clipping"], validateContext: {})
+    try expect(service.applicationState().clipMinimum == [0, 0, 0], "The agent did not reset the requested scope")
+    let editStatus = try await bridge.executeTool(name: "get_volume_edit_state", arguments: [:], validateContext: {})
+    let status = editStatus["structuredContent"] as? [String: Any]
+    try expect(status?["mode"] != nil && status?["pendingBrickCount"] != nil &&
+               status?["datasetID"] == nil && status?["savedStates"] as? [[String: String]] != nil,
+               "Edit status leaked private data or omitted saved state summaries")
 
     let cg = CGContext(data: nil, width: 1600, height: 1200, bitsPerComponent: 8, bytesPerRow: 0,
       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -204,10 +288,15 @@ struct VoiceAgentTests {
     try expect(CGImageDestinationFinalize(destination), "PNG fixture failed")
     let resized = try VoiceAgentController.agentImage(png as Data)
     try expect(resized.width <= 1024 && resized.height <= 1024 && resized.data.count <= 2097152, "Image bounds exceeded")
-    app.renderScreenshotHandler = { _, url, _, completion in
+    let positionBuffer = BorgVRScreenshotPositions(depth: Data(count: 1600 * 1200 * 4), depthBytesPerRow: 1600 * 4,
+      clipToVolume: matrix_identity_float4x4, columns: Array(repeating: 0.5, count: 1600),
+      rows: Array(repeating: 0.5, count: 1200))
+    app.renderScreenshotHandler = { id, url, _, completion in
       do {
         guard let url else { throw Failure.failed("No screenshot destination") }
         try (png as Data).write(to: url)
+        app.screenshotCache.begin(id)
+        app.screenshotCache.store(positionBuffer, id: id, renderedFrame: app.completedRenderFrameCount)
         completion(.success(url))
       } catch { completion(.failure(error)) }
     }
@@ -216,7 +305,15 @@ struct VoiceAgentTests {
     let account = "voice-agent-test-\(UUID())"
     defer { defaults.removePersistentDomain(forName: suite); try? KeychainSecretStore.delete(account: account) }
     let settings = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
+    func isolatedConversationStore(_ name: String) -> VoiceAgentConversationStore {
+      .init(file: fixture.appendingPathComponent("conversation-\(name)/conversation.sealed"),
+            keyAccount: "\(account)-conversation-\(name)")
+    }
+    let conversationStore = isolatedConversationStore("main")
+    defer { try? conversationStore.remove() }
     try expect(settings.workMinutes == 30 && settings.maximumCalls == 256, "Long-run defaults missing")
+    try expect(!settings.savesConversation && settings.confirmsVolumeEdits,
+               "Conversation must be opt-in and edits must ask by default")
     settings.workMinutes = 60
     settings.maximumCalls = 512
     let persisted = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
@@ -249,14 +346,115 @@ struct VoiceAgentTests {
                "Existing utterance rate changed")
     settings.enabled = true
     settings.speaks = false
+    let workflowAgent = VoiceAgentController(settings: settings, conversationStore: isolatedConversationStore("workflow"))
+    workflowAgent.configure(bridge: bridge)
+    var shotCount = 0
+    let screenshotHandler = app.renderScreenshotHandler
+    app.renderScreenshotHandler = { id, url, access, completion in
+      shotCount += 1
+      screenshotHandler?(id, url, access, completion)
+    }
+    workflowAgent.startDemonstration(goal: .exposeRegion, includeViewSettings: true)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 1), source: .mouse)
+    await workflowAgent.finishDemonstration()
+    try expect(shotCount == 0 && workflowAgent.demonstrations.screenshotExport == nil,
+               "A demonstration without image consent captured a screenshot")
+    workflowAgent.demonstrations.discard()
+
+    let frames = Task { @MainActor in
+      while !Task.isCancelled {
+        try? await Task.sleep(for: .milliseconds(20))
+        app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
+      }
+    }
+    defer { frames.cancel() }
+    await workflowAgent.startScreenshotDemonstration(goal: .exposeRegion)
+    try expect(workflowAgent.demonstrations.active && shotCount == 1, "The first consented render was not captured")
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 2), source: .mouse)
+    await workflowAgent.finishDemonstration(outcome: .reached)
+    guard let screenshotExport = workflowAgent.demonstrations.screenshotExport,
+          let numericExport = workflowAgent.demonstrations.completed else {
+      throw Failure.failed("Missing finished screenshot pair")
+    }
+    let paired = try JSONSerialization.jsonObject(with: JSONEncoder().encode(screenshotExport)) as? [String: Any]
+    let encodedShots = paired?["screenshots"] as? [String: String]
+    let plain = try JSONSerialization.jsonObject(with: JSONEncoder().encode(numericExport)) as? [String: Any]
+    try expect(shotCount == 2 && screenshotExport.screenshots.before.count <= 512 * 1024 &&
+               screenshotExport.screenshots.after.count <= 512 * 1024 &&
+               encodedShots?["before_png_base64"].flatMap { Data(base64Encoded: $0) } != nil &&
+               encodedShots?["after_png_base64"].flatMap { Data(base64Encoded: $0) } != nil &&
+               plain?["screenshots"] == nil, "Screenshot export was incomplete, oversized, or uploadable")
+    workflowAgent.demonstrations.discard()
+
+    await workflowAgent.startScreenshotDemonstration(goal: .exposeRegion)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 2), source: .mouse)
+    try session.perform(.rotate(axis: [0, 1, 0], degrees: 3), source: .mcp)
+    await workflowAgent.finishDemonstration()
+    try expect(shotCount == 3 && workflowAgent.demonstrations.screenshotExport == nil,
+               "A foreign change left exportable screenshots")
+    workflowAgent.demonstrations.discard()
+    frames.cancel()
+    app.renderScreenshotHandler = screenshotHandler
     settings.address = "https://127.0.0.1:\(ready["port"]!)"
     try settings.importCertificate(cert)
     try settings.setToken(String(contentsOf: fixture.appendingPathComponent("runtime/secrets/agent_token"), encoding: .utf8))
     try expect(!String(describing: defaults.dictionaryRepresentation()).contains(try settings.token()), "Token leaked to preferences")
+    let workflowAccounts = try JSONDecoder().decode([[String: String]].self,
+      from: Data(contentsOf: fixture.appending(path: "workflow-fixture.json")))
+    let workflowKey = "workflow-test-" + UUID().uuidString
+    defer { try? KeychainSecretStore.delete(account: workflowKey) }
+    let outbox = WorkflowOutbox(file: fixture.appending(path: "outbox.json"))
+    let workflow = WorkflowUpload(keychainAccount: workflowKey, outbox: outbox)
+    await workflow.link(try settings.token(), settings: settings)
+    try expect(workflow.destination(for: settings) == nil, "Chat credentials linked to workflow storage")
+    await workflow.link(workflowAccounts[0]["token"]!, settings: settings)
+    guard let ownerA = workflow.destination(for: settings) else {
+      throw Failure.failed("Workflow profile A could not link: \(workflow.errorText ?? "")")
+    }
+    try expect(ownerA.profileID == UUID(uuidString: workflowAccounts[0]["profile_id"]!) &&
+               workflow.enqueue(demonstration, capturedFor: ownerA, settings: settings),
+               "Demonstration did not enter its original profile queue")
+    let restarted = WorkflowUpload(keychainAccount: workflowKey, outbox: outbox)
+    try expect(restarted.pendingCount == 1, "Restart lost a queued demonstration")
+    await restarted.link(workflowAccounts[1]["token"]!, settings: settings)
+    guard let ownerB = restarted.destination(for: settings) else { throw Failure.failed("Workflow profile B could not link") }
+    try expect(ownerA != ownerB && restarted.pendingCount == 0 &&
+               !restarted.enqueue(demonstration, capturedFor: ownerA, settings: settings),
+               "Profile B could claim a capture from profile A")
+    recorder.discard()
+    recorder.start(goal: .inspectValues, context: demonstrationContext, destination: ownerA)
+    recorder.record(.clipping, context: demonstrationContext)
+    recorder.checkDestination(ownerB)
+    recorder.record(.annotations, context: demonstrationContext)
+    try expect(!recorder.active && recorder.completed == nil && recorder.destination == nil,
+               "An unqueued draft remained available after switching profiles")
+    await restarted.sync(settings: settings)
+    await restarted.refreshReport(settings: settings)
+    try expect(restarted.analysis?.status == .empty, "Profile B received profile A's report")
+    try expect(try outbox.pending(for: ownerA).map(\.episode.id) == [demonstration.id] && outbox.pending(for: ownerB).isEmpty,
+               "Profile switch retagged or uploaded another user's data")
+    await restarted.link(workflowAccounts[0]["token"]!, settings: settings)
+    await restarted.sync(settings: settings)
+    try expect(restarted.errorText == nil && restarted.pendingCount == 0 && outbox.load().isEmpty,
+               "Acknowledged demonstration was not removed from its queue")
+    try await wait { !restarted.busy }
+    for _ in 0..<20 {
+      await restarted.refreshReport(settings: settings)
+      if restarted.analysis?.status == .ready { break }
+      try await Task.sleep(for: .milliseconds(50))
+    }
+    try expect(restarted.analysis?.report?.episodes == 1 && restarted.analysis?.report?.patterns.isEmpty == true,
+               "The native workflow report did not reflect its own uploaded demonstration")
+    let replacement = WorkflowDestination(origin: ownerA.origin, certificateDigest: ownerA.certificateDigest,
+                                          profileID: ownerA.profileID, corpusID: UUID())
+    try outbox.enqueue(demonstration, for: ownerA)
+    try expect(try outbox.pending(for: replacement).isEmpty, "Old corpus queue was retagged after deletion")
+    try outbox.clear(for: replacement)
+    try expect(try outbox.load().isEmpty, "Old corpus queue could not be removed by its profile")
     let emptyApp = AppModel()
     let emptySession = ScreenBorgVRSession.screen(appModel: emptyApp,
       renderingParameters: RenderingParameters(), appSettings: AppSettings())
-    let startAgent = VoiceAgentController(settings: settings)
+    let startAgent = VoiceAgentController(settings: settings, conversationStore: isolatedConversationStore("start"))
     startAgent.configure(service: BorgVRScreenCommandService(session: emptySession)) { nil }
     await startAgent.submit("application-state")
     try await wait { !startAgent.busy }
@@ -331,7 +529,7 @@ struct VoiceAgentTests {
     let searchTextObject = try VoiceAgentPolicy.decode(searchText)
     try expect(searchTextObject["totalMatches"] as? Int == 1,
                "MCP clients without structuredContent did not receive the search results")
-    let catalogAgent = VoiceAgentController(settings: settings)
+    let catalogAgent = VoiceAgentController(settings: settings, conversationStore: isolatedConversationStore("catalog"))
     catalogAgent.configure(service: catalogService, isReady: { toolsReady }) {
       switch emptyApp.datasetSessionState {
         case .opening(let dataset, let request), .rendering(let dataset, let request):
@@ -379,7 +577,7 @@ struct VoiceAgentTests {
                "A delayed agent opener replaced the user's manual selection")
     guard case .opening(_, let retainedOpening) = emptyApp.datasetSessionState else { fatalError() }
     try expect(manualOpening == retainedOpening, "Manual opening identity was overwritten")
-    let agent = VoiceAgentController(settings: settings)
+    let agent = VoiceAgentController(settings: settings, conversationStore: conversationStore)
     var context: VoiceAgentContext? = .init(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
     let activeAgentBridge = BorgVRVoiceAgentBridge(service: service) { context }
     agent.configure(bridge: activeAgentBridge)
@@ -415,6 +613,11 @@ struct VoiceAgentTests {
     try await service.replayCommandRecording(Data(gsc.utf8))
     try expect(session.currentSnapshot().transform == expected, "Agent transform GSC roundtrip changed state")
     try expect(try service.transferFunction(channel: 0).samples == expectedTF.samples, "Agent TF GSC roundtrip changed state")
+    agent.newConversation()
+    await agent.submit("pick-position")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Screenshot position verified.",
+               "Agent picking did not use the screenshot's position buffer: \(agent.errorText ?? "")")
     agent.newConversation()
     await agent.submit("invalid-clipping-recovery")
     try await wait { !agent.busy }
@@ -573,21 +776,16 @@ struct VoiceAgentTests {
     app.sceneMeshInstances = []
     agent.newConversation()
     await agent.submit("collaborate")
-    try await wait { agent.messages.contains { $0.text == "Waiting for manual edit." } }
+    try await wait { agent.collaborationQuestion != nil }
     try service.rotate(axis: [1, 0, 0], degrees: 15)
     let userTransform = session.currentSnapshot().transform
     try expect(agent.userIsInteracting, "Manual change did not pause the active agent")
-    try await wait { agent.collaborationQuestion != nil }
-    try expect(agent.busy && !agent.userIsInteracting && agent.errorText == nil, "User priority lost the current task")
-    await agent.submit("Yes, I wanted to show a better section.")
     try await wait { !agent.busy }
     try expect(agent.errorText == nil && agent.messages.last?.text == "Collaborative task completed without undoing your change.",
                "Collaborative run failed: \(agent.errorText ?? "")")
     try expect(session.currentSnapshot().transform == userTransform, "Agent undid the manual rotation")
-    try expect(settings.knowledgeRules.isEmpty && agent.ruleProposals.count == 1, "A rule was saved without user approval")
-    await agent.decideRule(agent.ruleProposals[0], remember: true)
-    try expect(settings.knowledgeRules.count == 1 && agent.ruleProposals.isEmpty, "Explicit approval did not save the rule")
-    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).knowledgeRules.count == 1, "Confirmed rule missing on reload")
+    try expect(agent.collaborationQuestion == nil && agent.ruleProposals.isEmpty && settings.knowledgeRules.isEmpty,
+               "Manual help left a pending question or recorded a preference")
     agent.newConversation()
     await agent.submit("long-run")
     try await wait { !agent.busy }
@@ -624,15 +822,26 @@ struct VoiceAgentTests {
     try expect(agent.connectionState == .disconnected && !agent.busy && !agent.interrupting &&
                !agent.messages.contains { $0.user && $0.text == "must-not-run" },
                "Explicit cancellation allowed a queued replacement to start")
-    for (prompt, expectedError) in [("context-before-change", VoiceAgentError.contextLimit),
-                                     ("context-after-change", .changesAppliedContextLimit),
-                                     ("verification-failed", .changesAppliedVerificationFailed)] {
+    agent.newConversation()
+    await agent.submit("context-before-change")
+    try await wait { !agent.busy }
+    try expect(!agent.canResume && agent.connectionState == .disconnected && agent.errorText == nil &&
+               agent.messages.last?.text == voiceAgentText("I couldn't complete the task and didn't make any changes. Try asking for one step at a time."),
+               "Unrecoverable failure was not explained in the conversation")
+    for prompt in ["context-after-change", "verification-failed"] {
       agent.newConversation()
       await agent.submit(prompt)
       try await wait { !agent.busy }
-      try expect(agent.errorText == expectedError.localizedDescription,
-                 "Wrong partial-success/context error for \(prompt): \(agent.errorText ?? "")")
-      try expect(agent.connectionState == .disconnected, "Failed request must not be replayed")
+      let partialTransform = session.currentSnapshot().transform
+      try expect(agent.canResume && agent.errorText == nil && agent.connectionState == .ready &&
+                 agent.messages.last?.text.hasSuffix(voiceAgentText("Would you like me to continue?")) == true,
+                 "Expected a resumable partial result for \(prompt)")
+      await agent.resumePartialTask()
+      try await wait { !agent.busy }
+      try expect(!agent.canResume && agent.errorText == nil && agent.connectionState == .ready &&
+                 agent.messages.last?.text == "Continued without repeating the change." &&
+                 session.currentSnapshot().transform == partialTransform,
+                 "Continue repeated the already confirmed rotation or lost the task")
     }
     agent.newConversation()
     await agent.submit("wait")
@@ -666,23 +875,180 @@ struct VoiceAgentTests {
     await agent.submit("application-state")
     try await wait { !agent.busy }
     try expect(agent.errorText == nil && agent.messages.last?.text == "Dataset ready.", "Dataset context did not update")
-    context = nil
-    app.closeDataset(destination: .datasetSelection)
+
+    let editURL = fixture.appendingPathComponent("native-agent-edit.data")
+    let originalData = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
+    try originalData.write(to: editURL)
+    let editSource = try BORGVRFileData(filename: editURL.path)
+    _ = app.volumeBrush.open(editSource, datasetURL: editURL)
+    try await app.volumeBrush.waitForStateReady()
+    let editContext = app.volumeBrush.editingContextID
+    try expect(editContext != nil && app.volumeBrush.activeState == nil,
+               "Fresh original dataset lacks its own stable working edit identity")
+    context = .init(datasetID: entry.uniqueId, openingID: newOpening, editStateID: editContext)
     agent.invalidateContext()
     try await wait { agent.connectionState != .connecting }
-    await agent.submit("application-state")
+    let initialEditRevision = app.volumeBrush.editRevision
+    let rejectedEdit = try await activeAgentBridge.executeTool(name: "edit_volume", arguments: [:], validateContext: {})
+    try expect((rejectedEdit["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+               app.volumeBrush.editRevision == initialEditRevision, "Direct edit dispatch bypassed local approval")
+
+    await agent.submit("volume-edit-declined")
+    try await wait { agent.volumeEditApproval != nil || !agent.busy }
+    guard let declinedEdit = agent.volumeEditApproval else { throw Failure.failed("No volume edit approval was shown") }
+    agent.resolveVolumeEditApproval(id: declinedEdit.id, accepted: false)
     try await wait { !agent.busy }
-    try expect(agent.errorText == nil && agent.messages.last?.text == "Start menu ready." &&
-               agent.messages.filter { $0.user }.count == 3, "Closing the dataset destroyed the app session")
-    agent.cancel()
-    try expect(agent.messages.count >= 6 && !agent.speech.isRecording, "Session cancellation cleared conversation or started the microphone")
-    print("Voice agent tests passed: TLS/WSS, GSC roundtrip, generic Command events, user-priority collaboration, explicit local rules, long runs and safe cancellation")
+    try expect(agent.messages.last?.text == "Volume edit declined safely." &&
+               app.volumeBrush.editRevision == initialEditRevision && agent.volumeBrickStatus == nil,
+               "Declined volume edit changed data or reported completion")
+
+    try expect(!FileManager.default.fileExists(atPath: conversationStore.file.path),
+               "Opted-out conversation wrote an archive")
+    let approvalConnection = settings.identity
+    settings.savesConversation = true
+    await agent.submit("volume-edit-erase")
+    try await wait { agent.volumeEditApproval != nil || !agent.busy }
+    guard let pendingEdit = agent.volumeEditApproval else { throw Failure.failed("Missing erase approval") }
+    try expect(pendingEdit.erase && pendingEdit.sampleCount == 1, "Approval did not describe the exact edit")
+    agent.resolveVolumeEditApproval(id: pendingEdit.id, accepted: true, alwaysApprove: true)
+    try await wait { !agent.busy }
+    try await wait { agent.volumeBrickStatus == .ready }
+    try expect(!settings.confirmsVolumeEdits && settings.identity == approvalConnection &&
+               agent.messages.last?.text == "Edited bricks are ready." && agent.errorText == nil,
+               "Always approve did not persist or interrupted the pending edit")
+    try expect(!(try await app.volumeBrush.stateSnapshot()).mask.isOriginal &&
+               app.volumeBrush.editingContextID == editContext, "Erase did not update the edit mask")
+    agent.disconnect()
+
+    let sealed = try Data(contentsOf: conversationStore.file)
+    try expect(sealed.range(of: Data("volume-edit-erase".utf8)) == nil &&
+               (try conversationStore.load(owner: UUID())) == nil, "Archive leaked text or crossed an owner boundary")
+    let recoveredSettings = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
+    try expect(recoveredSettings.savesConversation && !recoveredSettings.confirmsVolumeEdits &&
+               recoveredSettings.archiveOwnerID == settings.archiveOwnerID, "Local settings did not survive reload")
+    let recovered = VoiceAgentController(settings: recoveredSettings, conversationStore: conversationStore)
+    try expect(recovered.messages.contains { $0.user && $0.text == "volume-edit-erase" },
+               "Chat transcript was not loaded from the local archive")
+    context = .init(datasetID: entry.uniqueId, openingID: UUID(), editStateID: editContext)
+    recovered.configure(bridge: activeAgentBridge)
+    await recovered.submit("volume-edit-restore")
+    try await wait { recovered.volumeEditApproval != nil || !recovered.busy }
+    try expect(recovered.volumeEditApproval == nil && recovered.errorText == nil &&
+               recovered.messages.last?.text == "Edited bricks are ready.",
+               "Restore did not use archived receipts without a second confirmation: \(recovered.errorText ?? "")")
+    try await wait { recovered.volumeBrickStatus == .ready }
+    try expect((try await app.volumeBrush.stateSnapshot()).mask.isOriginal &&
+               app.volumeBrush.editingContextID == editContext, "Restore did not recover the original mask")
+    recoveredSettings.confirmsVolumeEdits = true
+    await recovered.submit("volume-edit-declined")
+    try await wait { recovered.volumeEditApproval != nil || !recovered.busy }
+    guard let askedAgain = recovered.volumeEditApproval else { throw Failure.failed("Re-enabled approval did not ask") }
+    recovered.resolveVolumeEditApproval(id: askedAgain.id, accepted: false)
+    try await wait { !recovered.busy }
+    try expect(try Data(contentsOf: editURL) == originalData, "Agent edited the original .data file")
+    let changedChannels = try await activeAgentBridge.executeTool(name: "configure_volume_brush",
+      arguments: ["channels": [1]], validateContext: {})
+    try expect((changedChannels["structuredContent"] as? [String: Any])?["channels"] as? [Int] == [1],
+               "Brush command did not use the existing one-based channel selection")
+    let localSave = try await activeAgentBridge.executeFileTool(name: "save_visualization_state", arguments: ["filename": "view"],
+      select: { _ in fixture }, validateContext: {}, willCommit: {})
+    try expect((localSave["structuredContent"] as? [String: Any])?["saved"] as? Bool == true &&
+               FileManager.default.fileExists(atPath: fixture.appendingPathComponent("view.json").path) &&
+               !(try VoiceAgentPolicy.encoded(localSave)).contains(fixture.path), "Save did not write locally or leaked the directory")
+    let requestedExport = try await activeAgentBridge.executeFileTool(name: "export_edited_dataset",
+      arguments: ["filename": "edited-export"], select: { _ in fixture }, validateContext: {}, willCommit: {})
+    let exportJob = (requestedExport["structuredContent"] as? [String: Any])?["export"] as? [String: Any]
+    guard let exportID = (exportJob?["id"] as? String).flatMap(UUID.init(uuidString:)) else {
+      throw Failure.failed("Volume export did not return a job receipt")
+    }
+    _ = try await app.volumeBrush.waitForVolumeExport(id: exportID)
+    try expect(FileManager.default.fileExists(atPath: fixture.appendingPathComponent("edited-export.data").path) &&
+               (try Data(contentsOf: editURL)) == originalData, "Export changed its source or didn't write the result")
+    try await app.volumeBrush.duplicateState(name: "Test edit state")
+    guard let savedID = app.volumeBrush.activeState?.id else { throw Failure.failed("No saved edit state") }
+    let original = try await activeAgentBridge.executeTool(name: "select_edit_state",
+      arguments: ["id": "original"], validateContext: {})
+    try expect((original["structuredContent"] as? [String: Any])?["activeStateID"] == nil &&
+               app.volumeBrush.activeState == nil, "Could not select the original edit state")
+    let selected = try await activeAgentBridge.executeTool(name: "select_edit_state",
+      arguments: ["id": savedID.uuidString], validateContext: {})
+    let selectedStatus = selected["structuredContent"] as? [String: Any]
+    try expect(selectedStatus?["activeStateID"] as? String == savedID.uuidString &&
+               app.volumeBrush.activeState?.id == savedID, "Could not select a saved edit state")
+    context = nil
+    app.closeDataset(destination: .datasetSelection)
+    recovered.invalidateContext()
+    try await wait { recovered.connectionState != .connecting }
+    await recovered.submit("application-state")
+    try await wait { !recovered.busy }
+    try expect(recovered.errorText == nil && recovered.messages.last?.text == "Start menu ready." &&
+               recovered.messages.filter { $0.user }.count == 7 && recovered.volumeBrickStatus == nil,
+               "Closing the dataset destroyed the app session or retained stale edit status")
+    recovered.cancel()
+    try expect(recovered.messages.count >= 6 && !recovered.speech.isRecording, "Session cancellation cleared conversation or started the microphone")
+    recoveredSettings.savesConversation = false
+    try await wait { !FileManager.default.fileExists(atPath: conversationStore.file.path) }
+    try expect(!recovered.messages.isEmpty, "Turning off disk storage cleared the current in-memory conversation")
+    recoveredSettings.savesConversation = true
+    try await wait { FileManager.default.fileExists(atPath: conversationStore.file.path) }
+    recovered.newConversation()
+    try expect(recovered.messages.isEmpty && !FileManager.default.fileExists(atPath: conversationStore.file.path),
+               "New conversation retained saved chat or receipts")
+    try await testImportWorkflow(fixture: fixture, service: service, model: app)
+    print("Voice agent tests passed: TLS/WSS, Command events and GSC roundtrip, collaboration, local save/export, import and fusion")
   }
 
-  private static func wait(_ condition: () -> Bool) async throws {
-    let deadline = ContinuousClock.now + .seconds(20)
+  private static func testImportWorkflow(fixture: URL, service: BorgVRScreenCommandService, model: AppModel) async throws {
+    let source = fixture.appendingPathComponent("tiny-registration.nrrd")
+    var raw = Data("NRRD0005\ntype: uint8\ndimension: 3\nsizes: 12 12 12\nspacings: 1 1 1\nencoding: raw\n\n".utf8)
+    for index in 0..<1728 {
+      let value = (index * 37 + index / 13) % 251
+      raw.append(UInt8(value))
+    }
+    try raw.write(to: source)
+    let bridge = BorgVRVoiceAgentBridge(service: service, beginImport: {
+      let id = try model.beginBackgroundImport()
+      return .init(directory: fixture, brickSize: 32, overlap: 2, compression: true, borderMode: "border",
+                   quantize: false, colorCompression: 0, filter: .trilinear, release: { model.finishBackgroundImport(id) })
+    }) { nil }
+    var status: VoiceAgentImportStatus?
+    let observation = bridge.importUpdates.sink { status = $0 }
+    defer { observation.cancel() }
+    let cancelled = try await bridge.executeFileTool(name: "import_volume", arguments: ["filename": "cancelled", "source_kind": "file"],
+      select: { _ in nil }, validateContext: {}, willCommit: {})
+    try expect((cancelled["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+               model.backgroundImportID == nil && status == nil, "Declined picker left an active import")
+    let arguments = ["filename": "test-import", "source_kind": "file"]
+    let receipt = try await bridge.executeFileTool(name: "import_volume", arguments: arguments,
+      select: { _ in source }, validateContext: {}, willCommit: {})
+    try expect((receipt["structuredContent"] as? [String: Any])?["status"] as? String == "running" &&
+               model.backgroundImportID != nil, "Import did not acquire its renderer lease")
+    try await wait { status?.active == false }
+    let imported = fixture.appendingPathComponent("test-import.data")
+    try expect(status?.phase == .completed && model.backgroundImportID == nil &&
+               FileManager.default.fileExists(atPath: imported.path), "Native import failed: \(status?.detail ?? "")")
+    let importedID = try BORGVRMetaData(url: imported).uniqueID
+    let repeated = try await bridge.executeFileTool(name: "import_volume", arguments: arguments,
+      select: { _ in source }, validateContext: {}, willCommit: {})
+    try expect((repeated["structuredContent"] as? [String: Any])?["code"] as? String == "destination_exists" &&
+               (try BORGVRMetaData(url: imported)).uniqueID == importedID, "Import overwrote an existing dataset")
+    var picked = 0
+    _ = try await bridge.executeFileTool(name: "fuse_volumes",
+      arguments: ["filename": "test-fusion", "reference_kind": "file", "moving_kind": "file"],
+      select: { _ in
+        picked += 1
+        return picked == 1 ? source : imported
+      }, validateContext: {}, willCommit: {})
+    try await wait(timeout: 60) { status?.active == false }
+    let fused = try BORGVRMetaData(url: fixture.appendingPathComponent("test-fusion.data"))
+    try expect(picked == 2 && status?.phase == .completed && fused.componentCount == 2 &&
+               model.backgroundImportID == nil, "Fusion did not use both local inputs or release its renderer lease")
+  }
+
+  private static func wait(timeout: Int = 20, line: UInt = #line, _ condition: () -> Bool) async throws {
+    let deadline = ContinuousClock.now + .seconds(timeout)
     while !condition() {
-      if ContinuousClock.now > deadline { throw Failure.failed("Native agent test timed out") }
+      if ContinuousClock.now > deadline { throw Failure.failed("Native agent test timed out at line \(line)") }
       try await Task.sleep(for: .milliseconds(10))
     }
   }

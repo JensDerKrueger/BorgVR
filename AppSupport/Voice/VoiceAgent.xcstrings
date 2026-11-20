@@ -1,6 +1,670 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Weiter" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Continuer" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Continuar" } }
+      }
+    },
+    "I completed part of the task, but couldn't finish or check the whole result.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ich habe einen Teil der Aufgabe ausgeführt. Den Rest konnte ich noch nicht erledigen oder abschließend prüfen." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "J’ai réalisé une partie de la tâche, mais je n’ai pas pu terminer ou vérifier l’ensemble du résultat." } },
+        "es": { "stringUnit": { "state": "translated", "value": "He completado parte de la tarea, pero no he podido terminarla ni comprobar todo el resultado." } }
+      }
+    },
+    "Confirmed volume edit commands: %lld.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Bestätigte Volumenbearbeitungen: %lld." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Commandes de modification du volume confirmées : %lld." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Operaciones de edición del volumen confirmadas: %lld." } }
+      }
+    },
+    "Would you like me to continue?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Soll ich weitermachen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Voulez-vous que je continue ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Quieres que continúe?" } }
+      }
+    },
+    "There is no paused task in this session. Tell me what you would like me to do next.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "In dieser Sitzung gibt es keine pausierte Aufgabe. Sag mir, was ich als Nächstes tun soll." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucune tâche n’est en pause dans cette session. Dites-moi ce que vous voulez faire ensuite." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No hay ninguna tarea en pausa en esta sesión. Dime qué quieres que haga ahora." } }
+      }
+    },
+    "I can't tell whether the last change was fully applied. Please check the view before continuing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ich weiß nicht sicher, ob die letzte Änderung vollständig ausgeführt wurde. Bitte prüfe die Ansicht, bevor du weitermachst." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Je ne sais pas si la dernière modification a été entièrement appliquée. Vérifiez la vue avant de continuer." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No sé si el último cambio se aplicó por completo. Revisa la vista antes de continuar." } }
+      }
+    },
+    "I made some changes, but can't safely continue. Please check the view.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ich habe Änderungen vorgenommen, kann aber nicht sicher weitermachen. Bitte prüfe die Ansicht." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "J’ai apporté des modifications, mais je ne peux pas continuer en toute sécurité. Vérifiez la vue." } },
+        "es": { "stringUnit": { "state": "translated", "value": "He hecho algunos cambios, pero no puedo continuar con seguridad. Revisa la vista." } }
+      }
+    },
+    "I couldn't complete the task and didn't make any changes. Try asking for one step at a time.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ich konnte die Aufgabe nicht ausführen und habe nichts verändert. Versuche es mit einem einzelnen Schritt." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Je n’ai pas pu accomplir la tâche et n’ai rien modifié. Essayez de demander une seule étape à la fois." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No he podido completar la tarea y no he hecho cambios. Prueba a pedirme un paso cada vez." } }
+      }
+    },
+    "Choose the referenced file %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Referenzierte Datei %@ auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir le fichier référencé %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir el archivo referenciado %@" } }
+      }
+    },
+    "Choose export folder for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Exportordner für %@ auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir le dossier d’exportation pour %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir carpeta de exportación para %@" } }
+      }
+    },
+    "Choose save folder for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Speicherordner für %@ auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir le dossier d’enregistrement pour %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir carpeta de guardado para %@" } }
+      }
+    },
+    "Choose reference volume for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Referenzvolumen für %@ auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir le volume de référence pour %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir volumen de referencia para %@" } }
+      }
+    },
+    "Choose moving volume for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Zu registrierendes Volumen für %@ auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir le volume à recaler pour %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir volumen que se registrará para %@" } }
+      }
+    },
+    "Choose source for %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Quelle für %@ auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir la source pour %@" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir origen para %@" } }
+      }
+    },
+    "Imported with BorgVR": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Mit BorgVR importiert" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Importé avec BorgVR" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Importado con BorgVR" } }
+      }
+    },
+    "Choose folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ordner auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir un dossier" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir carpeta" } }
+      }
+    },
+    "Choose file": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Datei auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir un fichier" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir archivo" } }
+      }
+    },
+    "Waiting for file selection": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Warte auf Dateiauswahl" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "En attente de la sélection du fichier" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Esperando selección de archivo" } }
+      }
+    },
+    "Cancel import": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Import abbrechen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Annuler l’importation" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Cancelar importación" } }
+      }
+    },
+    "Cancelling import…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Import wird abgebrochen…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Annulation de l’importation…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Cancelando importación…" } }
+      }
+    },
+    "Import cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Import abgebrochen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Importation annulée" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Importación cancelada" } }
+      }
+    },
+    "Import failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Import fehlgeschlagen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Échec de l’importation" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Error de importación" } }
+      }
+    },
+    "Always approve volume edits": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Volumenbearbeitungen immer genehmigen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Toujours autoriser les modifications du volume" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Permitir siempre las ediciones del volumen" } }
+      }
+    },
+    "Save and restore the assistant conversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "KI-Gespräch speichern und wiederherstellen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Enregistrer et restaurer la conversation" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Guardar y restaurar la conversación del asistente" } }
+      }
+    },
+    "Confirm volume edits": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Volumenbearbeitungen bestätigen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Confirmer les modifications du volume" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Confirmar las ediciones del volumen" } }
+      }
+    },
+    "Could not save or restore the local conversation.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Das lokale KI-Gespräch konnte nicht gespeichert oder geladen werden." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d’enregistrer ou de restaurer la conversation locale." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo guardar o restaurar la conversación local." } }
+      }
+    },
+    "Could not remove the local conversation.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Das gespeicherte KI-Gespräch konnte nicht gelöscht werden." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible de supprimer la conversation locale." } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo eliminar la conversación local." } }
+      }
+    },
+    "Waiting for volume edit approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Warte auf Freigabe der Volumenbearbeitung" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "En attente de l’autorisation de modifier le volume" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Esperando autorización para editar el volumen" } }
+      }
+    },
+    "Edited bricks are ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Bearbeitete Bricks sind fertig" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les blocs modifiés sont prêts" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Los bloques editados están listos" } }
+      }
+    },
+    "Edited bricks pending: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Bearbeitete Bricks ausstehend: %lld" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Blocs modifiés en attente : %lld" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Bloques editados pendientes: %lld" } }
+      }
+    },
+    "Finishing edited bricks…": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Bearbeitete Bricks werden fertiggestellt…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Finalisation des blocs modifiés…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Finalizando los bloques editados…" } }
+      }
+    },
+    "Erase this volume region?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Diesen Volumenbereich löschen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Effacer cette région du volume ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Borrar esta región del volumen?" } }
+      }
+    },
+    "Restore this volume region?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Diesen Volumenbereich wiederherstellen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Restaurer cette région du volume ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Restaurar esta región del volumen?" } }
+      }
+    },
+    "Erase region": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Bereich löschen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Effacer la région" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Borrar región" } }
+      }
+    },
+    "Restore region": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Bereich wiederherstellen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Restaurer la région" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Restaurar región" } }
+      }
+    },
+    "Brush stamps: %lld. Channels: %@. Bounds (XYZ in meters): %@ to %@. The original dataset is preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Pinselabdrücke: %lld. Kanäle: %@. Grenzen (XYZ in Metern): %@ bis %@. Der Originaldatensatz bleibt unverändert." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Empreintes : %lld. Canaux : %@. Limites (XYZ en mètres) : %@ à %@. Les données d’origine sont conservées." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Marcas del pincel: %lld. Canales: %@. Límites (XYZ en metros): %@ a %@. Se conservan los datos originales." } }
+      }
+    },
+    "Workflow research (debug)": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Forschung (Debug)" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Recherche sur les procédures (débogage)" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Investigación de flujos de trabajo (depuración)" } }
+      }
+    },
+    "Allow before and after screenshots?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Vorher-/Nachher-Screenshots erlauben?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Autoriser les captures avant et après ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Permitir capturas antes y después?" } }
+      }
+    },
+    "Allow for this demonstration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Für diese Demonstration erlauben" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Autoriser pour cette démonstration" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Permitir para esta demostración" } }
+      }
+    },
+    "The two render images may reveal dataset details. They are only included in a separate local export and are never sent to the workflow server.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Die beiden Renderbilder können Details des Datensatzes zeigen. Sie werden nur in einen separaten lokalen Export aufgenommen und nicht an den Workflow-Server gesendet." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les deux images peuvent révéler des détails des données. Elles figurent uniquement dans un export local séparé et ne sont pas envoyées au serveur." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Las dos imágenes pueden mostrar detalles de los datos. Solo se incluyen en una exportación local independiente y no se envían al servidor." } }
+      }
+    },
+    "Demonstrate with before and after screenshots": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Mit Vorher-/Nachher-Screenshots demonstrieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Démontrer avec des captures avant et après" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Demostrar con capturas antes y después" } }
+      }
+    },
+    "Export demonstration with screenshots": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration mit Screenshots exportieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Exporter la démonstration avec les captures" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Exportar demostración con capturas" } }
+      }
+    },
+    "Cancel screenshot capture": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Screenshot-Aufnahme abbrechen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Annuler la capture" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Cancelar captura" } }
+      }
+    },
+    "Could not capture both screenshots": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Das Screenshot-Paar konnte nicht aufgenommen werden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible de prendre les deux captures" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudieron tomar ambas capturas" } }
+      }
+    },
+    "Demonstrate with before and after view settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Mit Vorher-/Nachher-Ansichtseinstellungen demonstrieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Démontrer avec les réglages de vue avant et après" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Demostrar con ajustes de vista iniciales y finales" } }
+      }
+    },
+    "Send demonstration with view settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration mit Ansichtseinstellungen senden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Envoyer la démonstration avec les réglages de vue" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Enviar demostración con ajustes de vista" } }
+      }
+    },
+    "Export demonstration with view settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration mit Ansichtseinstellungen exportieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Exporter la démonstration avec les réglages de vue" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Exportar demostración con ajustes de vista" } }
+      }
+    },
+    "Fetch workflow report": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Bericht abrufen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Récupérer le rapport d’analyse" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Obtener informe de flujos de trabajo" } }
+      }
+    },
+    "No demonstrations analyzed yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Noch keine Demonstrationen analysiert" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucune démonstration analysée pour le moment" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Aún no se han analizado demostraciones" } }
+      }
+    },
+    "Analysis queued": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Analyse in der Warteschlange" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Analyse en attente" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Análisis en cola" } }
+      }
+    },
+    "Demonstrations analyzed: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Analysierte Demonstrationen: %lld" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Démonstrations analysées : %lld" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Demostraciones analizadas: %lld" } }
+      }
+    },
+    "View transformation": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ansichtstransformation" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Transformation de la vue" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Transformación de la vista" } }
+      }
+    },
+    "Clipping": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Clipping" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Découpage" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Recorte" } }
+      }
+    },
+    "Lighting": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Beleuchtung" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Éclairage" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Iluminación" } }
+      }
+    },
+    "Rendering": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Rendering" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Rendu" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Renderizado" } }
+      }
+    },
+    "Annotations": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Annotationen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Annotations" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Anotaciones" } }
+      }
+    },
+    "Volume editing": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Volumenbearbeitung" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Édition du volume" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Edición de volumen" } }
+      }
+    },
+    "Transfer function": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Fonction de transfert" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Función de transferencia" } }
+      }
+    },
+    "Link a workflow profile for this server first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Verknüpfe zuerst ein Workflow-Profil mit diesem Server." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Associez d’abord un profil de travail à ce serveur." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Vincula primero un perfil de flujos de trabajo a este servidor." } }
+      }
+    },
+    "The demonstration queue is full.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Die Warteschlange für Demonstrationen ist voll." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "La file d’attente des démonstrations est pleine." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La cola de demostraciones está llena." } }
+      }
+    },
+    "The server collection changed. Queued demonstrations were not moved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Die Sammlung auf dem Server wurde geändert. Ausstehende Demonstrationen wurden nicht verschoben." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "La collection du serveur a changé. Les démonstrations en attente n’ont pas été déplacées." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La colección del servidor ha cambiado. Las demostraciones pendientes no se han movido." } }
+      }
+    },
+    "Send demonstration for analysis": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration zur Analyse senden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Envoyer la démonstration pour analyse" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Enviar demostración para su análisis" } }
+      }
+    },
+    "Workflow profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Profil" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Profil de travail" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Perfil de flujos de trabajo" } }
+      }
+    },
+    "Workflow device token": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Geräte-Token für Workflows" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Jeton d’appareil pour les flux de travail" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Token de dispositivo para flujos de trabajo" } }
+      }
+    },
+    "Link workflow profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Profil verknüpfen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Associer le profil de travail" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Vincular perfil de flujos de trabajo" } }
+      }
+    },
+    "Unlink workflow profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Profil trennen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Dissocier le profil de travail" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Desvincular perfil de flujos de trabajo" } }
+      }
+    },
+    "Workflow profile linked": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Profil verknüpft" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Profil de travail associé" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Perfil de flujos de trabajo vinculado" } }
+      }
+    },
+    "Queued demonstrations: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ausstehende Demonstrationen: %lld" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Démonstrations en attente : %lld" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Demostraciones en cola: %lld" } }
+      }
+    },
+    "Retry demonstration uploads": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstrationen erneut senden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Réessayer l’envoi des démonstrations" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Reintentar el envío de las demostraciones" } }
+      }
+    },
+    "Delete queued demonstrations": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ausstehende Demonstrationen löschen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer les démonstrations en attente" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Eliminar demostraciones en cola" } }
+      }
+    },
+    "Remove this profile's queued demonstrations?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ausstehende Demonstrationen löschen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer les démonstrations en attente ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar las demostraciones en cola?" } }
+      }
+    },
+    "Some demonstrations belong to an older collection and will not be uploaded.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Einige Demonstrationen gehören zu einer älteren Sammlung und werden nicht übertragen." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Certaines démonstrations appartiennent à une ancienne collection et ne seront pas envoyées." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Algunas demostraciones pertenecen a una colección anterior y no se enviarán." } }
+      }
+    },
+    "Demonstration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Démonstration" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Demostración" } }
+      }
+    },
+    "Demonstration recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration läuft" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Démonstration en cours" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Demostración en curso" } }
+      }
+    },
+    "Demonstrate value exploration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Wertebereiche erkunden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Explorer les plages de valeurs" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Explorar rangos de valores" } }
+      }
+    },
+    "Demonstrate exposing a region": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Einen Bereich sichtbar machen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Rendre une région visible" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Hacer visible una región" } }
+      }
+    },
+    "Demonstrate without a specified goal": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Ohne Zielangabe demonstrieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Démontrer sans objectif précisé" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Demostrar sin especificar un objetivo" } }
+      }
+    },
+    "Finish demonstration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration beenden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Terminer la démonstration" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Finalizar demostración" } }
+      }
+    },
+    "Finish: goal reached": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Beenden: Ziel erreicht" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Terminer : objectif atteint" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Finalizar: objetivo alcanzado" } }
+      }
+    },
+    "Finish: goal not reached": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Beenden: Ziel nicht erreicht" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Terminer : objectif non atteint" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Finalizar: objetivo no alcanzado" } }
+      }
+    },
+    "Export demonstration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration exportieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Exporter la démonstration" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Exportar demostración" } }
+      }
+    },
+    "Discard demonstration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration verwerfen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer la démonstration" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Descartar demostración" } }
+      }
+    },
+    "Could not export demonstration": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Demonstration konnte nicht exportiert werden" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d'exporter la démonstration" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No se pudo exportar la demostración" } }
+      }
+    },
     "Delete all annotations?": {
       "extractionState": "manual",
       "localizations": {

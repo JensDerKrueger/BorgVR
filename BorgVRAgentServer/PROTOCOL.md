@@ -67,6 +67,28 @@ may have committed retain the existing stop-without-replay behavior.
 
 ## Handshake
 
+The native catalog accepts up to 48 definitions. With an open dataset,
+`select_edit_state`, `configure_volume_brush`, `save_visualization_state`,
+`export_edited_dataset`, `cancel_volume_export` and `close_dataset` reuse MCP Commands.
+The brush schema exposes only one-based channel selection. Saving and exporting accept a
+plain filename; the device asks the user to choose a folder, never overwrites existing
+output, and returns no absolute path. A started export is not a completed export.
+
+A successful open, edit-state selection or close carries a verified `dataset_transition`
+alongside the result. The result envelope still names the previous scope. The transition
+uses a fresh context ID, the same dataset ID for edit-state selection, or null for close;
+the server verifies the corresponding receipt, replaces the tool catalog, and replans
+without repeating completed actions. Declines and no-ops do not change the scope.
+
+In the start menu, `import_volume` and `fuse_volumes` are native tools backed by the
+shared volume conversion service. File and folder selection happens on the device.
+Each fusion selects a reference and a moving volume independently. The tools return a job
+ID and filename; `get_import_status` reports progress and terminal status,
+`cancel_import` cancels that exact active job. The app catalog is the source for opening
+completed datasets. No tool accepts source paths, transmits voxel data, or overwrites output.
+If the OS requires a separate grant for a referenced RAW file, the app asks for it locally;
+the wire status exposes only whether a local file choice is pending.
+
 Within 10 seconds of connection, the client sends:
 
 ```json
@@ -119,6 +141,11 @@ annotation operations are described above. Closing datasets, arbitrary file path
 edits, exports, settings and arbitrary GSC are excluded. `capture_screenshot` is narrowed
 to `include_alpha` only, even if the app's MCP
 definition also permits saving a file. There is no shell, code execution or web-browsing tool.
+With image sharing enabled, a screenshot can include a `screenshotId`. The
+`pick_screenshot_positions` read uses that ID and normalized top-left image coordinates
+to return a bounded set of normalized volume positions (or `null` for no hit).
+The full position map is never sent to the voice agent. An unavailable ID requires a
+new screenshot; it is not permission to reuse an older observation.
 If any visualization-changing tool is advertised, `get_application_state` must also be
 available; the server enforces a successful state read before each turn's first change.
 
@@ -148,6 +175,18 @@ Only one request may run per session; another receives `error` with code `busy`.
 Request IDs are unique for the connection and never replayed. A new connection starts a
 new conversation; there is **no automatic reconnect/resend or persisted session recovery**.
 The server allows at most 64 accepted turns per connection.
+
+If work is interrupted after confirmed changes and no command is in doubt, the terminal
+`assistant_message` includes `partial: {"reason":"context_limit","confirmed_volume_edits":2}`
+(or `reason:"run_failed"`), followed by `completed` with `outcome:"partial"`. The reply is a partial
+result, not a success claim; clients can offer **Continue**. A new request containing only
+`Continue` (or `Weiter`, `Continuer`, `Continuar`) restores the original goal, bounded
+receipts, and prior approval denials for the same conversation and data context. It starts
+with fresh reads and cannot dispatch previously confirmed commands or voxel samples from
+the previous attempt. A mixed edit batch with confirmed samples is rejected in full
+with their zero-based indices so the model can send a batch containing only new samples.
+A different request, context change, or lost connection drops the paused task. An
+uncertain command is still an `error` and cannot be resumed safely.
 
 ## Remote Tool Execution
 
@@ -267,7 +306,7 @@ state read first. Search alone is not permission to open; the model must obtain 
 intent from the user and ask about ambiguous choices. At most one opening is permitted per
 request. App guards are rechecked after asynchronous preparation, before replacing the dataset.
 
-For an authorized open call only, the native `tool_result` uses the **old** dataset/context IDs
+For an authorized open call, the native `tool_result` uses the **old** dataset/context IDs
 for correlation and adds `dataset_transition: {dataset_id, context_id, tools}`. The result
 must confirm `rendererReady:true` and `dataset.id` matching the requested target. The native
 adapter waits for the specific opening identity to become ready; a foreign switch cancels
@@ -312,7 +351,7 @@ It emits `collaboration_paused`, waits for the final user snapshot, then
 usage and absolute task deadline remain unchanged. Superseded state/images are invalidated;
 tool execution receipts remain. No commands are replayed. The latest user state replaces
 any earlier view-restoration baseline. A failed manual action is not proof of a useful edit:
-the final snapshot describes the actual resulting state and generalization requires feedback.
+the final snapshot describes the actual resulting state for this task.
 Automatic state restoration is not reported as manual input. A failed action contributes
 no changed domain; it still pauses planning until the resulting state is available.
 
@@ -324,46 +363,27 @@ finish normally; stale images are not supplied as current evidence. Dataset clos
 still disconnects during active work (idle app sessions use the extension above). A user-initiated edit may update the edit-state ID within the same dataset
 opening; an unrelated edit-state/context switch still invalidates the session.
 
-The server can use an internal `ask_collaboration_feedback` tool to ask what an intervention
-meant, or request specific help when an investigation is inconclusive:
+The internal `ask_collaboration_feedback` tool can request a more informative view
+when missing evidence blocks the task:
 
 ```json
-{"type":"collaboration_question","session_id":"SERVER-ID","request_id":"TURN-ID","question_id":"QUESTION-ID","text":"Was that rotation intended to help?"}
-{"type":"collaboration_feedback","request_id":"TURN-ID","question_id":"QUESTION-ID","text":"Yes, inspect a section perpendicular to this view."}
+{"type":"collaboration_question","session_id":"SERVER-ID","request_id":"TURN-ID","question_id":"QUESTION-ID","text":"Can you show me a view in which the details we are looking for are easier to see?"}
+{"type":"collaboration_feedback","request_id":"TURN-ID","question_id":"QUESTION-ID","text":"Use the current view; I can't provide another one."}
 ```
 
-Questions are at most 500 characters, answers 2000. A correlated reply continues the same
-task, unlike an ordinary new prompt. The internal tool accepts only `purpose`
-(`intervention_intent`, `view_change`, `help`) and `language` (`de`, `en`). The server supplies
-a single-purpose question from localized templates; the model cannot bundle several decisions
-into a generated yes/no question. Explanations belong in a separate progress message.
-Each purpose is available once per intervention per task, so help intent and permission
-can be answered separately. Replies retain the exact question and purpose in model context.
-`intervention_intent` requires a completed change with nonempty domains in the current task;
-startup state, active operations and interventions from previous tasks do not qualify.
-An ineligible attempt returns `not_asked:true, code:"no_user_intervention"` internally,
-without displaying a question. Help and view-change permission remain independently available.
-A yes to help intent never grants additional permissions or saves a rule. A no or conditional
-answer to `view_change` makes the task read-only; only an unconditional `Ja` or `Yes` to that
-permission question allows further mutations. Reads, render waits and screenshots remain
-available. Tool filtering and the execution guard both enforce this restriction; no native
-command is sent for a denied mutation. The overall deadline and explicit cancellation
-remain active while waiting. This extension requires only a server update, not an app update.
-
-Only after explicit feedback may `propose_visualization_rule` emit `rule_proposal` with
-`request_id`, `proposal_id`, and `text` (1 to 500 characters, at most eight pending proposals).
-The client asks for separate explicit approval and sends
-`{"type":"rule_decision","proposal_id":"PROPOSAL-ID","accepted":true}` (or false).
-Only approved rules are persisted by the client, per device. The server keeps them only
-in this session; future Hello messages supply the device's approved rules. No weight updates,
-training, autonomous permanent memory or server-side rule files are involved. Deleted local
-rules take effect in new conversations; an existing context can still contain older copies.
+The tool accepts only `purpose=help` and `language=de|en`. It can ask once per request.
+The user may reply with up to 2000 characters, or supply a view by completing a newer
+manual change with a nonempty set of changed domains. The latter resumes the same task
+via `collaboration_resumed`, which also dismisses the pending question in the client.
+The task deadline and cancellation remain active while waiting. A manual action or reply
+does not approve edits or create a reusable preference. The interactive agent no longer
+proposes rules; previously approved preferences supplied in Hello remain usable.
 
 ## Bounds and errors
 
 - Maximum 4 authenticated sessions; concurrent agent runs follow the configured model's
   `BORGVR_MAX_SEQS` (default 2, small-model profile 1).
-- JSON frame: 4 MiB; catalog: 32 tools/128 KiB; schema: depth 16/4096 nodes.
+- JSON frame: 4 MiB; catalog: 48 tools/128 KiB; schema: depth 16/4096 nodes.
 - Closed object schemas required. No schema references or regex patterns; no remote schema
   resolution. Unknown message fields, duplicate JSON keys and NaN/infinite values are rejected.
 - User text: 8192 characters; result/arguments: 256 KiB; PNG: 2 MiB, one frame, at most
@@ -374,9 +394,19 @@ rules take effect in new conversations; an existing context can still contain ol
   context limits applies, with room reserved for the configured answer length and a safety margin.
   Above 85% of that input budget, completed older turns become bounded, explicitly untrusted
   excerpts. Older screenshots and superseded tool-result details can be omitted; large TF
-  results become marked previews. Active user text, tool-call arguments, call/result IDs and
-  failures remain intact. This changes conversation memory, not the actual TF or app state.
-  If necessary the older-turn summary is discarded. An oversized active request fails safely.
+  results become marked previews. Active user text, confirmed call/result pairs and failures
+  remain intact during ordinary compaction. The trusted system instructions form one leading
+  system message in both tokenization and generation, even if the SDK merged them into a
+  checkpoint message. This does not change app state. If the active
+  request still cannot fit after compaction, the agent can start a fresh
+  model context under the same request ID using a bounded checkpoint with confirmed actions
+  and explicitly unverified observations. No old executable plan, images or bulk arguments
+  are copied to that new context. The original prompt, deadline, budgets and refusal decisions
+  remain in force. Checkpoints require new completed tool receipts since the last one, with
+  no tool in flight or uncertain completion, and are limited to three per request.
+  On continuation, the server blocks identical confirmed mutations in the same app context,
+  even with a different tool-call ID or equivalent JSON number formatting; reads can be
+  refreshed. The block does not assert equivalence between different operations or arguments.
   Token counting has a 15-second absolute timeout and a 4 MiB response limit; counting failures
   do not silently disable the budget check. A rejected context-overflow model request can be
   retried once with a smaller history, without rerunning completed tools.
@@ -399,6 +429,19 @@ mutations to recover from these errors. Older clients may show their generic err
 Protocol violations close with code 1008.
 Disconnect cancels the active run and drops conversation data. The framework tests exercise
 this protocol with a deterministic test model; the installation smoke test uses actual vLLM.
+
+Context diagnostic logs are not sent to the model and do not drive the continuation. They
+contain the stage, reason, input token counts and budget per compaction attempt, serialized
+size when relevant, checkpoint count and names of confirmed mutation tools. They do not
+contain prompt text, tool arguments/results, provider exception bodies, or images.
+A terminal unexpected-model diagnostic adds a fixed failure category and, when identifiable,
+a known tool name. Unrecognized model-supplied names and raw exception details are not logged.
+Before asking the model to correct rejected arguments, the agent logs a fixed validation reason
+such as `too_many_items` or `wrong_type`. For volume edits, it may log a fixed field label such
+as `samples` or `samples.item.radius_meters`, but never field values or array indices.
+A terminal mutation audit records counts by tool name for confirmed writes, identical
+confirmed repeats and blocked replay attempts, with a random per-run correlation label and
+an uncertainty flag. A zero repeat count with uncertain completion is not proof of a single write.
 
 ## Native Client
 
@@ -431,3 +474,19 @@ connection/send/tool deadlines are 15/10/40 seconds; the turn deadline is the ne
 task timeout plus five seconds. There is no automatic reconnect
 or request replay. `Scripts/test-voice-agent.sh` exercises actual local TLS/WSS against the
 agent with a deterministic model, including render-image delivery and GSC roundtrip.
+
+## Native command history
+
+Clients that advertise `get_command_history` expose a read-only lookup of the
+current conversation's app-scoped history. It uses the normal `tool_call` and
+`tool_result` messages, not MCP or a server-side history upload. Its default
+source `commands` returns confirmed tool arguments and the previously shared
+result; `source: "chat"` returns user text and final assistant text. These are
+historical data, not current state or authorization. Screenshot image bytes
+are excluded.
+
+Lists are newest first. Use `tool` or `kind` (commands only), `limit`, and
+`cursor` from `nextCursor`. An oversized inline field can be retrieved by
+its row `id`, `field` (`arguments`, `result`, or `text`), and subsequent
+`nextOffset` as `offset`. Each `fragment` is a part of a UTF-8 JSON document
+or plain text as indicated by `format`. No application mutation is dispatched.

@@ -247,22 +247,31 @@ struct macOSApp: App {
           voiceAgent.configure(service: commandService, isReady: {
             !appModel.volumeBrush.isOpeningState && !appModel.volumeBrush.isRestoringPersonalState &&
               !appModel.volumeBrush.isWaitingForSharedState
+          }, beginImport: {
+            let id = try appModel.beginBackgroundImport()
+            return VoiceAgentImportLease(directory: storedAppModel.resolvedDataDirectoryURL(),
+              brickSize: appSettings.brickSize, overlap: appSettings.brickOverlap,
+              compression: appSettings.enableCompression, borderMode: appSettings.borderMode,
+              quantize: appSettings.quantizeImportsTo8Bit, colorCompression: appSettings.importColorCompression,
+              filter: appSettings.dicomResamplingFilter, release: { appModel.finishBackgroundImport(id) })
           }) {
             switch appModel.datasetSessionState {
               case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
                 return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
-                                         editStateID: appModel.volumeBrush.activeState?.id)
+                                         editStateID: appModel.volumeBrush.editingContextID)
               default: return nil
             }
           }
           applyMCPConfiguration()
         }
         .onDisappear {
+          voiceAgent.pauseDemonstration()
           voiceAgent.disconnect()
           saveOpenDatasetState()
         }
         .onChange(of: appModel.datasetSessionState) { _, _ in voiceAgent.invalidateContext() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+          voiceAgent.pauseDemonstration()
           voiceAgent.speech.cancel()
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
@@ -312,6 +321,7 @@ struct macOSApp: App {
     .commands {
       BorgVRMenuCommands(
         recordingSaveDidFail: { recordingSaveError = $0 },
+        saveExtendedScreenshot: saveExtendedScreenshot,
         appModel: appModel,
         renderingParameters: renderingParameters,
         appSettings: appSettings,
@@ -434,6 +444,28 @@ struct macOSApp: App {
   }
 
   @MainActor
+  private func saveExtendedScreenshot() {
+    let panel = NSSavePanel()
+    panel.title = String(localized: "Extended Screenshot")
+    panel.canCreateDirectories = true
+    let fileExtension = BorgVRScreenshotPositions.fileExtension
+    panel.allowedContentTypes = [UTType(filenameExtension: fileExtension) ?? .data]
+    panel.nameFieldStringValue = "BorgVR.\(fileExtension)"
+    panel.begin { response in
+      guard response == .OK, let url = panel.url else { return }
+      Task { @MainActor in
+        do {
+          _ = try await BorgVRCommandExecutionContext.$source.withValue(.userInterface) {
+            try await makeCommandService().captureExtendedScreenshot(to: url, includeAlpha: true, overwrite: true)
+          }
+        } catch {
+          NSApp.presentError(error)
+        }
+      }
+    }
+  }
+
+  @MainActor
   private func makeCommandService() -> BorgVRScreenCommandService {
     BorgVRScreenCommandService(
       session: session,
@@ -467,6 +499,7 @@ struct macOSApp: App {
   @MainActor
   private func openMCPDataset(id: String, validateContext: @escaping () throws -> Void,
                               didBegin: @escaping () throws -> Void) async throws {
+    guard appModel.backgroundImportID == nil else { throw BorgVRVolumeEditingCommandError.busy }
     let records = try await loadMCPDatasetRecords()
     try validateContext()
     guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
@@ -502,6 +535,7 @@ struct macOSApp: App {
       datasetURL: entry.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()),
       interactive: false, restoreLastSelection: false)
     try validateContext()
+    guard appModel.backgroundImportID == nil else { throw BorgVRVolumeEditingCommandError.busy }
     appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true,
                          automaticallyLoadState: false)
     try didBegin()
@@ -597,6 +631,7 @@ struct macOSApp: App {
 
 private struct BorgVRMenuCommands: Commands {
   var recordingSaveDidFail: (Error) -> Void
+  var saveExtendedScreenshot: () -> Void
   @ObservedObject var appModel: AppModel
   @ObservedObject var renderingParameters: RenderingParameters
   @ObservedObject var appSettings: AppSettings
@@ -622,7 +657,7 @@ private struct BorgVRMenuCommands: Commands {
         menuLabel("modeselection_import", systemImage: "arrow.up.arrow.down.square")
       }
       .macKeyboardShortcut(.importExport)
-      .disabled(hasActiveDataset)
+      .disabled(hasActiveDataset || appModel.backgroundImportID != nil)
     }
 
     CommandGroup(replacing: .appSettings) {
@@ -757,6 +792,10 @@ private struct BorgVRMenuCommands: Commands {
       .disabled(!hasActiveDataset || renderingParameters.renderMode != .isoValue)
 
       renderCommand("Screenshot", systemImage: "camera", shortcut: .screenshot)
+      Button(action: saveExtendedScreenshot) {
+        menuLabel("Extended Screenshot", systemImage: "viewfinder")
+      }
+      .disabled(!hasActiveDataset)
       renderCommand("Reset", systemImage: "arrow.counterclockwise", shortcut: .reset)
 
       Toggle(isOn: Binding(get: { appSettings.showDatasetBoundingBox },

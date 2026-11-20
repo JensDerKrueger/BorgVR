@@ -33,6 +33,7 @@ enum BorgVRRecordedAction: Codable, Sendable {
   case openDataset(String)
   case closeDataset
   case captureScreenshot(path: String?, includeAlpha: Bool)
+  case captureExtendedScreenshot(path: String?, includeAlpha: Bool)
   case resizeWindow(width: Int, height: Int, units: String, area: String)
   case setFullscreen(Bool)
   case saveTransferFunction(channel: Int, path: String)
@@ -199,13 +200,21 @@ protocol BorgVRVolumeEditingCommands: AnyObject {
   func renameState(_ id: UUID, name: String) throws
   func deleteState(_ id: UUID) throws
   func volumeEditingState() -> BorgVRVolumeEditingState
+  var editRevision: UInt64? { get }
   func configureVolumeBrush(mode: BorgVRVolumeBrushMode?, radiusFraction: Double?, projectsOntoVolume: Bool?) throws
   func setVolumeBrushChannels(_ channels: BorgVRVolumeEditChannels) throws
-  func editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample]) async throws
+  func editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample],
+                  validateContext: (() throws -> Void)?) async throws
   func discardVolumeEdits() async throws
   func waitForVolumeEdits(timeout: TimeInterval) async throws
   func prepareVolumeEdits() async throws
   func startVolumeExport(to url: URL, name: String?, description: String?) throws -> BorgVRVolumeExportJob
   func waitForVolumeExport(id: UUID) async throws -> BorgVRVolumeExportJob
   func cancelVolumeExport(id: UUID) throws
+}
+
+extension BorgVRVolumeEditingCommands {
+  func editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample]) async throws {
+    try await editVolume(mode: mode, samples: samples, validateContext: nil)
+  }
 }

@@ -37,6 +37,219 @@ struct VoiceAgentButton: View {
   }
 }
 
+#if DEBUG
+private struct WorkflowDemonstrationDocument: FileDocument {
+  static let readableContentTypes: [UTType] = [.json]
+  let data: Data
+
+  init(data: Data) { self.data = data }
+
+  init(configuration: ReadConfiguration) throws {
+    guard let data = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
+    self.data = data
+  }
+
+  func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+    FileWrapper(regularFileWithContents: data)
+  }
+}
+
+private struct WorkflowDemonstrationMenu: View {
+  @ObservedObject var agent: VoiceAgentController
+  @ObservedObject private var recorder: WorkflowDemonstrationRecorder
+  @ObservedObject private var upload: WorkflowUpload
+  @State private var document: WorkflowDemonstrationDocument?
+  @State private var exportID: UUID?
+  @State private var exporting = false
+  @State private var exportFailed = false
+  @State private var screenshotGoal: WorkflowDemonstrationGoal?
+  @State private var confirmsScreenshots = false
+
+  init(agent: VoiceAgentController) {
+    self.agent = agent
+    _recorder = ObservedObject(wrappedValue: agent.demonstrations)
+    _upload = ObservedObject(wrappedValue: agent.workflowUpload)
+  }
+
+  var body: some View {
+    Menu {
+      if agent.capturingDemonstrationScreenshot {
+        Button(voiceAgentText("Cancel screenshot capture"), systemImage: "xmark") { agent.pauseDemonstration() }
+      } else if recorder.active {
+        Button(voiceAgentText("Finish demonstration"), systemImage: "stop.circle") { Task { await agent.finishDemonstration() } }
+        Button(voiceAgentText("Finish: goal reached"), systemImage: "checkmark") { Task { await agent.finishDemonstration(outcome: .reached) } }
+        Button(voiceAgentText("Finish: goal not reached"), systemImage: "xmark") { Task { await agent.finishDemonstration(outcome: .notReached) } }
+      } else if let episode = recorder.completed {
+        if recorder.screenshotExport == nil,
+           let owner = recorder.destination, upload.destination(for: agent.settings) == owner,
+           episode.end == .finished {
+          Button(voiceAgentText(episode.evidence == nil ? "Send demonstration for analysis" :
+                                 "Send demonstration with view settings"), systemImage: "paperplane") {
+            Task { await agent.queueDemonstration(episode) }
+          }
+          .disabled(upload.busy)
+        }
+        Button(voiceAgentText(episode.evidence == nil ? "Export demonstration" :
+                               "Export demonstration with view settings"), systemImage: "square.and.arrow.up") {
+          export(episode, id: episode.id)
+        }
+        if let screenshots = recorder.screenshotExport {
+          Button(voiceAgentText("Export demonstration with screenshots"), systemImage: "photo.on.rectangle") {
+            export(screenshots, id: episode.id)
+          }
+        }
+        Button(voiceAgentText("Discard demonstration"), systemImage: "trash", role: .destructive) { recorder.discard() }
+      } else {
+        ForEach(WorkflowDemonstrationGoal.allCases, id: \.self) { goal in
+          Button(voiceAgentText(goal.title), systemImage: "record.circle") { agent.startDemonstration(goal: goal) }
+            .disabled(!agent.canStartDemonstration)
+        }
+        Menu(voiceAgentText("Demonstrate with before and after view settings")) {
+          ForEach(WorkflowDemonstrationGoal.allCases, id: \.self) { goal in
+            Button(voiceAgentText(goal.title), systemImage: "viewfinder") {
+              agent.startDemonstration(goal: goal, includeViewSettings: true)
+            }
+          }
+        }
+        .disabled(!agent.canStartDemonstration)
+        Menu(voiceAgentText("Demonstrate with before and after screenshots")) {
+          ForEach(WorkflowDemonstrationGoal.allCases, id: \.self) { goal in
+            Button(voiceAgentText(goal.title), systemImage: "camera") {
+              screenshotGoal = goal
+              confirmsScreenshots = true
+            }
+          }
+        }
+        .disabled(!agent.canStartDemonstration)
+      }
+    } label: {
+      Image(systemName: agent.capturingDemonstrationScreenshot ? "camera.fill" :
+              recorder.active ? "record.circle.fill" : "record.circle")
+        .foregroundStyle(recorder.active || agent.capturingDemonstrationScreenshot ? Color.red : Color.primary)
+    }
+    .buttonStyle(.bordered)
+    .accessibilityLabel(voiceAgentText(recorder.active ? "Demonstration recording" : "Demonstration"))
+    .help(voiceAgentText(recorder.active ? "Demonstration recording" : "Demonstration"))
+    .fileExporter(isPresented: $exporting, document: document, contentType: .json,
+                  defaultFilename: "BorgVR-demonstration") { result in
+      document = nil
+      let completedExportID = exportID
+      exportID = nil
+      switch result {
+        case .success:
+          if let completedExportID { recorder.discard(id: completedExportID) }
+        case .failure: exportFailed = true
+      }
+    }
+    .alert(voiceAgentText("Could not export demonstration"), isPresented: $exportFailed) {
+      Button(voiceAgentText("Close"), role: .cancel) {}
+    }
+    .alert(voiceAgentText("Allow before and after screenshots?"), isPresented: $confirmsScreenshots) {
+      Button(voiceAgentText("Allow for this demonstration")) {
+        guard let goal = screenshotGoal else { return }
+        screenshotGoal = nil
+        Task { await agent.startScreenshotDemonstration(goal: goal) }
+      }
+      Button(voiceAgentText("Cancel"), role: .cancel) { screenshotGoal = nil }
+    } message: {
+      Text(voiceAgentText("The two render images may reveal dataset details. They are only included in a separate local export and are never sent to the workflow server."))
+    }
+    .alert(voiceAgentText("Could not capture both screenshots"), isPresented: $agent.demonstrationScreenshotFailed) {
+      Button(voiceAgentText("Close"), role: .cancel) {}
+    }
+  }
+
+  private func export<T: Encodable>(_ value: T, id: UUID) {
+    do {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      document = WorkflowDemonstrationDocument(data: try encoder.encode(value))
+      exportID = id
+      exporting = true
+    } catch { exportFailed = true }
+  }
+}
+
+private struct WorkflowProfileSettingsView: View {
+  @ObservedObject var upload: WorkflowUpload
+  @ObservedObject var settings: VoiceAgentSettings
+  @State private var token = ""
+  @State private var confirmsDelete = false
+
+  var body: some View {
+    let linked = upload.destination(for: settings) != nil
+    VStack(alignment: .leading, spacing: 8) {
+      Text(voiceAgentText("Workflow profile")).font(.headline)
+      HStack {
+        SecureField(voiceAgentText("Workflow device token"), text: $token).textFieldStyle(.roundedBorder)
+        Button {
+          let input = token
+          token = ""
+          Task { await upload.link(input, settings: settings) }
+        } label: { Image(systemName: "link") }
+        .buttonStyle(.bordered)
+        .help(voiceAgentText("Link workflow profile"))
+        .accessibilityLabel(voiceAgentText("Link workflow profile"))
+        .disabled(upload.busy || token.isEmpty)
+        if linked {
+          Button { upload.unlink() } label: { Image(systemName: "link.badge.minus") }
+            .buttonStyle(.bordered)
+            .help(voiceAgentText("Unlink workflow profile"))
+            .accessibilityLabel(voiceAgentText("Unlink workflow profile"))
+            .disabled(upload.busy)
+        }
+      }
+      if linked {
+        Text(voiceAgentText("Workflow profile linked")).foregroundStyle(.secondary)
+        Button(voiceAgentText("Fetch workflow report"), systemImage: "chart.bar.xaxis") {
+          Task { await upload.refreshReport(settings: settings) }
+        }.buttonStyle(.bordered).disabled(upload.busy)
+        if let analysis = upload.analysis {
+          switch analysis.status {
+            case .empty: Text(voiceAgentText("No demonstrations analyzed yet"))
+            case .queued: Text(voiceAgentText("Analysis queued"))
+            case .ready:
+              if let report = analysis.report {
+                Text(String(format: voiceAgentText("Demonstrations analyzed: %lld"), Int64(report.episodes)))
+                ForEach(Array(report.patterns.enumerated()), id: \.offset) { _, pattern in
+                  let steps = pattern.openingSequence.map { voiceAgentText($0.title) }.joined(separator: " → ")
+                  Text("\(voiceAgentText(pattern.goal.title)): \(steps) (\(pattern.support)/\(pattern.total))")
+                    .font(.caption).foregroundStyle(.secondary)
+                }
+              }
+          }
+        }
+        if upload.pendingCount + upload.staleCount > 0 {
+          HStack {
+            Text(String(format: voiceAgentText("Queued demonstrations: %lld"), Int64(upload.pendingCount + upload.staleCount)))
+            Spacer()
+            Button { Task { await upload.sync(settings: settings) } } label: { Image(systemName: "arrow.clockwise") }
+              .help(voiceAgentText("Retry demonstration uploads"))
+              .accessibilityLabel(voiceAgentText("Retry demonstration uploads"))
+              .disabled(upload.pendingCount == 0 || upload.busy)
+            Button(role: .destructive) { confirmsDelete = true } label: { Image(systemName: "trash") }
+              .help(voiceAgentText("Delete queued demonstrations"))
+              .accessibilityLabel(voiceAgentText("Delete queued demonstrations"))
+              .disabled(upload.busy)
+          }
+          .buttonStyle(.bordered)
+          if upload.staleCount > 0 {
+            Text(voiceAgentText("Some demonstrations belong to an older collection and will not be uploaded."))
+              .font(.caption).foregroundStyle(.secondary)
+          }
+        }
+      }
+      if upload.busy { ProgressView().controlSize(.small) }
+      if let error = upload.errorText { Text(error).font(.caption).foregroundStyle(.red) }
+    }
+    .confirmationDialog(voiceAgentText("Remove this profile's queued demonstrations?"), isPresented: $confirmsDelete) {
+      Button(voiceAgentText("Delete queued demonstrations"), role: .destructive) { upload.clearPending(settings: settings) }
+    }
+  }
+}
+
+#endif
+
 struct VoiceAgentView: View {
   static let windowID = "VoiceAgent"
   @ObservedObject var agent: VoiceAgentController
@@ -44,6 +257,8 @@ struct VoiceAgentView: View {
   @ObservedObject private var settings: VoiceAgentSettings
   @Environment(\.dismiss) private var dismiss
   @State private var text = ""
+  @State private var pickerSelection: VoiceAgentFileSelection?
+  @State private var filePickerPresented = false
 
   init(agent: VoiceAgentController) {
     self.agent = agent
@@ -57,7 +272,8 @@ struct VoiceAgentView: View {
         HStack {
           Label(agent.status, systemImage: agent.connectionState == .ready ? "checkmark.shield" : "network")
           Spacer()
-          if (agent.busy && agent.collaborationQuestion == nil && agent.annotationDeletion == nil && !agent.userIsInteracting) || agent.connectionState == .connecting {
+          if (agent.busy && agent.collaborationQuestion == nil && agent.annotationDeletion == nil &&
+              agent.volumeEditApproval == nil && !agent.userIsInteracting) || agent.connectionState == .connecting {
             ProgressView().controlSize(.small)
           }
           Button { agent.newConversation() } label: { Image(systemName: "arrow.counterclockwise") }
@@ -65,6 +281,41 @@ struct VoiceAgentView: View {
             .accessibilityLabel(voiceAgentText("New conversation"))
         }
         if !agent.model.isEmpty { Text(agent.model).font(.caption).foregroundStyle(.secondary) }
+        if let job = agent.importStatus {
+          VStack(alignment: .leading, spacing: 4) {
+            HStack {
+              Label(job.filename, systemImage: job.phase == .completed ? "checkmark.circle" : "square.and.arrow.down")
+              Spacer()
+              if job.phase == .running {
+                Button { agent.cancelImport(id: job.id) } label: { Image(systemName: "stop.circle") }
+                  .help(voiceAgentText("Cancel import"))
+                  .accessibilityLabel(voiceAgentText("Cancel import"))
+              }
+            }
+            if job.active { ProgressView(value: job.progress) }
+            if job.phase == .cancelling { Text(voiceAgentText("Cancelling import…")) }
+            if job.phase == .cancelled { Text(voiceAgentText("Import cancelled")) }
+            if job.phase == .failed { Text(voiceAgentText("Import failed")).foregroundStyle(.red) }
+            if let detail = job.detail { Text(detail).foregroundStyle(.secondary) }
+          }
+          .font(.callout)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if let bricks = agent.volumeBrickStatus {
+          Group {
+            switch bricks {
+              case .ready:
+                Label(voiceAgentText("Edited bricks are ready"), systemImage: "checkmark.circle")
+              case .pending(let count):
+                ProgressView(count > 0
+                  ? String(format: voiceAgentText("Edited bricks pending: %lld"), Int64(count))
+                  : voiceAgentText("Finishing edited bricks…"))
+                  .controlSize(.small)
+            }
+          }
+          .font(.callout)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
         ScrollViewReader { proxy in
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
@@ -110,6 +361,31 @@ struct VoiceAgentView: View {
             VStack(alignment: .leading) { collaborationActions }
           }
         }
+        if agent.canResume && !agent.busy && agent.connectionState == .ready {
+          Button(voiceAgentText("Continue"), systemImage: "play.fill") {
+            Task { await agent.resumePartialTask() }
+          }
+          .buttonStyle(.borderedProminent)
+          .disabled(speech.isRecording)
+        }
+        if let selection = agent.presentedFileSelection {
+          HStack {
+            Text(selection.title).fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button {
+              pickerSelection = selection
+              filePickerPresented = true
+            } label: {
+              Label(voiceAgentText(selection.kind == .folder ? "Choose folder" : "Choose file"), systemImage: "folder")
+            }
+            .buttonStyle(.borderedProminent)
+            Button { agent.resolvePresentedFileSelection(id: selection.id, url: nil) } label: {
+              Image(systemName: "xmark")
+            }
+            .help(voiceAgentText("Cancel"))
+            .accessibilityLabel(voiceAgentText("Cancel"))
+          }
+        }
         if let error = agent.errorText {
           HStack(alignment: .top) {
             Text(error).foregroundStyle(.red).font(.callout).textSelection(.enabled)
@@ -120,6 +396,15 @@ struct VoiceAgentView: View {
         if !speech.transcript.isEmpty, speech.isRecording {
           Text(speech.transcript).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
+        #if DEBUG
+        if agent.hasDataset || agent.demonstrations.active || agent.demonstrations.completed != nil {
+          DisclosureGroup(voiceAgentText("Workflow research (debug)")) {
+            WorkflowDemonstrationMenu(agent: agent)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .font(.caption)
+        }
+        #endif
         Divider()
         HStack(alignment: .bottom, spacing: 12) {
           Button { Task { await agent.toggleMicrophone() } } label: {
@@ -164,6 +449,17 @@ struct VoiceAgentView: View {
     .frame(width: 600, height: 580)
     #endif
     .task { await agent.connect() }
+    .fileImporter(isPresented: $filePickerPresented,
+                  allowedContentTypes: pickerSelection?.kind == .folder ? [.folder] : [.item],
+                  allowsMultipleSelection: false, onCompletion: { result in
+      if let selection = pickerSelection {
+        agent.resolvePresentedFileSelection(id: selection.id, url: (try? result.get())?.first)
+      }
+      pickerSelection = nil
+    }, onCancellation: {
+      if let selection = pickerSelection { agent.resolvePresentedFileSelection(id: selection.id, url: nil) }
+      pickerSelection = nil
+    })
     .alert(voiceAgentText(deletionTitle), isPresented: Binding(
       get: { agent.annotationDeletion != nil },
       set: { visible in
@@ -177,11 +473,36 @@ struct VoiceAgentView: View {
         Text(String(format: voiceAgentText("Markers: %lld. Measurements: %lld. Placed meshes are kept."),
                     Int64(preview.markerCount), Int64(preview.measurementCount)))
       }
+    .alert(voiceAgentText(agent.volumeEditApproval?.erase == true ? "Erase this volume region?" : "Restore this volume region?"),
+           isPresented: Binding(
+             get: { agent.volumeEditApproval != nil },
+             set: { visible in
+               if !visible, let preview = agent.volumeEditApproval { agent.resolveVolumeEditApproval(id: preview.id, accepted: false) }
+             }), presenting: agent.volumeEditApproval) { preview in
+      Button(voiceAgentText(preview.erase ? "Erase region" : "Restore region"), role: preview.erase ? .destructive : nil) {
+        agent.resolveVolumeEditApproval(id: preview.id, accepted: true)
+      }
+      Button(voiceAgentText("Always approve volume edits")) {
+        agent.resolveVolumeEditApproval(id: preview.id, accepted: true, alwaysApprove: true)
+      }
+      Button(voiceAgentText("Cancel"), role: .cancel) { agent.resolveVolumeEditApproval(id: preview.id, accepted: false) }
+    } message: { preview in
+      Text(String(format: voiceAgentText("Brush stamps: %lld. Channels: %@. Bounds (XYZ in meters): %@ to %@. The original dataset is preserved."),
+                  Int64(preview.sampleCount), preview.channels.map(String.init).joined(separator: ", "),
+                  formatEditBounds(preview.boundsMinimumMeters), formatEditBounds(preview.boundsMaximumMeters)))
+    }
     .onDisappear {
       speech.cancel()
       if let preview = agent.annotationDeletion { agent.resolveAnnotationDeletion(id: preview.id, accepted: false) }
+      if let preview = agent.volumeEditApproval { agent.resolveVolumeEditApproval(id: preview.id, accepted: false) }
+      if let selection = agent.fileSelection { agent.resolveFileSelection(id: selection.id, url: nil) }
     }
     .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
+  }
+
+  private func formatEditBounds(_ point: SIMD3<Double>) -> String {
+    let numbers = (0..<3).map { point[$0].formatted(.number.precision(.significantDigits(1...4))) }
+    return "(" + numbers.joined(separator: "; ") + ")"
   }
 
   private var canSendMessage: Bool {
@@ -366,7 +687,17 @@ struct VoiceAgentSettingsView: View {
       } else {
         Text(voiceAgentText("System certificate trust")).font(.caption).foregroundStyle(.secondary)
       }
+      #if DEBUG
+      DisclosureGroup(voiceAgentText("Workflow research (debug)")) {
+        WorkflowProfileSettingsView(upload: agent.workflowUpload, settings: settings)
+      }
+      #endif
       Toggle(voiceAgentText("Share render images"), isOn: $settings.sharesImages)
+      Toggle(voiceAgentText("Save and restore the assistant conversation"), isOn: $settings.savesConversation)
+      if let error = agent.conversationStorageError {
+        Text(error).font(.callout).foregroundStyle(.red)
+      }
+      Toggle(voiceAgentText("Confirm volume edits"), isOn: $settings.confirmsVolumeEdits)
       Toggle(voiceAgentText("Speak responses"), isOn: $settings.speaks)
       Stepper(value: $settings.workMinutes, in: 1...120) {
         HStack {

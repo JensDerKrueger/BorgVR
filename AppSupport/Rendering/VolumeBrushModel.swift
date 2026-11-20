@@ -191,6 +191,9 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   enum ExportPhase: Equatable { case options, exporting, cancelling, ready, cancelled }
 
   let context = VolumeBrushContext()
+  // The first edit makes this state visible in the UI, but does not switch it.
+  var editingContextID: UUID? { workingState?.id }
+  var editRevision: UInt64? { dataSource?.recordedBrushRevision }
   private weak var commandExecutor: (any BorgVRActionExecuting)?
   private var isPreparingRecording = false
   private var recordingStateAliases: [UUID: UUID] = [:]
@@ -981,7 +984,8 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     if let projectsOntoVolume { self.projectsOntoVolume = projectsOntoVolume }
   }
 
-  func editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample]) async throws {
+  func editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample],
+                  validateContext: (() throws -> Void)? = nil) async throws {
     try await waitForStateReady()
     guard context.editingStatus() != nil else { throw BorgVRVolumeEditingCommandError.unavailable }
     guard !isDiscardingEdits, !isExporting, !isRestoringPersonalState else { throw BorgVRVolumeEditingCommandError.busy }
@@ -989,6 +993,8 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
       throw BorgVRVolumeEditingCommandError.invalidArgument("Provide between 1 and 65536 brush samples.")
     }
     for sample in samples { try sample.validate() }
+    try Task.checkCancellation()
+    try validateContext?()
     let generation = datasetGeneration
     let token = BorgVRVolumeConversionCancellationToken()
     try await withTaskCancellationHandler {

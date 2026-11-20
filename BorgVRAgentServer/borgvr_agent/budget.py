@@ -39,7 +39,7 @@ class ControlBudget(AbstractCapability):
         phase = self.phase(ctx)
         if phase == "answer":
             collaboration = getattr(self.session, "collaboration", None)
-            if collaboration is not None and collaboration.asked_revision != collaboration.revision:
+            if collaboration is not None and not collaboration.asked_for_help:
                 return [tool for tool in tool_defs if tool.name == "ask_collaboration_feedback"]
             return []
         if phase == "wrap_up":

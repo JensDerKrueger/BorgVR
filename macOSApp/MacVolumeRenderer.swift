@@ -1,8 +1,6 @@
 import AppKit
-import ImageIO
 import Metal
 import MetalKit
-import UniformTypeIdentifiers
 
 @MainActor
 private final class MacRendererDatasetAccess {
@@ -199,10 +197,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       return
     }
 
-    let screenshotCapture = makeScreenshotCapture(
-      from: frame.drawable.texture,
-      on: frame.commandBuffer
-    )
+    let screenshotCapture = makeScreenshotCapture(from: frame)
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
         guard let self, self.core.isAttached else { return }
@@ -215,7 +210,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
           datasetKey: frame.datasetKey,
           missingBrickCount: missingBrickCount
         )
-        self.finishScreenshotCapture(screenshotCapture)
+        if commandBuffer.status == .completed {
+          self.finishScreenshotCapture(screenshotCapture)
+        } else if let screenshotCapture {
+          self.finishScreenshotRequest(id: screenshotCapture.id, result: .failure(MetalScreenshotError.readbackFailed))
+        }
         self.updatePerformanceGraph()
         self.frameInFlight = false
         self.drawNextFrameIfDisplaySyncIsDisabled()
@@ -241,7 +240,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   ) {
     guard appModel.activeDataset != nil else {
       appModel.logger.warning(String(localized: "screenshot_no_dataset"))
-      completion(.failure(ScreenshotError.noDataset))
+      completion(.failure(BorgVRMCPCommandError.noDataset))
       return
     }
 
@@ -279,6 +278,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
       return
     }
+    appModel.screenshotCache.begin(id)
     guard let view else {
       cancelScreenshot(id: id, error: AppModelError.rendererUnavailable)
       return
@@ -329,57 +329,19 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
 
   private struct ScreenshotCapture {
     let id: UUID
-    let buffer: MTLBuffer
-    let width: Int
-    let height: Int
-    let bytesPerRow: Int
+    let readback: MetalPairedScreenshotReadback
   }
 
-  private func makeScreenshotCapture(
-    from texture: MTLTexture,
-    on commandBuffer: MTLCommandBuffer
-  ) -> ScreenshotCapture? {
+  private func makeScreenshotCapture(from frame: ScreenVolumeEncodedFrame) -> ScreenshotCapture? {
     guard let request = screenshotRequests.takePending() else { return nil }
-
-    let width = texture.width
-    let height = texture.height
-    guard width > 0, height > 0 else {
-      appModel.logger.warning(String(localized: "screenshot_failed_empty"))
-      finishScreenshotRequest(id: request.id, result: .failure(ScreenshotError.emptyTexture))
+    do {
+      return ScreenshotCapture(id: request.id, readback: try MetalScreenshotEncoder.encodePairedReadback(
+        color: frame.drawable.texture, depth: frame.interactionDepthTexture,
+        textureToClip: frame.textureToClip, commandBuffer: frame.commandBuffer))
+    } catch {
+      finishScreenshotRequest(id: request.id, result: .failure(error))
       return nil
     }
-
-    let bytesPerPixel = 4
-    let unalignedBytesPerRow = width * bytesPerPixel
-    let bytesPerRow = ((unalignedBytesPerRow + 255) / 256) * 256
-    let byteCount = bytesPerRow * height
-    guard let buffer = texture.device.makeBuffer(length: byteCount, options: .storageModeShared),
-          let blitEncoder = commandBuffer.makeBlitCommandEncoder() else {
-      appModel.logger.error(String(localized: "screenshot_failed_readback"))
-      finishScreenshotRequest(id: request.id, result: .failure(ScreenshotError.readbackFailed))
-      return nil
-    }
-
-    blitEncoder.copy(
-      from: texture,
-      sourceSlice: 0,
-      sourceLevel: 0,
-      sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
-      sourceSize: MTLSize(width: width, height: height, depth: 1),
-      to: buffer,
-      destinationOffset: 0,
-      destinationBytesPerRow: bytesPerRow,
-      destinationBytesPerImage: byteCount
-    )
-    blitEncoder.endEncoding()
-
-    return ScreenshotCapture(
-      id: request.id,
-      buffer: buffer,
-      width: width,
-      height: height,
-      bytesPerRow: bytesPerRow
-    )
   }
 
   private func finishScreenshotCapture(_ capture: ScreenshotCapture?) {
@@ -390,7 +352,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
 
     do {
-      try writeScreenshot(capture, to: request.url)
+      let png = try MetalScreenshotEncoder.pngData(from: capture.readback.color)
+      try png.write(to: request.url, options: .atomic)
+      if let positions = capture.readback.positionReadback?.positions() {
+        appModel.screenshotCache.store(positions, id: request.id, renderedFrame: appModel.completedRenderFrameCount)
+      }
       appModel.logger.info(
         String(
           format: String(localized: "screenshot_saved_format"),
@@ -428,46 +394,6 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
   }
 
-  private func writeScreenshot(_ capture: ScreenshotCapture, to url: URL) throws {
-    let byteCount = capture.bytesPerRow * capture.height
-    let data = Data(bytes: capture.buffer.contents(), count: byteCount)
-    guard let dataProvider = CGDataProvider(data: data as CFData) else {
-      throw ScreenshotError.imageCreationFailed
-    }
-
-    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-    let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(
-      CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-    )
-    guard let image = CGImage(
-      width: capture.width,
-      height: capture.height,
-      bitsPerComponent: 8,
-      bitsPerPixel: 32,
-      bytesPerRow: capture.bytesPerRow,
-      space: colorSpace,
-      bitmapInfo: bitmapInfo,
-      provider: dataProvider,
-      decode: nil,
-      shouldInterpolate: false,
-      intent: .defaultIntent
-    ) else {
-      throw ScreenshotError.imageCreationFailed
-    }
-
-    guard let destination = CGImageDestinationCreateWithURL(
-      url as CFURL,
-      UTType.png.identifier as CFString,
-      1,
-      nil
-    ) else {
-      throw ScreenshotError.destinationCreationFailed
-    }
-    CGImageDestinationAddImage(destination, image, nil)
-    guard CGImageDestinationFinalize(destination) else {
-      throw ScreenshotError.writeFailed
-    }
-  }
 
   private func uniqueScreenshotURL(in directory: URL) -> URL {
     let formatter = DateFormatter()
@@ -487,29 +413,4 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     return url
   }
 
-  private enum ScreenshotError: LocalizedError {
-    case noDataset
-    case emptyTexture
-    case readbackFailed
-    case imageCreationFailed
-    case destinationCreationFailed
-    case writeFailed
-
-    var errorDescription: String? {
-      switch self {
-        case .noDataset:
-          return String(localized: "screenshot_no_dataset")
-        case .emptyTexture:
-          return String(localized: "screenshot_failed_empty")
-        case .readbackFailed:
-          return String(localized: "screenshot_failed_readback")
-        case .imageCreationFailed:
-          return String(localized: "screenshot_error_image_creation")
-        case .destinationCreationFailed:
-          return String(localized: "screenshot_error_destination_creation")
-        case .writeFailed:
-          return String(localized: "screenshot_error_write")
-      }
-    }
-  }
 }

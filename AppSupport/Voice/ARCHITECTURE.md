@@ -46,6 +46,35 @@ lokale Ausführungssicherung. `VoiceAgentPolicy` begrenzt Werkzeuge und Daten.
 besitzt Planung, Kontextpflege, Arbeitsbudget und Rückfragen; diese Logik liegt nicht im
 Renderer. `create_app(settings, model)` erlaubt einen unabhängig injizierbaren Modelladapter.
 
+Speichern und Exportieren laufen über die vorhandenen MCP-Commands. Der App-Vertrag
+vermittelt lokale Datei-/Ordnerauswahl, aber kein Werkzeug akzeptiert Dateipfade vom
+Server. Import und Fusion laufen im Adapter über den gemeinsamen Konvertierungsdienst;
+die App-Wurzel liefert nur Einstellungen, das Datensatzverzeichnis und die Freigabe für
+einen exklusiven Import. Ein Abbruch folgt dem vorhandenen Konvertierungs-Token.
+
+## Gespräch und Ausführungsbelege
+
+Der Client hält Nutzernachrichten, finale Antworten und bestätigte native
+Werkzeugaufrufe im Arbeitsspeicher des aktuellen Gesprächs. Der Chat ist Kontext,
+kein Nachweis einer Ausführung. Ein Werkzeugbeleg enthält die übergebenen
+Argumente und die bereits für den Agenten aufbereiteten Ergebnisdaten. Er wird
+vor dem Netzversand lokal erfasst und ist nicht mit der Socket-gebundenen
+Wiederholungssicherung identisch. Bildpixel, abgelehnte und ungewisse
+Ausführungen sowie die Abfrage der Historie selbst werden nicht gespeichert.
+
+`get_command_history` fragt beide Quellen schreibgeschützt und paginiert ab.
+Das Werkzeug ist vom MCP-Server unabhängig. Der Verlauf bleibt bei
+Kontextkompression und Reconnect abrufbar. Mit ausdrücklicher Einstellung
+speichert BorgVR das aktuelle Gespräch verschlüsselt lokal und stellt es beim
+App-Start wieder her. Der Schlüssel bleibt im gerätespezifischen Keychain.
+Abfragen sehen nur den aktuellen App- bzw. Datensatzöffnungs- und Editierkontext.
+Nach einem Neustart werden abgelegte Datensatzbelege nur bei derselben
+Datensatz-ID und demselben Editierstand erneut gebunden. Ausschalten der
+Speicherung löscht die Datei, ohne den aktuellen Chat aus der UI zu entfernen.
+Ein neues Gespräch leert den Verlauf. Ein Wechsel von Serveradresse, Schlüssel
+oder Zertifikat verwirft die zugehörigen Belege und das Archiv. Historische
+Belege sind keine aktuellen Zustände und keine Autorisierung.
+
 ## Appweite Sitzung
 
 Die drei App-Wurzeln besitzen je einen Controller; Startmenü und Render-Bedienelemente
@@ -55,7 +84,8 @@ Aktivierung in den Einstellungen, startet aber weder Mikrofonaufnahme noch einen
 
 Der Bridge-Kontext ist ohne Datensatz wirklich `nil`. Im ausgehandelten Protokollzusatz
 `application_session` wird `dataset_id: null` übertragen. Ohne renderbereiten Datensatz
-geben Client und Server `get_application_state`, `search_datasets` und `open_dataset` frei.
+geben Client und Server `get_application_state`, `search_datasets`, `open_dataset`
+und `get_command_history` frei. Die Historie zeigt dort nur App-Kontext-Belege.
 Schließen und Import-/Fusionsjobs sind noch nachfolgende Ausbauschritte, keine implizite Freigabe.
 
 Bei einem Wechsel im Leerlauf werden Kontext-ID und Werkzeugkatalog neu abgeglichen.

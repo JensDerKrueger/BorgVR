@@ -3,9 +3,9 @@
 Generiert aus `capabilities.json` und den Quellcode-Registern mit `python3 audit_capabilities.py --write`.
 Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nachweis ausgeführter Tests.
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
-Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets` und `open_dataset` verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
+Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets`, `open_dataset` und die kontextgebundene Befehlshistorie verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
 
-Erfasst: **75 Funktionsgruppen**, **61 MCP-Werkzeuge**, **26 maximal erlaubte native Agentenwerkzeuge**, **99 Command-/UI-Registereinträge**, **103 unterschiedliche GSC-Namen**.
+Erfasst: **77 Funktionsgruppen**, **63 MCP-Werkzeuge**, **42 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **104 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
@@ -18,6 +18,8 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Bereich | Funktion | Kontext | Command-Pfad | MCP | Agent |
 |---|---|---|---|---|---|
 | App und Assistent | [Assistent aktivieren und ab App-Start benutzen](#app-assistant) | application | lokale Funktion | nein | nein |
+| App und Assistent | [Ausgeführte Agentenbefehle und Gesprächskontext nachschlagen](#app-command_history) | assistant | lokale Funktion | nein | ja* |
+| App und Assistent | [Manuelle Demonstration für Forschung (Debug)](#app-demonstration) | dataset | lokale Funktion | nein | nein |
 | App und Assistent | [Textparameter für einen Skriptauftrag eingeben](#app-script_input) | application | lokale Funktion | nein | nein |
 | App und Assistent | [Hauptmenü, Auswahl, Einstellungen und Assistent aufrufen](#app-navigation) | application | nur UI | nein | nein |
 | App und Assistent | [Hilfe, Über und Datenschutz anzeigen](#app-help) | application | nur UI | nein | nein |
@@ -26,17 +28,17 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Datensätze und Quellen | [Verfügbare Datensätze und vollständige Metadaten abfragen](#datasets-catalog) | application | Service/Abfrage | ja | nein |
 | Datensätze und Quellen | [Datensätze nach Thema suchen, sortieren und gruppieren](#datasets-search) | application | Service/Abfrage | ja | ja* |
 | Datensätze und Quellen | [Datensatz öffnen und Laden abbrechen](#datasets-open) | application | vorhanden | ja | ja* |
-| Datensätze und Quellen | [Datensatz schließen und Zustand sichern](#datasets-close) | dataset | vorhanden | ja | nein |
+| Datensätze und Quellen | [Datensatz schließen und Zustand sichern](#datasets-close) | dataset | vorhanden | ja | ja* |
 | Datensätze und Quellen | [Datensatzliste aktualisieren und Quellenstatus prüfen](#datasets-refresh) | application | Service/Abfrage | nein | nein |
 | Datensätze und Quellen | [Lokale Datensätze und lokale Kopien löschen](#datasets-delete) | application | Service/Abfrage | nein | nein |
 | Datensätze und Quellen | [Lokale Verzeichnisse, Remote-Server und Quellenauswahl verwalten](#datasets-sources) | application | teilweise | nein | nein |
-| Import, Fusion und Export | [Volumendateien importieren oder native Daten übernehmen](#conversion-file) | job | Service/Abfrage | nein | nein |
-| Import, Fusion und Export | [DICOM-Verzeichnis prüfen, Serie auswählen und importieren](#conversion-dicom) | job | Service/Abfrage | nein | nein |
-| Import, Fusion und Export | [Bildsequenzen auswählen, ordnen und mit physischer Größe importieren](#conversion-images) | job | Service/Abfrage | nein | nein |
-| Import, Fusion und Export | [Zwei Volumen registrieren und fusioniert importieren](#conversion-fusion) | job | Service/Abfrage | nein | nein |
+| Import, Fusion und Export | [Volumendateien importieren oder native Daten übernehmen](#conversion-file) | job | Service/Abfrage | nein | ja* |
+| Import, Fusion und Export | [DICOM-Verzeichnis prüfen, Serie auswählen und importieren](#conversion-dicom) | job | Service/Abfrage | nein | ja* |
+| Import, Fusion und Export | [Bildsequenzen auswählen, ordnen und mit physischer Größe importieren](#conversion-images) | job | Service/Abfrage | nein | ja* |
+| Import, Fusion und Export | [Zwei Volumen registrieren und fusioniert importieren](#conversion-fusion) | job | Service/Abfrage | nein | ja* |
 | Import, Fusion und Export | [Brickgröße, Quantisierung, Kompression und Importmetadaten festlegen](#conversion-options) | job | teilweise | nein | nein |
 | Import, Fusion und Export | [Quelldateien und referenzierte RAW-Dateien freigeben](#conversion-access) | application | lokale Funktion | nein | nein |
-| Import, Fusion und Export | [Konvertierung starten, Fortschritt/Details lesen, abbrechen und Ergebnis öffnen](#conversion-jobs) | job | teilweise | nein | nein |
+| Import, Fusion und Export | [Konvertierung starten, Fortschritt/Details lesen, abbrechen und Ergebnis öffnen](#conversion-jobs) | job | teilweise | nein | ja* |
 | Import, Fusion und Export | [Meshes importieren oder exportieren](#conversion-mesh) | job | Service/Abfrage | nein | nein |
 | Import, Fusion und Export | [BorgVR-LoD als flaches Volumen exportieren](#conversion-export_original) | job | Service/Abfrage | nein | nein |
 | Import, Fusion und Export | [Isofläche extrahieren und als Mesh speichern](#windows-isosurface) | job | vorhanden | ja | nein |
@@ -49,18 +51,18 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Darstellung | [Field of View und Parallelprojektion einstellen](#render-projection) | application | vorhanden | ja | ja* |
 | Darstellung | [Datensatz-Bounding-Box ein- und ausblenden](#render-bounding_box) | dataset | vorhanden | ja | ja* |
 | Darstellung | [Sampling, LOD, Atlas und Optimierungen einstellen](#render-optimizations) | application | teilweise | ja | nein |
-| Darstellung | [Darstellungsgruppen gezielt zurücksetzen](#render-reset) | dataset | vorhanden | ja | nein |
-| Darstellung | [Renderabschluss abwarten und Screenshot aufnehmen](#render-wait_capture) | dataset | vorhanden | ja | ja* |
+| Darstellung | [Darstellungsgruppen gezielt zurücksetzen](#render-reset) | dataset | vorhanden | ja | ja* |
+| Darstellung | [Renderabschluss abwarten und Screenshot aufnehmen](#render-wait_capture) | dataset | vorhanden | ja | teilweise* |
 | Darstellung | [Interaktionsmodus und TF-Malwerkzeug auswählen](#render-interaction) | dataset | vorhanden | nein | nein |
 | Transferfunktionen | [Mehrkanal-TF lesen und durch RGBA-Einträge ändern](#tf-samples) | dataset | vorhanden | ja | ja* |
 | Transferfunktionen | [Aktiven TF-Kanal und bearbeitete RGBA-Komponenten auswählen](#tf-channel) | dataset | vorhanden | nein | nein |
 | Transferfunktionen | [TF-Katalog durchsuchen, TF laden und speichern](#tf-files) | dataset | teilweise | ja | nein |
-| Volumenbearbeitung | [Pinselmodus, Radius, Projektion und Kanäle einstellen](#edit-brush) | dataset | vorhanden | ja | nein |
-| Volumenbearbeitung | [Volumenbereiche löschen oder wiederherstellen](#edit-apply) | dataset | vorhanden | ja | nein |
-| Volumenbearbeitung | [Edit-Bricks vorbereiten und deren Abschluss abwarten](#edit-finish) | job | Service/Abfrage | ja | nein |
+| Volumenbearbeitung | [Pinselmodus, Radius, Projektion und Kanäle einstellen](#edit-brush) | dataset | vorhanden | ja | ja* |
+| Volumenbearbeitung | [Volumenbereiche löschen oder wiederherstellen](#edit-apply) | dataset | vorhanden | ja | ja* |
+| Volumenbearbeitung | [Edit-Bricks vorbereiten und deren Abschluss abwarten](#edit-finish) | job | Service/Abfrage | ja | teilweise* |
 | Volumenbearbeitung | [Alle Edits im aktiven Zustand verwerfen](#edit-discard) | dataset | vorhanden | ja | nein |
-| Volumenbearbeitung | [Editierstände auswählen, erzeugen, duplizieren, umbenennen und löschen](#edit-states) | dataset | vorhanden | ja | nein |
-| Volumenbearbeitung | [Bearbeiteten Datensatz exportieren und Export abbrechen](#edit-export) | job | vorhanden | ja | nein |
+| Volumenbearbeitung | [Editierstände auswählen, erzeugen, duplizieren, umbenennen und löschen](#edit-states) | dataset | vorhanden | ja | teilweise* |
+| Volumenbearbeitung | [Bearbeiteten Datensatz exportieren und Export abbrechen](#edit-export) | job | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Objekte, Messungen und Punkte auswählen sowie Projektionswerkzeuge konfigurieren](#annotations-selection) | dataset | nur UI | nein | nein |
 | Marker, Objekte und Messungen | [Kugel-, Richtungs- und Strichmarker erstellen und bearbeiten](#annotations-markers) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Mesh-Assets auswählen und Instanzen platzieren oder transformieren](#annotations-mesh) | dataset | vorhanden | ja | nein |
@@ -69,7 +71,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Marker, Objekte und Messungen | [Einzelne oder alle Messungen entfernen](#annotations-measure_delete) | dataset | vorhanden | ja | teilweise* |
 | Marker, Objekte und Messungen | [Objekte und Messungen sichtbar oder unsichtbar schalten](#annotations-visibility) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Marker, Objekte und Messungen laden, zusammenführen und speichern](#annotations-files) | dataset | teilweise | nein | nein |
-| Speichern und Automatisierung | [Darstellungszustand speichern und laden](#state-picture) | dataset | vorhanden | ja | nein |
+| Speichern und Automatisierung | [Darstellungszustand speichern und laden](#state-picture) | dataset | vorhanden | ja | teilweise* |
 | Speichern und Automatisierung | [Command-Aufzeichnung starten, beenden und als GSC speichern](#state-record) | application | vorhanden | ja | nein |
 | Speichern und Automatisierung | [Aufzeichnungen und allgemeine GSC-Skripte abspielen oder stoppen](#state-replay) | application | teilweise | ja | nein |
 | Speichern und Automatisierung | [Interne Command-Payloads, Dateischreibbelege und Mutationsgrenzen](#state-internal) | application | intern | nein | nein |
@@ -101,8 +103,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 |---|---|
 | `report_progress` | Kurze Zwischenmeldung; keine Benutzeraktion und kein Beleg für erfolgreiche Ausführung. |
 | `record_visual_observation` | Begrenzte Bildbefunde im laufenden Auftrag; kein dauerhaftes Erfahrungswissen oder Ground Truth. |
-| `ask_collaboration_feedback` | Eine getrennte Frage zu Hilfeabsicht, Ansichtsänderung oder benötigter Hilfe; keine allgemeine lokale Freigabe für Dateien/Editing. |
-| `propose_visualization_rule` | Regel vorschlagen; erst lokale Bestätigung speichert eine persönliche Präferenz. |
+| `ask_collaboration_feedback` | Bei fehlender Bildevidenz um eine bessere Ansicht bitten; eine manuelle Änderung beantwortet die Frage. Keine Freigabe für Dateien oder Bearbeitungen. |
 
 ## Details
 
@@ -119,6 +120,34 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Nächster Schritt: Weitere App-Werkzeuge über die Bridge ergänzen; keine automatische Mikrofonaufnahme.
 - Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [macOSApp/ModeSelectionView.swift](../macOSApp/ModeSelectionView.swift), [iOSApp/ModeSelectionView.swift](../iOSApp/ModeSelectionView.swift), [VisionApp/ModeSelectionView.swift](../VisionApp/ModeSelectionView.swift), [BorgVRAgentServer/PROTOCOL.md](../BorgVRAgentServer/PROTOCOL.md)
 - Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_application_session.py](../BorgVRAgentServer/tests/test_application_session.py), [BorgVRAgentServer/tests/test_dataset_navigation.py](../BorgVRAgentServer/tests/test_dataset_navigation.py)
+
+<a id="app-command_history"></a>
+### Ausgeführte Agentenbefehle und Gesprächskontext nachschlagen
+
+- Kennung: `app.command_history`; Plattformen: macOS, iOS, visionOS; Kontext: `assistant`; Wirkung: lokale Gesprächsdaten, nur im passenden Server- und Datensatzkontext abrufbar.
+- Register: kein spezifischer Command/UI-Registereintrag
+- MCP: fehlt
+- Native Agentenwerkzeuge: `get_command_history`
+- Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
+- Zustandsabfrage: Bestätigte Parameter und freigegebene Ergebnisse sowie frühere Nutzernachrichten und finale Antworten getrennt abfragen; optional ein laufendes Gespräch verschlüsselt auf dem Gerät speichern und laden.
+- Lücke: Kein geräteübergreifendes Archiv. Keine Bilder, ungeklärten Ausführungen oder Freigaben zur Wiederholung.
+- Nächster Schritt: Archiv und serverseitiges Erfahrungswissen getrennt behandeln.
+- Quellen: [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentConversationStore.swift](../AppSupport/Voice/VoiceAgentConversationStore.swift), [BorgVRAgentServer/borgvr_agent/app.py](../BorgVRAgentServer/borgvr_agent/app.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
+
+<a id="app-demonstration"></a>
+### Manuelle Demonstration für Forschung (Debug)
+
+- Kennung: `app.demonstration`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: expliziter profilgebundener Upload ohne Bild; separat freigegebene Renderbilder nur im lokalen Export; kein Audio.
+- Register: kein spezifischer Command/UI-Registereintrag
+- MCP: fehlt
+- Native Agentenwerkzeuge: fehlen
+- Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
+- Zustandsabfrage: Nur im Debug-Build: Command-Kategorien und optionale Ansichtswerte exportieren oder an den Workflow-Dienst senden; auf Wunsch zwei Renderbilder lokal exportieren.
+- Lücke: Kein Aufnahmemodus im normalen UI. Der Forschungsdienst und die Modellvergleiche übernehmen keine Regeln in den Assistenten.
+- Nächster Schritt: Werkzeugabdeckung und getrenntes Fachwissen haben Vorrang; spätere Beobachtung in die normale Bedienung integrieren.
+- Quellen: [AppSupport/Voice/WorkflowDemonstration.swift](../AppSupport/Voice/WorkflowDemonstration.swift), [AppSupport/Voice/WorkflowUpload.swift](../AppSupport/Voice/WorkflowUpload.swift), [BorgVRAgentServer/WORKFLOW_LEARNER.md](../BorgVRAgentServer/WORKFLOW_LEARNER.md)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_workflow_learner.py](../BorgVRAgentServer/tests/test_workflow_learner.py), [BorgVRAgentServer/tests/test_workflow_service.py](../BorgVRAgentServer/tests/test_workflow_service.py), [BorgVRAgentServer/tests/test_workflow_experiment.py](../BorgVRAgentServer/tests/test_workflow_experiment.py), [BorgVRAgentServer/tests/test_workflow_visibility.py](../BorgVRAgentServer/tests/test_workflow_visibility.py)
 
 <a id="app-script_input"></a>
 ### Textparameter für einen Skriptauftrag eingeben
@@ -238,11 +267,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `datasets.close`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Renderer-/Immersive-Space-Ende, Speicherung.
 - Register: `BorgVRRecordedAction.closeDataset`, `MacCommand.closeDataset`
 - MCP: `close_dataset`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `close_dataset`
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: get_application_state; lokale Datensatz-Lebenszykluszustände.
-- Lücke: Agent sperrt close_dataset und verliert danach derzeit sein Gesprächsfenster.
-- Nächster Schritt: App-Gespräch erhalten; Datensatzwerkzeuge bis zum nächsten Öffnen entfernen; Speicher-/Bearbeitungsabschluss prüfen.
+- Zustandsabfrage: Der Agent schließt über close_dataset, bestätigt das Ende des Renderers und setzt die Unterhaltung mit den Startmenü-Werkzeugen fort.
+- Lücke: Ein aktiver Volumenexport muss zuerst beendet oder abgebrochen werden.
+- Nächster Schritt: Bei Bedarf den Schließfortschritt für langsame Renderer gesondert anzeigen.
 - Quellen: [AppSupport/Application/AppModel.swift](../AppSupport/Application/AppModel.swift), [VisionApp/RenderView.swift](../VisionApp/RenderView.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift)
 - Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
@@ -294,11 +323,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `conversion.file`; Plattformen: macOS, iOS, visionOS; Kontext: `job`; Wirkung: Dateilesen, Konvertierung und neue Dateien.
 - Register: `VolumeImportKind.volumeFile`
 - MCP: fehlt
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `import_volume`
 - Benannte GSC-Befehle (macOS): `importfile`
-- Zustandsabfrage: BorgVRVolumeConversionService und UI-Fortschritt; GSC-Import nur auf macOS.
-- Lücke: Kein semantischer Import-Command/MCP-Auftrag. Ergebnis-writeFiles beschreibt nicht den Import samt Quellen und Parametern.
-- Nächster Schritt: prepare_import/start_import/get_job/cancel_job mit zugelassenen Source-IDs und Ergebnis-Datensatz-ID.
+- Zustandsabfrage: Agent importiert lokal ausgewählte Volumendateien und Zarr-Ordner über BorgVRVolumeConversionService ins Datensatzverzeichnis.
+- Lücke: Kein externer MCP-Import. Referenzierte Rohdateien werden nur bei Bedarf lokal nachgefordert.
+- Nächster Schritt: Bei Bedarf Quellenfreigaben und validierte Pläne zwischen lokalen Aufrufern vereinheitlichen.
 - Quellen: [BORGVR-IO/Importers/BorgVRVolumeConversionService.swift](../BORGVR-IO/Importers/BorgVRVolumeConversionService.swift), [AppSupport/Datasets/ConverterView.swift](../AppSupport/Datasets/ConverterView.swift), [iOSApp/ConverterView.swift](../iOSApp/ConverterView.swift), [VisionApp/ConverterView.swift](../VisionApp/ConverterView.swift), [macOSApp/BorgVRScriptRunner.swift](../macOSApp/BorgVRScriptRunner.swift)
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
@@ -308,11 +337,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `conversion.dicom`; Plattformen: macOS, iOS, visionOS; Kontext: `job`; Wirkung: Patientendaten, Konvertierung und neue Dateien.
 - Register: `VolumeImportKind.dicomDirectory`
 - MCP: fehlt
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `import_volume`
 - Benannte GSC-Befehle (macOS): `importdirectory`
-- Zustandsabfrage: DICOM-Parser und UI-Vorschau; noch kein Serien-/Vorschauwerkzeug.
-- Lücke: GSC kann auf macOS Verzeichnisse importieren, aber kein einheitlicher Serienauswahl-/Preview-/Job-Vertrag.
-- Nächster Schritt: Serienübersicht, Abmessungen, Orientierung und Auswahl-ID vor dem Start prüfen; Patientendaten nur nach Freigabe übertragen.
+- Zustandsabfrage: Agent importiert einen lokal ausgewählten DICOM-Ordner über den vorhandenen Konverter.
+- Lücke: Kein Serien-/Vorschauwerkzeug im Agenten.
+- Nächster Schritt: Serienvorschau und gezielte Auswahl bei mehreren Serien ergänzen.
 - Quellen: [BORGVR-IO/Importers/BorgVRVolumeConversionService.swift](../BORGVR-IO/Importers/BorgVRVolumeConversionService.swift), [AppSupport/Datasets/DicomSlicePreview.swift](../AppSupport/Datasets/DicomSlicePreview.swift), [AppSupport/Datasets/ConverterView.swift](../AppSupport/Datasets/ConverterView.swift), [macOSApp/BorgVRScriptRunner.swift](../macOSApp/BorgVRScriptRunner.swift)
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
@@ -322,11 +351,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `conversion.images`; Plattformen: macOS, iOS, visionOS; Kontext: `job`; Wirkung: Dateilesen und neue Dateien.
 - Register: `VolumeImportKind.imageSequence`
 - MCP: fehlt
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `import_volume`
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: UI-Auswahl mit Größen-/Sequenzparametern.
-- Lücke: Kein eigener Sequenz-Command mit Reihenfolge, Kanälen, Abstand und Ergebnisabfrage.
-- Nächster Schritt: Importquelle image_sequence mit expliziter Reihenfolge und physischer Skalierung im gemeinsamen Job-Service ergänzen.
+- Zustandsabfrage: Agent importiert lokal ausgewählte Bildstapel mit expliziter physischer Breite, Höhe und Tiefe in Metern.
+- Lücke: Die Reihenfolge ist wie im vorhandenen Importer; keine individuelle Bild- oder Kanalwahl im Agenten.
+- Nächster Schritt: Zusätzliche Optionen erst bei Bedarf ergänzen.
 - Quellen: [AppSupport/Datasets/ConverterView.swift](../AppSupport/Datasets/ConverterView.swift), [iOSApp/ConverterView.swift](../iOSApp/ConverterView.swift), [VisionApp/ConverterView.swift](../VisionApp/ConverterView.swift)
 - Vorhandene Testquellen: [Tests/ImageSequenceConverterTests.cjs](../Tests/ImageSequenceConverterTests.cjs)
 
@@ -336,11 +365,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `conversion.fusion`; Plattformen: macOS, iOS, visionOS; Kontext: `job`; Wirkung: mehrere Datenquellen, Registrierung und neue Dateien.
 - Register: `VolumeImportKind.volumeFusion`
 - MCP: fehlt
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `fuse_volumes`
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: BorgVRVolumeInput und vorhandener Registrierungs-/Fusionspfad; Parameter und Status liegen im Wizard.
-- Lücke: Kein Fuse/Register-Command, keine Quell-/Parameter-/Registrierungsergebnisabfrage im Agentenvertrag.
-- Nächster Schritt: prepare_fusion/start_fusion/get_job/cancel_job; Referenz und Moving, Formate, Metadaten, Transformation und Qualität getrennt ausweisen.
+- Zustandsabfrage: Agent wählt lokal Referenz und bewegtes Volumen getrennt; die bestehende starre Registrierung verarbeitet DICOM, Volumendateien und Zarr. Ergebnis ist ein neuer Datensatz.
+- Lücke: Kein Transformations- oder Qualitätsbericht des Registrierers im Agenten.
+- Nächster Schritt: Bei Bedarf verifizierbare Registrierungsmetriken und Vorschau melden.
 - Quellen: [BORGVR-IO/Importers/BorgVRVolumeConversionService.swift](../BORGVR-IO/Importers/BorgVRVolumeConversionService.swift), [AppSupport/UI/ConverterChoiceView.swift](../AppSupport/UI/ConverterChoiceView.swift), [AppSupport/Datasets/ConverterView.swift](../AppSupport/Datasets/ConverterView.swift), [iOSApp/ConverterView.swift](../iOSApp/ConverterView.swift), [VisionApp/ConverterView.swift](../VisionApp/ConverterView.swift)
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
@@ -378,11 +407,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `conversion.jobs`; Plattformen: macOS, iOS, visionOS; Kontext: `job`; Wirkung: Langläufer, Teildateien und Renderer-Konflikt.
 - Register: kein spezifischer Command/UI-Registereintrag
 - MCP: fehlt
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `cancel_import`, `get_import_status`
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: UI-eigene Tasks, CancellationToken und Logger; Konfliktsperre gegen gleichzeitigen Renderer.
-- Lücke: Kein appweiter Jobzustand unabhängig vom Wizard, keine Agenten-Job-ID und kein semantischer Konvertierungs-Command.
-- Nächster Schritt: Konvertierungsjob aus Views extrahieren; Sperre, Abbruch, Cleanup, Fortschrittsphase und Ergebnis-ID gemeinsam mit UI verwenden.
+- Zustandsabfrage: Der gemeinsame Konvertierungsdienst liefert dem App-Assistenten lokalen Fortschritt; der Auftrag kann per UUID abgebrochen werden. Zum Öffnen den Datensatzkatalog nutzen.
+- Lücke: Der Wizard besitzt weiterhin seinen eigenen Fortschrittszustand; Agentenauftrag ist nicht über die externe MCP-Schnittstelle verfügbar.
+- Nächster Schritt: Bei Bedarf Jobstatus und Zusatzdateizugriff zwischen Wizard und anderen lokalen Aufrufern vereinheitlichen.
 - Quellen: [AppSupport/Datasets/ConverterView.swift](../AppSupport/Datasets/ConverterView.swift), [iOSApp/ConverterView.swift](../iOSApp/ConverterView.swift), [VisionApp/ConverterView.swift](../VisionApp/ConverterView.swift), [BORGVR-IO/Importers/BorgVRVolumeConversionService.swift](../BORGVR-IO/Importers/BorgVRVolumeConversionService.swift)
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
@@ -560,24 +589,24 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `render.reset`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: vorhandene Darstellung überschreiben.
 - Register: `BorgVRCommand.reset`, `MacRenderShortcut.reset`
 - MCP: `reset_state`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `reset_state`
 - Benannte GSC-Befehle (macOS): `resettf`
 - Zustandsabfrage: get_application_state und get_transfer_function nach Reset.
-- Lücke: MCP vorhanden, im nativen Agenten nicht freigegeben.
-- Nächster Schritt: Reset als auftragsbezogene Aktion anbieten; Initialzustände nicht mit Nutzerkorrekturen verwechseln.
-- Quellen: [AppSupport/Application/BorgVRSession.swift](../AppSupport/Application/BorgVRSession.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
+- Lücke: Agent verlangt einen expliziten Bereich und einen aktuellen Zustand; RGB/RGBA bietet nur Transformation und Clipping an.
+- Nächster Schritt: Sichere exakte Snapshots für spätere Wiederherstellung bereitstellen.
+- Quellen: [AppSupport/Application/BorgVRSession.swift](../AppSupport/Application/BorgVRSession.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift)
+- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
 
 <a id="render-wait_capture"></a>
 ### Renderabschluss abwarten und Screenshot aufnehmen
 
 - Kennung: `render.wait_capture`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Bildübertragung oder lokale Datei.
-- Register: `BorgVRRecordedAction.captureScreenshot`, `MacRenderShortcut.screenshot`
-- MCP: `wait_until_rendered`, `capture_screenshot`
-- Native Agentenwerkzeuge: `capture_screenshot`, `wait_until_rendered`
-- Benannte GSC-Befehle (macOS): `waitframes`, `waitloaded`, `waitidle`, `screenshot`
-- Zustandsabfrage: Frame-ID, fehlende Bricks und PNG; Agent erhält nur Renderbilder bei separater Freigabe.
-- Lücke: Agent darf keine Screenshot-Ausgabepfade angeben; GSC-Lade-/Paging-Warten ist nicht vollständig identisch zu wait_until_rendered.
+- Register: `BorgVRRecordedAction.captureScreenshot`, `MacRenderShortcut.screenshot`, `BorgVRRecordedAction.captureExtendedScreenshot`
+- MCP: `wait_until_rendered`, `capture_screenshot`, `capture_extended_screenshot`, `pick_screenshot_positions`
+- Native Agentenwerkzeuge: `capture_screenshot`, `pick_screenshot_positions`, `wait_until_rendered`
+- Benannte GSC-Befehle (macOS): `waitframes`, `waitloaded`, `waitidle`, `screenshot`, `extendedscreenshot`
+- Zustandsabfrage: PNG, optional letzte Positionskarte und erweiterte Aufnahmedatei; Agent bekommt nach Bildfreigabe Screenshot und einzelne Positionsabfragen.
+- Lücke: GSC gibt die erweiterte Aufnahme als Datei aus. Der Agent erhält weder die vollständige Positionskarte noch einen Screenshot-Ausgabepfad.
 - Nächster Schritt: Job-/Frame-/Vollständigkeitszustände sauber trennen; Bildfreigabe und stale-frame-Schutz beibehalten.
 - Quellen: [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [macOSApp/BorgVRScriptRunner.swift](../macOSApp/BorgVRScriptRunner.swift)
 - Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
@@ -644,27 +673,27 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `edit.brush`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Vorbereitung einer Volumenbearbeitung.
 - Register: `BorgVRRecordedAction.configureBrush`, `MacRenderShortcut.erase`, `MacRenderShortcut.restore`, `MacRenderShortcut.smallerBrush`, `MacRenderShortcut.largerBrush`
 - MCP: `get_volume_edit_state`, `configure_volume_brush`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `configure_volume_brush`, `get_volume_edit_state`
 - Benannte GSC-Befehle (macOS): `setvolumebrush`, `setvolumeeditchannels`
-- Zustandsabfrage: get_volume_edit_state mit aktiven Kanälen, Radius, Projektion und Editierstand.
-- Lücke: Im nativen Agenten gesperrt; Schema benutzt oneOf und bestätigt derzeit nicht alle benötigten Werte über dieselben Agentenvalidatoren.
-- Nächster Schritt: Edit-Capability samt Schemakompatibilität und lokalen Freigaben ergänzen; Einheiten explizit halten.
-- Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift)
-- Vorhandene Testquellen: kein spezifischer Test zugeordnet
+- Zustandsabfrage: Der Agent liest get_volume_edit_state und setzt die Bearbeitungskanäle mit configure_volume_brush.
+- Lücke: Agentenwerkzeug ändert ausschließlich Kanäle, nicht den lokalen Pinselmodus, Radius oder Projektionsmodus.
+- Nächster Schritt: Nur bei Bedarf weitere unabhängige Pinselparameter freigeben.
+- Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
 
 <a id="edit-apply"></a>
 ### Volumenbereiche löschen oder wiederherstellen
 
-- Kennung: `edit.apply`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Editierstand und ggf. geteilte Daten ändern.
+- Kennung: `edit.apply`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: persönlichen Editierstand ändern; gemeinsamer Editierstand nur über bestehende UI/MCP/GSC-Workflows.
 - Register: `BorgVRRecordedAction.editVolume`
 - MCP: `edit_volume`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `edit_volume`
 - Benannte GSC-Befehle (macOS): `erasevolume`, `restorevolume`, `editvolume`
-- Zustandsabfrage: get_volume_edit_state und Renderprüfung nach abgeschlossenen Brick-Jobs.
-- Lücke: Agent sperrt Werkzeug. Command-Abschluss ist nicht gleich fertige Hintergrundberechnung; Agenten-Tooldeadline passt nicht automatisch zu großen Edits.
-- Nächster Schritt: Edit-Aufträge mit Samples in physischen Metern, Kanal-/SharePlay-Freigabe, Job-ID und endgültigem Abschluss anbieten.
-- Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
+- Zustandsabfrage: get_volume_edit_state und wait_volume_edits; Bricks angezeigt unabhängig von der Modellantwort.
+- Lücke: Agent kann bis zu 256 Kugelproben pro Aufruf anwenden. Bestätigung ist standardmäßig an, lokal abschaltbar. Bekanntes XYZ in Metern und aktive Kanäle nötig; kein räumliches Raten aus Screenshots, keine Agenten-Edits in SharePlay.
+- Nächster Schritt: Geprüfte Projektions- und Auswahlwerkzeuge für interaktive Regionseingabe sowie bedarfsgerechte Freigaben für geteilte Edits ergänzen.
+- Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
 
 <a id="edit-finish"></a>
 ### Edit-Bricks vorbereiten und deren Abschluss abwarten
@@ -672,13 +701,13 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `edit.finish`; Plattformen: macOS, iOS, visionOS; Kontext: `job`; Wirkung: CPU/GPU, Netzwerk und Persistenz.
 - Register: kein spezifischer Command/UI-Registereintrag
 - MCP: `wait_volume_edits`, `prepare_volume_edits`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `wait_volume_edits`
 - Benannte GSC-Befehle (macOS): `waitvolumeedits`, `preparevolumeedits`, `hasvolumeedits`, `volumeeditsbusy`
-- Zustandsabfrage: get_volume_edit_state.pendingBrickCount/isUpdatingBricks.
-- Lücke: Agent sperrt die Werkzeuge; lange Waits brauchen Polling/Abbruch statt bloß höherer Socket-Fristen.
-- Nächster Schritt: Job-Werkzeuge mit kumulativen Fristen und Commit-/Persistenz-/Renderstatus ergänzen.
-- Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
+- Zustandsabfrage: get_volume_edit_state.bricksReady/pendingBrickCount und wait_volume_edits.timedOut.
+- Lücke: Agent kann begrenzt warten, die lokale UI beobachtet den Abschluss unabhängig davon; keine Aussage über GPU-Atlas oder Bildqualität. Vorbereiten mit erhöhter Priorität bleibt separat.
+- Nächster Schritt: Längere Vorbereitung als abbrechbaren Auftrag mit Fortschritt anbieten.
+- Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
 
 <a id="edit-discard"></a>
 ### Alle Edits im aktiven Zustand verwerfen
@@ -700,11 +729,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `edit.states`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Zustandswechsel und Löschung; eingeschränkt bei SharePlay.
 - Register: `BorgVRRecordedAction.selectEditState`, `BorgVRRecordedAction.duplicateEditState`, `BorgVRRecordedAction.renameEditState`, `BorgVRRecordedAction.deleteEditState`, `BorgVRRecordedAction.restoreEditState`, `BorgVRRecordedAction.installSavedEditState`
 - MCP: `select_edit_state`, `create_edit_state`, `rename_edit_state`, `delete_edit_state`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `select_edit_state`
 - Benannte GSC-Befehle (macOS): `logeditstates`, `selecteditstate`, `neweditstate`, `duplicateeditstate`, `renameeditstate`, `deleteeditstate`
-- Zustandsabfrage: get_volume_edit_state.savedStates/activeStateID.
-- Lücke: Im Agenten gesperrt; absichtlicher Editierstandswechsel beendet derzeit den Kontext statt einen geplanten Übergang zu bilden.
-- Nächster Schritt: Erwartete Standwechsel und lokale Delete-Freigabe einführen; bestehende SharePlay-Sperren behalten.
+- Zustandsabfrage: get_volume_edit_state nennt verfügbare IDs und Namen; select_edit_state übernimmt einen persönlichen Stand oder das Original.
+- Lücke: Erzeugen, Duplizieren, Umbenennen und Löschen bleiben dem Agenten vorerst vorenthalten.
+- Nächster Schritt: Weitere Standverwaltung separat autorisieren; SharePlay-Sperren beibehalten.
 - Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift)
 - Vorhandene Testquellen: [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 
@@ -714,11 +743,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `edit.export`; Plattformen: macOS, iOS, visionOS; Kontext: `job`; Wirkung: neue Datei, kein Export während SharePlay.
 - Register: `BorgVRRecordedAction.exportVolume`
 - MCP: `export_edited_dataset`, `cancel_volume_export`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `cancel_volume_export`, `export_edited_dataset`
 - Benannte GSC-Befehle (macOS): `exportediteddataset`
-- Zustandsabfrage: get_volume_edit_state.export mit Job-ID, Fortschritt und Status.
-- Lücke: Agent sperrt Export; Pfade, Jobkontrolle und lokale Zielauswahl fehlen im Agentenvertrag.
-- Nächster Schritt: Bestehenden Exportjob hinter sicheren Ziel-Handles und gemeinsamer Jobabfrage freigeben.
+- Zustandsabfrage: export_edited_dataset nutzt lokale Ordnerauswahl und Dateinamen; get_volume_edit_state liefert Status; cancel_volume_export begrenzt den Agenten auf seinen eigenen Auftrag.
+- Lücke: Kein Agentenexport während SharePlay und kein Überschreiben.
+- Nächster Schritt: Bei Bedarf zusätzliche Exportformate und Optionen getrennt freigeben.
 - Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
 - Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
 
@@ -840,11 +869,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `state.picture`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Dateizugriff und bestehende Darstellung ersetzen.
 - Register: `BorgVRCommand.restoreDatasetViewState`, `BorgVRRecordedAction.saveVisualizationState`, `MacCommand.saveDatasetState`, `MacCommand.restoreDatasetState`
 - MCP: `save_visualization_state`, `load_visualization_state`
-- Native Agentenwerkzeuge: fehlen
+- Native Agentenwerkzeuge: `save_visualization_state`
 - Benannte GSC-Befehle (macOS): `savestate`, `loadstate`, `savevisualizationstate`, `loadvisualizationstate`, `setviewstate`
-- Zustandsabfrage: get_application_state plus TFs; Bildzustand enthält keine Marker/Messungen.
-- Lücke: Agent sperrt Dateien; lokaler Autosave-Bundle und benannte MCP-Bildkonfiguration sind nicht identische Dokumente.
-- Nächster Schritt: Sichere benannte Zustände, Scope und exakte Snapshots anbieten; Bestandteile eines Save-Bundles ausdrücklich melden.
+- Zustandsabfrage: Agent speichert mit save_visualization_state einen benannten JSON-Darstellungszustand per lokaler Ordnerauswahl, ohne Voxeländerungen, Marker und Messungen.
+- Lücke: load_visualization_state bleibt dem Agenten vorerst vorenthalten; automatischer Speicherstand ist ein anderes Dokument.
+- Nächster Schritt: Lokale Dateiauswahl und Vorschau für explizites Laden ergänzen.
 - Quellen: [AppSupport/Datasets/DatasetViewState.swift](../AppSupport/Datasets/DatasetViewState.swift), [BORGVR-Services/BorgVRMCP.swift](../BORGVR-Services/BorgVRMCP.swift), [macOSApp/RenderView.swift](../macOSApp/RenderView.swift)
 - Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 

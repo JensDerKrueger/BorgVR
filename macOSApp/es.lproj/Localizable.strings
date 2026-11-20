@@ -1188,3 +1188,4 @@
 "mandelbulb_space_required_format" = "Espacio libre necesario durante el cálculo (incluida la reserva): %@\nVolumen final (comprimido, aprox.): %@";
 "mandelbulb_insufficient_space_format" = "No hay suficiente espacio libre en %@.\nNecesario: %@. Disponible: %@";
 "mandelbulb_space_unavailable_format" = "No se pudo determinar el espacio libre en %@.";
+"Extended Screenshot" = "Captura de pantalla ampliada";

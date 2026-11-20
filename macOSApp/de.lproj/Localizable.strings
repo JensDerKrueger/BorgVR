@@ -1192,3 +1192,4 @@
 "mandelbulb_space_required_format" = "Während der Berechnung frei benötigt (inkl. Reserve): %@\nFertiger Datensatz (komprimiert, ca.): %@";
 "mandelbulb_insufficient_space_format" = "Nicht genügend freier Speicherplatz unter %@.\nBenötigt: %@. Verfügbar: %@.";
 "mandelbulb_space_unavailable_format" = "Der freie Speicherplatz unter %@ konnte nicht ermittelt werden.";
+"Extended Screenshot" = "Erweitertes Bildschirmfoto";

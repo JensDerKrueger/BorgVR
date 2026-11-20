@@ -6,6 +6,7 @@ import io
 import json
 import warnings
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
@@ -17,24 +18,44 @@ MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 MAX_RESULT_BYTES = 256 * 1024
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_HISTORY_BYTES = 8 * 1024 * 1024
+MAX_TOOLS = 48
 
 # Annotation bulk deletion still requires local approval in the native client.
 ALLOWED_TOOLS = frozenset({
-    "search_datasets", "open_dataset",
+    "search_datasets", "open_dataset", "close_dataset", "get_command_history",
     "get_application_state", "get_transfer_function", "get_background",
     "set_render_mode", "set_transform", "rotate_view", "set_iso_value",
     "set_clipping", "set_lighting", "set_background", "set_transfer_function",
-    "set_bounding_box", "set_screen_projection", "wait_until_rendered",
-    "capture_screenshot",
+    "set_bounding_box", "set_screen_projection", "reset_state", "get_volume_edit_state", "edit_volume",
+    "wait_volume_edits", "wait_until_rendered",
+    "select_edit_state", "configure_volume_brush", "save_visualization_state", "export_edited_dataset", "cancel_volume_export",
+    "import_volume", "fuse_volumes", "get_import_status", "cancel_import",
+    "capture_screenshot", "pick_screenshot_positions",
     "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
     "list_measurements", "upsert_measurement", "set_annotation_visibility",
     "remove_object", "remove_measurement", "clear_annotations",
 })
-APPLICATION_TOOLS = frozenset({"get_application_state", "search_datasets", "open_dataset"})
+CONVERSION_TOOLS = frozenset({"import_volume", "fuse_volumes"})
+LOCAL_CLIENT_TOOLS = frozenset({"get_command_history", "import_volume", "fuse_volumes", "get_import_status", "cancel_import"})
+APPLICATION_TOOLS = LOCAL_CLIENT_TOOLS | {"get_application_state", "search_datasets", "open_dataset"}
+DATASET_TRANSITIONS = frozenset({"open_dataset", "close_dataset", "select_edit_state"})
+FILE_TOOLS = CONVERSION_TOOLS | {"save_visualization_state", "export_edited_dataset"}
+
+
+def changes_view(name):
+    return name.startswith("set_") or name in DATASET_TRANSITIONS or name in FILE_TOOLS or name in {
+        "rotate_view", "reset_state", "edit_volume", "configure_volume_brush", "cancel_volume_export", "cancel_import",
+    }
 
 
 class ProtocolError(ValueError):
     pass
+
+
+class ToolArgumentError(ProtocolError):
+    def __init__(self, message: str, reason: str, field: str | None = None):
+        super().__init__(message)
+        self.reason, self.field = reason, field
 
 
 class Message(BaseModel):
@@ -59,7 +80,7 @@ class Hello(Message):
     application_session: bool = False
     dataset_opening: bool = False
     context_id: str = Field(min_length=1, max_length=128)
-    tools: list[ToolDefinition] = Field(max_length=32)
+    tools: list[ToolDefinition] = Field(max_length=MAX_TOOLS)
     execution_limits: ExecutionLimits | None = None
     collaboration: bool = False
     knowledge: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(default_factory=list, max_length=16)
@@ -80,9 +101,9 @@ class UserMessage(Message):
 
 
 class DatasetTransition(Message):
-    dataset_id: str = Field(min_length=1, max_length=128)
+    dataset_id: Annotated[str, Field(min_length=1, max_length=128)] | None
     context_id: str = Field(min_length=1, max_length=128)
-    tools: list[ToolDefinition] = Field(max_length=32)
+    tools: list[ToolDefinition] = Field(max_length=MAX_TOOLS)
 
 
 class ToolResult(Message):
@@ -130,7 +151,7 @@ class ContextChanged(Message):
     type: Literal["context_changed"]
     dataset_id: str | None = Field(min_length=1, max_length=128)
     context_id: str = Field(min_length=1, max_length=128)
-    tools: list[ToolDefinition] | None = Field(default=None, max_length=32)
+    tools: list[ToolDefinition] | None = Field(default=None, max_length=MAX_TOOLS)
 
 
 def json_bytes(value: Any) -> bytes:
@@ -202,35 +223,110 @@ def select_tools(definitions: list[ToolDefinition]) -> list[ToolDefinition]:
             schema["properties"] = {"include_alpha": {"type": "boolean"}}
             schema.pop("required", None)
         selected.append(definition)
-    if any(d.name.startswith("set_") or d.name == "rotate_view" or d.name in ANNOTATION_WRITES for d in selected):
+    if any(changes_view(d.name) or d.name in ANNOTATION_WRITES for d in selected):
         if "get_application_state" not in {d.name for d in selected}:
             raise ProtocolError("Visualization changes require get_application_state")
     return selected
 
 
+_SCHEMA_FAILURE_REASONS = {
+    "additionalProperties": "unexpected_fields",
+    "required": "missing_fields",
+    "type": "wrong_type",
+    "enum": "invalid_choice",
+    "const": "invalid_choice",
+    "maxItems": "too_many_items",
+    "minItems": "too_few_items",
+    "uniqueItems": "duplicate_items",
+    "minLength": "text_too_short",
+    "maxLength": "text_too_long",
+    "minimum": "below_minimum",
+    "exclusiveMinimum": "below_minimum",
+    "maximum": "above_maximum",
+    "exclusiveMaximum": "above_maximum",
+    "oneOf": "invalid_variant",
+    "anyOf": "invalid_variant",
+    "format": "invalid_format",
+    "pattern": "invalid_format",
+}
+
+
+def _edit_schema_field(name, path):
+    # Use only fixed public field labels, never instance keys, indices or values.
+    if name != "edit_volume" or not path:
+        return None
+    if path[0] == "mode":
+        return "mode"
+    if path[0] != "samples":
+        return None
+    if len(path) == 1:
+        return "samples"
+    if len(path) > 2 and path[2] == "center_meters":
+        return "samples.item.center_meters"
+    if len(path) > 2 and path[2] == "radius_meters":
+        return "samples.item.radius_meters"
+    return "samples.item"
+
+
 def validate_arguments(definition: ToolDefinition, arguments: dict) -> None:
     if len(json_bytes(arguments)) > MAX_RESULT_BYTES:
-        raise ProtocolError("Tool arguments too large")
-    if not Draft202012Validator(definition.inputSchema).is_valid(arguments):
+        raise ToolArgumentError("Tool arguments too large", "arguments_too_large")
+    failure = next(Draft202012Validator(definition.inputSchema).iter_errors(arguments), None)
+    if failure is not None:
+        reason = _SCHEMA_FAILURE_REASONS.get(failure.validator, "schema_constraint_failed")
+        field = _edit_schema_field(definition.name, failure.absolute_path)
         if definition.inputSchema.get("properties") == {}:
-            raise ProtocolError(f"Tool {definition.name} takes no arguments. Retry with exactly {{}}. "
-                                "Do not include reason, action, or any other fields.")
+            raise ToolArgumentError(f"Tool {definition.name} takes no arguments. Retry with exactly {{}}. "
+                                    "Do not include reason, action, or any other fields.", reason, field)
         if definition.name == "set_transfer_function":
-            raise ProtocolError(
+            raise ToolArgumentError(
                 "Invalid TF arguments. Each samples entry must contain EXACTLY four integer bytes "
                 "[R,G,B,A] in 0...255, NOT [position,R,G,B,A] and not normalized floats. "
                 "Positions are implicit and uniformly spaced across [0,1]; do not add a position. "
                 "Use a valid zero-based channel and respect the advertised sample-count limits. "
-                'Retry with a short ramp, for example {"channel":0,"samples":[[0,0,0,0],[255,255,255,255]]}.'
+                'Retry with a short ramp, for example {"channel":0,"samples":[[0,0,0,0],[255,255,255,255]]}.',
+                reason, field,
             )
-        raise ProtocolError("Arguments do not match the advertised tool schema. "
-                            "Use only its declared properties, include required fields, and respect their types and bounds.")
+        raise ToolArgumentError("Arguments do not match the advertised tool schema. "
+                                "Use only its declared properties, include required fields, and respect their types and bounds.",
+                                reason, field)
     if definition.name == "capture_screenshot" and set(arguments) - {"include_alpha"}:
-        raise ProtocolError("Saving screenshot files is not allowed")
+        raise ToolArgumentError("Saving screenshot files is not allowed", "unexpected_fields")
+    if definition.name == "pick_screenshot_positions":
+        try:
+            value = arguments["screenshot_id"]
+            if not isinstance(value, str) or str(UUID(value)) != value.lower():
+                raise ValueError("Non-canonical capture ID")
+        except (KeyError, ValueError) as error:
+            raise ToolArgumentError("Use the exact screenshotId returned by capture_screenshot",
+                                    "invalid_screenshot_id") from error
+    if definition.name == "reset_state" and (set(arguments) != {"scope"} or arguments["scope"] not in (
+            "transform", "clipping", "transfer_function", "lighting", "all")):
+        raise ToolArgumentError("Reset requires an explicit visualization scope", "invalid_reset_scope")
+    if definition.name == "edit_volume":
+        feedback = "Use erase or restore with 1 to 256 spherical samples in physical meters"
+        if {"mode", "samples"} - set(arguments):
+            raise ToolArgumentError(feedback, "missing_fields")
+        if set(arguments) - {"mode", "samples"}:
+            raise ToolArgumentError(feedback, "unexpected_fields")
+        if arguments["mode"] not in ("erase", "restore"):
+            raise ToolArgumentError(feedback, "invalid_choice", "mode")
+        samples = arguments["samples"]
+        if not isinstance(samples, list):
+            raise ToolArgumentError(feedback, "wrong_type", "samples")
+        if not samples:
+            raise ToolArgumentError(feedback, "too_few_items", "samples")
+        if len(samples) > 256:
+            raise ToolArgumentError(feedback, "too_many_items", "samples")
+    if definition.name == "wait_volume_edits" and (
+        set(arguments) - {"timeout_seconds"} or type(arguments.get("timeout_seconds", 5)) not in (int, float)
+        or not 0.1 <= arguments.get("timeout_seconds", 5) <= 10
+    ):
+        raise ToolArgumentError("Volume edit waits are between 0.1 and 10 seconds", "invalid_edit_wait")
     try:
         validate_annotation_arguments(definition.name, arguments)
     except ValueError as error:
-        raise ProtocolError(str(error)) from error
+        raise ToolArgumentError(str(error), "annotation_constraint_failed") from error
 
 
 def decode_image(value: str) -> bytes:

@@ -20,11 +20,16 @@ final class VoiceAgentController: ObservableObject {
   enum ConnectionState { case disconnected, connecting, ready }
   let settings: VoiceAgentSettings
   let speech = VoiceAgentSpeech()
+  let demonstrations = WorkflowDemonstrationRecorder()
+  let workflowUpload = WorkflowUpload()
   @Published private(set) var connectionState: ConnectionState = .disconnected
   @Published private(set) var busy = false
+  @Published private(set) var canResume = false
   @Published private(set) var interrupting = false
   @Published private(set) var collaborationQuestion: VoiceAgentQuestion?
   @Published private(set) var annotationDeletion: VoiceAgentAnnotationDeletion?
+  @Published private(set) var volumeEditApproval: VoiceAgentVolumeEdit?
+  @Published private(set) var volumeBrickStatus: VoiceAgentVolumeBrickStatus?
   @Published private(set) var ruleProposals: [VoiceAgentQuestion] = []
   @Published private(set) var userIsInteracting = false
   @Published private(set) var model = ""
@@ -33,6 +38,9 @@ final class VoiceAgentController: ObservableObject {
   @Published private(set) var status = voiceAgentText("Disconnected")
   @Published var errorText: String?
   @Published var isPresented = false
+  @Published private(set) var capturingDemonstrationScreenshot = false
+  @Published var demonstrationScreenshotFailed = false
+  @Published private(set) var conversationStorageError: String?
   private var bridge: (any VoiceAgentApplicationBridge)?
   private var context: VoiceAgentContext?
   private var scopeOpening: VoiceAgentContext?
@@ -42,11 +50,27 @@ final class VoiceAgentController: ObservableObject {
   private var requestID: String?
   private var acknowledgedRequestID: String?
   private var lastAssistantResponse: (requestID: String, messageID: UUID)?
-  private var deletionReply: CheckedContinuation<Bool, Never>?
+  private var approvalReply: CheckedContinuation<Bool, Never>?
+  @Published private(set) var fileSelection: VoiceAgentFileSelection?
+  @Published private(set) var importStatus: VoiceAgentImportStatus?
+  private var importObservation: AnyCancellable?
+  private var fileSelectionReply: CheckedContinuation<URL?, Never>?
+  private var declinedFileRequestID: String?
   private var declinedDeletionRequestID: String?
+  private var declinedVolumeEditRequestID: String?
+  private var volumeBrickMonitor: Task<Void, Never>?
+  private var volumeBrickContext: VoiceAgentContext?
   private let diagnosticLog = Logger(subsystem: "de.uni-due.BorgVR", category: "VoiceAgent")
   private var catalog: [[String: Any]] = []
   private var ledger = VoiceAgentCallLedger()
+  private var commandHistory = VoiceAgentCommandHistory<VoiceAgentContext?>()
+  private var historyOwner: (address: String, revision: UUID)?
+  private let conversationStore: VoiceAgentConversationStore
+  private var archiveOwner: UUID
+  private var savingConversation: Bool
+  private var restoredHistoryScopes: Set<VoiceAgentContext> = []
+  private var conversationDirty = false
+  private var conversationSaveTask: Task<Void, Never>?
   private var readState = false
   private var changesApplied = false
   private var pendingMutation = false
@@ -67,6 +91,12 @@ final class VoiceAgentController: ObservableObject {
   private var toolDeadline: Task<Void, Never>?
   private var settingsObservation: AnyCancellable?
   private var commandObservation: AnyCancellable?
+  private var demonstrationObservation: AnyCancellable?
+  private var demonstrationEvidenceObservation: AnyCancellable?
+  private var demonstrationCaptureID: UUID?
+  private var demonstrationImageTask: Task<Data, Error>?
+  private var demonstrationCaptureChanged = false
+  private var workflowProfileObservation: AnyCancellable?
   private var collaborationEnabled = false
   private var viewRevision = 0
   private var changedDomains: Set<String> = []
@@ -79,30 +109,74 @@ final class VoiceAgentController: ObservableObject {
   private var openingTarget: String?
   private var openingContext: VoiceAgentContext?
   private var openingPreviousContext: VoiceAgentContext?
+  private var datasetChange: DatasetChange?
+
+  private enum DatasetChange {
+    case close(VoiceAgentContext)
+    case select(VoiceAgentContext, UUID?)
+
+    func permits(_ current: VoiceAgentContext?) -> Bool {
+      switch self {
+        case .close(let old): return current == nil || current == old
+        case .select(let old, let wanted):
+          guard let current, current.hasSameOpening(as: old) else { return false }
+          return current == old || wanted == nil || current.editStateID == wanted
+      }
+    }
+  }
   private var lastActivity = Date()
 
-  init(settings: VoiceAgentSettings? = nil) {
-    self.settings = settings ?? VoiceAgentSettings()
+  init(settings: VoiceAgentSettings? = nil, conversationStore: VoiceAgentConversationStore = .init()) {
+    let settings = settings ?? VoiceAgentSettings()
+    self.settings = settings
+    self.conversationStore = conversationStore
+    archiveOwner = settings.archiveOwnerID
+    savingConversation = settings.savesConversation
+    if savingConversation {
+      do {
+        if let saved = try conversationStore.load(owner: archiveOwner) {
+          commandHistory = saved
+          restoredHistoryScopes = Set(saved.scopes.compactMap { $0 })
+          historyOwner = (settings.address, settings.revision)
+          messages = saved.transcript.map { VoiceAgentMessage(user: $0.user, text: $0.text) }
+        }
+      } catch { conversationStorageError = voiceAgentText("Could not save or restore the local conversation.") }
+    } else if FileManager.default.fileExists(atPath: conversationStore.file.path) {
+      // Finish any pending deletion if the app stopped right after the preference changed.
+      do { try conversationStore.remove() }
+      catch { conversationStorageError = voiceAgentText("Could not remove the local conversation.") }
+    }
     speech.onFinal = { [weak self] text in
       Task { @MainActor [weak self] in await self?.submit(text) }
     }
     speech.onFailure = { [weak self] error in self?.errorText = error.localizedDescription }
+    workflowProfileObservation = workflowUpload.profileChanges.sink { [weak self] current in
+      self?.clearDemonstrationCapture()
+      self?.demonstrations.checkDestination(current)
+    }
     settingsObservation = self.settings.objectWillChange.sink { [weak self] _ in
       Task { @MainActor [weak self] in
         guard let self else { return }
         if !self.settings.speaks { self.speech.stopSpeaking() }
+        if !self.settings.enabled { self.pauseDemonstration() }
+        self.checkCommandHistoryOwner()
+        self.updateConversationStoragePreference()
+        self.demonstrations.checkDestination(self.workflowUpload.destination(for: self.settings))
         if let identity = self.connectionIdentity, identity != self.settings.identity { self.disconnect() }
       }
     }
   }
 
   deinit {
-    deletionReply?.resume(returning: false)
+    approvalReply?.resume(returning: false)
+    volumeBrickMonitor?.cancel()
     receiver?.cancel()
     heartbeat?.cancel()
+    conversationSaveTask?.cancel()
     deadline?.cancel()
     toolDeadline?.cancel()
     toolTask?.cancel()
+    demonstrationImageTask?.cancel()
     interventionTask?.cancel()
     collaborationSendTask?.cancel()
     contextUpdateTask?.cancel()
@@ -112,12 +186,130 @@ final class VoiceAgentController: ObservableObject {
   }
 
   func configure(bridge: any VoiceAgentApplicationBridge) {
+    pauseDemonstration()
+    if self.bridge != nil && !settings.savesConversation { commandHistory.clear() }
+    clearVolumeBrickStatus()
     disconnect()
     self.bridge = bridge
+    importObservation = bridge.importUpdates.sink { [weak self] in self?.importStatus = $0 }
     commandObservation = bridge.changes.sink { [weak self] event in
       self?.observeCommand(event)
     }
+    demonstrationObservation = bridge.demonstrationActions.sink { [weak self] action in
+      guard let self else { return }
+      if self.capturingDemonstrationScreenshot { self.demonstrationCaptureChanged = true }
+      guard self.demonstrations.active else { return }
+      self.demonstrations.checkDestination(self.workflowUpload.destination(for: self.settings))
+      self.demonstrations.record(action, context: self.bridge?.applicationDatasetContext)
+    }
+    demonstrationEvidenceObservation = bridge.demonstrationEvidenceInvalidations.sink { [weak self] _ in
+      if self?.capturingDemonstrationScreenshot == true { self?.demonstrationCaptureChanged = true }
+      self?.demonstrations.invalidateEvidence()
+    }
     invalidateContext()
+  }
+
+  var canStartDemonstration: Bool {
+    settings.enabled && !busy && !speech.isRecording && !capturingDemonstrationScreenshot &&
+      !demonstrations.active && demonstrations.completed == nil && bridge?.context != nil
+  }
+
+  func startDemonstration(goal: WorkflowDemonstrationGoal, includeViewSettings: Bool = false) {
+    guard canStartDemonstration, let context = bridge?.context else { return }
+    let before = includeViewSettings ? bridge?.workflowViewEvidence() : nil
+    demonstrations.start(goal: goal, context: context, destination: workflowUpload.destination(for: settings), before: before)
+  }
+
+  func startScreenshotDemonstration(goal: WorkflowDemonstrationGoal) async {
+    guard canStartDemonstration, let bridge, let context = bridge.context,
+          let before = bridge.workflowViewEvidence() else {
+      demonstrationScreenshotFailed = true
+      return
+    }
+    let destination = workflowUpload.destination(for: settings)
+    let capture = beginDemonstrationCapture()
+    defer { endDemonstrationCapture(capture) }
+    do {
+      let image = try await captureDemonstrationImage(bridge, in: context)
+      guard capture == demonstrationCaptureID else { return }
+      guard !demonstrationCaptureChanged, settings.enabled, !busy, !speech.isRecording, bridge.context == context,
+            destination == workflowUpload.destination(for: settings) else { throw VoiceAgentError.contextChanged }
+      demonstrations.start(goal: goal, context: context, destination: destination, before: before, beforeImage: image)
+    } catch {
+      if capture == demonstrationCaptureID { demonstrationScreenshotFailed = true }
+    }
+  }
+
+  func pauseDemonstration() {
+    clearDemonstrationCapture()
+    demonstrations.finish(end: .interrupted)
+  }
+
+  func finishDemonstration(outcome: WorkflowDemonstration.Outcome = .unknown) async {
+    guard !capturingDemonstrationScreenshot else { return }
+    demonstrations.checkDestination(workflowUpload.destination(for: settings))
+    demonstrations.checkContext(bridge?.applicationDatasetContext)
+    var after = demonstrations.capturingEvidence ? bridge?.workflowViewEvidence() : nil
+    var image: Data?
+    if demonstrations.capturingScreenshots, let bridge, let context = bridge.context {
+      let capture = beginDemonstrationCapture()
+      defer { endDemonstrationCapture(capture) }
+      do {
+        guard after != nil else { throw VoiceAgentError.commandFailed }
+        let captured = try await captureDemonstrationImage(bridge, in: context)
+        guard !demonstrationCaptureChanged else { throw VoiceAgentError.contextChanged }
+        image = captured
+      } catch {
+        if capture == demonstrationCaptureID { demonstrationScreenshotFailed = true }
+        // A command during the screenshot can also make the numeric end state stale.
+        after = demonstrations.capturingEvidence ? bridge.workflowViewEvidence() : nil
+      }
+      guard capture == demonstrationCaptureID else { return }
+      demonstrations.checkDestination(workflowUpload.destination(for: settings))
+      demonstrations.checkContext(bridge.applicationDatasetContext)
+    } else if demonstrations.requestedScreenshots {
+      demonstrationScreenshotFailed = true
+    }
+    demonstrations.finish(outcome: outcome, after: after, afterImage: image)
+  }
+
+  private func beginDemonstrationCapture() -> UUID {
+    let capture = UUID()
+    demonstrationCaptureID = capture
+    demonstrationCaptureChanged = false
+    capturingDemonstrationScreenshot = true
+    return capture
+  }
+
+  private func endDemonstrationCapture(_ capture: UUID) {
+    if capture == demonstrationCaptureID { clearDemonstrationCapture() }
+  }
+
+  private func clearDemonstrationCapture() {
+    guard demonstrationCaptureID != nil else { return }
+    demonstrationCaptureID = nil
+    demonstrationImageTask?.cancel()
+    demonstrationImageTask = nil
+    capturingDemonstrationScreenshot = false
+  }
+
+  private func captureDemonstrationImage(_ bridge: any VoiceAgentApplicationBridge, in context: VoiceAgentContext) async throws -> Data {
+    let task = Task {
+      let png = try await bridge.captureWorkflowScreenshot(in: context)
+      try Task.checkCancellation()
+      return try Self.agentImage(png, sizes: [768, 512, 256], maximumBytes: 512 * 1024).data
+    }
+    demonstrationImageTask = task
+    return try await task.value
+  }
+
+  func queueDemonstration(_ episode: WorkflowDemonstration) async {
+    guard demonstrations.screenshotExport == nil, episode.id == demonstrations.completed?.id,
+          let owner = demonstrations.destination,
+          workflowUpload.enqueue(episode, capturedFor: owner, settings: settings)
+    else { return }
+    demonstrations.discard(id: episode.id)
+    await workflowUpload.sync(settings: settings)
   }
 
   var hasDataset: Bool { bridge?.context != nil && bridge?.rendererReady == true }
@@ -132,11 +324,18 @@ final class VoiceAgentController: ObservableObject {
   }
 
   func invalidateContext() {
+    demonstrations.checkContext(bridge?.applicationDatasetContext)
+    if let tracked = volumeBrickContext, bridge?.applicationDatasetContext != tracked { clearVolumeBrickStatus() }
     let current = bridge?.context
+    rebindStoredHistory(to: current)
     let editing = userIsInteracting && changedDomains.contains("volume") &&
       (current == nil || current?.openingID == context?.openingID) &&
       bridge?.datasetID == context?.datasetID
     datasetOpeningID = bridge?.rendererReady == true ? (current?.openingID ?? (editing ? context?.openingID : nil)) : nil
+    if let datasetChange {
+      if !datasetChange.permits(bridge?.applicationDatasetContext) { disconnect(reason: VoiceAgentError.contextChanged) }
+      return
+    }
     if let openingContext {
       if bridge?.applicationDatasetContext?.hasSameOpening(as: openingContext) != true { disconnect(reason: VoiceAgentError.contextChanged) }
       return
@@ -170,6 +369,7 @@ final class VoiceAgentController: ObservableObject {
   private var wireDatasetID: Any { context?.datasetID as Any? ?? NSNull() }
 
   private func updateContext(_ current: VoiceAgentContext?) {
+    canResume = false
     context = current
     scopeOpening = bridge?.applicationDatasetContext
     contextID = UUID().uuidString
@@ -198,7 +398,10 @@ final class VoiceAgentController: ObservableObject {
   }
 
   func disconnect(reason: Error? = nil) {
+    flushConversationSave()
     if let annotationDeletion { resolveAnnotationDeletion(id: annotationDeletion.id, accepted: false) }
+    if let volumeEditApproval { resolveVolumeEditApproval(id: volumeEditApproval.id, accepted: false) }
+    if let fileSelection { resolveFileSelection(id: fileSelection.id, url: nil) }
     var reportedReason = reason
     if busy, let error = reason as? VoiceAgentError,
        [.connection, .timedOut, .commandFailed].contains(error), changesApplied || pendingMutation {
@@ -236,6 +439,7 @@ final class VoiceAgentController: ObservableObject {
     openingTarget = nil
     openingContext = nil
     openingPreviousContext = nil
+    datasetChange = nil
     interventionTask = nil
     collaborationSendTask = nil
     collaborationQuestion = nil
@@ -249,6 +453,7 @@ final class VoiceAgentController: ObservableObject {
     pendingCallID = nil
     changesApplied = false
     pendingMutation = false
+    canResume = false
     catalog = []
     ledger = VoiceAgentCallLedger()
     busy = false
@@ -260,6 +465,9 @@ final class VoiceAgentController: ObservableObject {
 
   func newConversation() {
     disconnect()
+    commandHistory.clear()
+    restoredHistoryScopes.removeAll()
+    removeSavedConversation()
     messages = []
     errorText = nil
     model = ""
@@ -317,6 +525,10 @@ final class VoiceAgentController: ObservableObject {
     guard connectionState != .connecting else { throw CancellationError() }
     let endpoint = try VoiceAgentEndpoint(settings.address)
     let token = try settings.token()
+    checkCommandHistoryOwner()
+    updateConversationStoragePreference()
+    historyOwner = (settings.address, settings.revision)
+    rebindStoredHistory(to: captured)
     disconnect()
     interrupting = replacing
     errorText = nil
@@ -357,7 +569,7 @@ final class VoiceAgentController: ObservableObject {
           let sessionID = ready["session_id"] as? String, !sessionID.isEmpty, sessionID.utf8.count <= 128,
           let capabilities = ready["capabilities"] as? [String: Any],
           capabilities["vision"] as? Bool == true, capabilities["tool_calling"] as? Bool == true,
-          let accepted = ready["tools"] as? [String], accepted.count <= 32,
+          let accepted = ready["tools"] as? [String], accepted.count <= VoiceAgentPolicy.maximumTools,
           accepted.contains("get_application_state"), Set(accepted).count == accepted.count,
           Set(accepted).isSubset(of: Set(catalog.compactMap { $0["name"] as? String }))
     else { throw VoiceAgentError.protocolViolation }
@@ -430,6 +642,7 @@ final class VoiceAgentController: ObservableObject {
     guard !speech.isRecording, !interrupting else { return }
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty, trimmed.count <= 8192 else { return }
+    pauseDemonstration()
     if collaborationQuestion != nil {
       await answerCollaboration(trimmed)
       return
@@ -440,10 +653,17 @@ final class VoiceAgentController: ObservableObject {
       status = voiceAgentText("Interrupting…")
       speech.stopSpeaking()
       if let annotationDeletion { resolveAnnotationDeletion(id: annotationDeletion.id, accepted: false) }
+      if let volumeEditApproval { resolveVolumeEditApproval(id: volumeEditApproval.id, accepted: false) }
+      if let fileSelection { resolveFileSelection(id: fileSelection.id, url: nil) }
       resumeQueuedPromptIfSafe()
       return
     }
     await sendPrompt(trimmed)
+  }
+
+  func resumePartialTask() async {
+    guard canResume, !busy, connectionState == .ready else { return }
+    await submit(voiceAgentText("Continue"))
   }
 
   private func sendPrompt(_ trimmed: String, preserving transcript: [VoiceAgentMessage]? = nil) async {
@@ -452,6 +672,7 @@ final class VoiceAgentController: ObservableObject {
       try await establishConnection(replacing: transcript != nil)
       operationGeneration = generation
       try requireContext()
+      pauseDemonstration()
       if let transcript { messages = transcript }
       guard turns < 64 else { throw VoiceAgentError.protocolViolation }
       turns += 1
@@ -463,6 +684,7 @@ final class VoiceAgentController: ObservableObject {
       let id = UUID().uuidString
       requestID = id
       busy = true
+      canResume = false
       interrupting = false
       status = voiceAgentText("Working…")
       append(user: true, text: trimmed)
@@ -513,22 +735,100 @@ final class VoiceAgentController: ObservableObject {
   func resolveAnnotationDeletion(id: UUID, accepted: Bool) {
     guard annotationDeletion?.id == id else { return }
     annotationDeletion = nil
-    let continuation = deletionReply
-    deletionReply = nil
     if !accepted { declinedDeletionRequestID = requestID }
-    status = voiceAgentText("Working…")
-    continuation?.resume(returning: accepted)
+    finishLocalApproval(accepted)
   }
 
   private func requestAnnotationDeletion(_ preview: VoiceAgentAnnotationDeletion) async -> Bool {
     await withCheckedContinuation { continuation in
-      deletionReply = continuation
+      approvalReply = continuation
       annotationDeletion = preview
       status = voiceAgentText("Waiting for deletion approval")
     }
   }
 
+  func resolveVolumeEditApproval(id: UUID, accepted: Bool, alwaysApprove: Bool = false) {
+    guard volumeEditApproval?.id == id else { return }
+    if accepted && alwaysApprove { settings.confirmsVolumeEdits = false }
+    volumeEditApproval = nil
+    if !accepted { declinedVolumeEditRequestID = requestID }
+    finishLocalApproval(accepted)
+  }
+
+  private func requestVolumeEditApproval(_ preview: VoiceAgentVolumeEdit) async -> Bool {
+    await withCheckedContinuation { continuation in
+      approvalReply = continuation
+      volumeEditApproval = preview
+      status = voiceAgentText("Waiting for volume edit approval")
+    }
+  }
+
+  private func finishLocalApproval(_ accepted: Bool) {
+    let continuation = approvalReply
+    approvalReply = nil
+    status = voiceAgentText("Working…")
+    continuation?.resume(returning: accepted)
+  }
+
+  func resolveFileSelection(id: UUID, url: URL?) {
+    guard fileSelection?.id == id else { return }
+    fileSelection = nil
+    if url == nil { declinedFileRequestID = requestID }
+    let continuation = fileSelectionReply
+    fileSelectionReply = nil
+    status = voiceAgentText("Working…")
+    continuation?.resume(returning: url)
+  }
+
+  func cancelImport(id: UUID) { bridge?.cancelImport(id: id) }
+
+  var presentedFileSelection: VoiceAgentFileSelection? { fileSelection ?? importStatus?.fileSelection }
+
+  func resolvePresentedFileSelection(id: UUID, url: URL?) {
+    if fileSelection?.id == id { resolveFileSelection(id: id, url: url) }
+    else { bridge?.resolveImportFileSelection(id: id, url: url) }
+  }
+
+  private func requestFileSelection(_ selection: VoiceAgentFileSelection) async -> URL? {
+    guard !Task.isCancelled, declinedFileRequestID != requestID else { return nil }
+    return await withCheckedContinuation { continuation in
+      fileSelectionReply = continuation
+      fileSelection = selection
+      status = voiceAgentText("Waiting for file selection")
+    }
+  }
+
+  private func trackVolumeBricks() {
+    clearVolumeBrickStatus()
+    guard let expected = bridge?.context, let initial = bridge?.volumeBrickStatus() else { return }
+    volumeBrickContext = expected
+    volumeBrickStatus = initial
+    guard initial != .ready else { return }
+    volumeBrickMonitor = Task { @MainActor [weak self] in
+      while !Task.isCancelled {
+        do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
+        guard let self else { return }
+        guard self.bridge?.applicationDatasetContext == expected else { self.clearVolumeBrickStatus(); return }
+        guard let current = self.bridge?.volumeBrickStatus() else { continue }
+        if self.volumeBrickStatus != current { self.volumeBrickStatus = current }
+        if current == .ready { self.volumeBrickMonitor = nil; return }
+      }
+    }
+  }
+
+  private func clearVolumeBrickStatus() {
+    volumeBrickMonitor?.cancel()
+    volumeBrickMonitor = nil
+    volumeBrickContext = nil
+    volumeBrickStatus = nil
+  }
+
   private func requireContext() throws {
+    if let datasetChange {
+      guard datasetChange.permits(bridge?.applicationDatasetContext), settings.enabled,
+            connectionIdentity == settings.identity else { throw VoiceAgentError.contextChanged }
+      return
+    }
     if let openingContext {
       guard bridge?.applicationDatasetContext?.hasSameOpening(as: openingContext) == true, settings.enabled,
             connectionIdentity == settings.identity else { throw VoiceAgentError.contextChanged }
@@ -551,7 +851,7 @@ final class VoiceAgentController: ObservableObject {
     else { throw VoiceAgentError.protocolViolation }
     if updatingContext {
       guard type == "context_updated", event["context_id"] as? String == contextID,
-            let accepted = event["tools"] as? [String], accepted.count <= 32,
+            let accepted = event["tools"] as? [String], accepted.count <= VoiceAgentPolicy.maximumTools,
             accepted.contains("get_application_state"), Set(accepted).count == accepted.count,
             Set(accepted).isSubset(of: Set(catalog.compactMap { $0["name"] as? String }))
       else { throw VoiceAgentError.protocolViolation }
@@ -590,6 +890,7 @@ final class VoiceAgentController: ObservableObject {
         status = voiceAgentText("Paused for your changes")
       case "collaboration_resumed":
         guard collaborationEnabled else { throw VoiceAgentError.protocolViolation }
+        collaborationQuestion = nil
         status = voiceAgentText("Working…")
       case "collaboration_question":
         guard collaborationEnabled, collaborationQuestion == nil,
@@ -608,8 +909,23 @@ final class VoiceAgentController: ObservableObject {
         else { throw VoiceAgentError.protocolViolation }
         ruleProposals.append(.init(id: proposalID, text: text))
       case "assistant_message":
-        guard let text = event["text"] as? String, text.count <= 8192, event["final"] is Bool
+        guard var text = event["text"] as? String, text.count <= 8192, let final = event["final"] as? Bool
         else { throw VoiceAgentError.protocolViolation }
+        if let partial = event["partial"] as? [String: Any], final,
+           let count = partial["confirmed_volume_edits"] as? Int, (0...65536).contains(count) {
+          canResume = true
+          text = voiceAgentText("I completed part of the task, but couldn't finish or check the whole result.")
+          if count > 0 {
+            text += " " + String(format: voiceAgentText("Confirmed volume edit commands: %lld."), Int64(count))
+          }
+          text += "\n\n" + voiceAgentText("Would you like me to continue?")
+        } else if final, event["resume_unavailable"] as? Bool == true {
+          text = voiceAgentText("There is no paused task in this session. Tell me what you would like me to do next.")
+        }
+        if final {
+          commandHistory.appendMessage(scope: context, user: false, text: text)
+          scheduleConversationSave()
+        }
         if let previous = lastAssistantResponse, previous.requestID == requestID,
            let last = messages.last, last.id == previous.messageID,
            last.text.trimmingCharacters(in: .whitespacesAndNewlines) == text.trimmingCharacters(in: .whitespacesAndNewlines) {
@@ -623,8 +939,7 @@ final class VoiceAgentController: ObservableObject {
       case "tool_call": try startTool(event)
       case "tool_cancel":
         guard event["call_id"] as? String == pendingCallID else { throw VoiceAgentError.protocolViolation }
-        throw VoiceAgentPolicy.failure(code: nil, changesApplied: changesApplied,
-                                       completionUncertain: pendingMutation)
+        showTurnFailure(uncertain: pendingMutation)
       case "completed":
         guard pendingCallID == nil else { throw VoiceAgentError.protocolViolation }
         self.requestID = nil
@@ -635,10 +950,26 @@ final class VoiceAgentController: ObservableObject {
       case "cancelled": disconnect()
       case "error":
         // Use local execution receipts, never a remote claim that a change succeeded.
-        throw VoiceAgentPolicy.failure(code: event["code"] as? String, changesApplied: changesApplied,
-                                       completionUncertain: pendingMutation)
+        showTurnFailure(uncertain: pendingMutation || (changesApplied && event["requires_reconnect"] as? Bool == true))
       default: throw VoiceAgentError.protocolViolation
     }
+  }
+
+  private func showTurnFailure(uncertain: Bool) {
+    let failedContext = context
+    let text: String
+    if uncertain {
+      text = voiceAgentText("I can't tell whether the last change was fully applied. Please check the view before continuing.")
+    } else if changesApplied {
+      text = voiceAgentText("I made some changes, but can't safely continue. Please check the view.")
+    } else {
+      text = voiceAgentText("I couldn't complete the task and didn't make any changes. Try asking for one step at a time.")
+    }
+    disconnect()
+    commandHistory.appendMessage(scope: failedContext, user: false, text: text)
+    scheduleConversationSave()
+    append(user: false, text: text)
+    if settings.speaks { speech.speak(text, rateMultiplier: settings.speechRateMultiplier) }
   }
 
   private func startTool(_ event: [String: Any]) throws {
@@ -674,7 +1005,9 @@ final class VoiceAgentController: ObservableObject {
     guard VoiceAgentPolicy.reads.contains(name) || readState else { throw VoiceAgentError.protocolViolation }
     pendingCallID = callID
     let deletionTool = ["clear_annotations", "remove_object", "remove_measurement"].contains(name)
-    pendingMutation = !VoiceAgentPolicy.reads.contains(name) && !deletionTool
+    let volumeEditTool = name == "edit_volume"
+    let fileTool = VoiceAgentPolicy.fileTools.contains(name)
+    pendingMutation = !VoiceAgentPolicy.reads.contains(name) && !deletionTool && !volumeEditTool && !fileTool
     if name == "open_dataset" {
       openingPreviousContext = bridge?.applicationDatasetContext
       openingTarget = arguments["id"] as? String
@@ -682,7 +1015,8 @@ final class VoiceAgentController: ObservableObject {
     let id = generation
     let request = requestID!
     toolDeadline = Task { @MainActor [weak self] in
-      do { try await Task.sleep(for: .seconds(name == "open_dataset" ? 330 : deletionTool ? 300 : name == "search_datasets" ? 75 : 40)) } catch { return }
+      let seconds = name == "open_dataset" ? 330 : deletionTool || fileTool ? 300 : volumeEditTool ? 125 : name == "search_datasets" ? 75 : 40
+      do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
       if self?.generation == id { self?.disconnect(reason: VoiceAgentError.timedOut) }
     }
     toolTask = Task { @MainActor [weak self] in
@@ -707,7 +1041,11 @@ final class VoiceAgentController: ObservableObject {
             }
           }
         let result: [String: Any]
-        if deletionTool, self.declinedDeletionRequestID == request {
+        if name == VoiceAgentPolicy.commandHistoryTool {
+          try validate()
+          self.checkCommandHistoryOwner()
+          result = ["structuredContent": self.commandHistory.lookup(scope: self.context, query: arguments)]
+        } else if deletionTool, self.declinedDeletionRequestID == request {
           result = ["structuredContent": ["ok": false, "not_applied": true, "code": "user_declined",
             "note": "The user declined deletion in this request. Do not bypass that decision with other deletion tools."]]
         } else if deletionTool {
@@ -727,18 +1065,50 @@ final class VoiceAgentController: ObservableObject {
             self.pendingMutation = true
             result = try await bridge.executeTool(name: name, arguments: arguments, validateContext: validate)
           }
+        } else if volumeEditTool {
+          if self.declinedVolumeEditRequestID == request {
+            result = self.rejectedVolumeEdit("user_declined", "The user declined a volume edit in this request.")
+          } else {
+            let preview: VoiceAgentVolumeEdit?
+            do { preview = try bridge.prepareVolumeEdit(arguments: arguments) }
+            catch { preview = nil }
+            if let preview {
+              let approved = self.settings.confirmsVolumeEdits ? await self.requestVolumeEditApproval(preview) : true
+              if approved {
+                guard self.generation == id, self.requestID == request, !Task.isCancelled else { return }
+                self.pendingMutation = true
+                result = try await bridge.executeVolumeEdit(preview, validateContext: validate)
+              } else {
+                result = self.rejectedVolumeEdit("user_declined", "The user did not approve this volume edit. Do not ask again in this request.")
+              }
+            } else {
+              result = self.rejectedVolumeEdit("volume_edit_unavailable",
+                "No edit was applied. Check edit availability, SharePlay, active export, and sample bounds in physical meters.")
+            }
+          }
         } else if name == "open_dataset", let target = self.openingTarget {
           result = try await bridge.openDataset(id: target, validateContext: validate, didBegin: { opened in
             guard self.generation == id, self.requestID == request, self.openingTarget == opened.datasetID,
                   self.openingContext == nil || self.openingContext?.hasSameOpening(as: opened) == true else { throw VoiceAgentError.contextChanged }
             self.openingContext = opened
           })
+        } else if fileTool {
+          result = try await bridge.executeFileTool(name: name, arguments: arguments, select: { selection in
+            await self.requestFileSelection(selection)
+          }, validateContext: validate, willCommit: { self.pendingMutation = true })
         } else {
+          if let previous = self.context {
+            if name == "close_dataset" { self.datasetChange = .close(previous) }
+            if name == "select_edit_state" {
+              self.datasetChange = .select(previous, (arguments["id"] as? String).flatMap(UUID.init(uuidString:)))
+            }
+          }
           result = try await bridge.executeTool(name: name, arguments: arguments, validateContext: validate)
         }
         guard result["isError"] as? Bool != true else { throw VoiceAgentError.commandFailed }
         let notApplied = (result["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true
         if self.generation == id, self.requestID == request {
+          if volumeEditTool && !notApplied { self.trackVolumeBricks() }
           if self.pendingMutation && !notApplied { self.changesApplied = true }
           self.pendingMutation = false
         }
@@ -747,11 +1117,26 @@ final class VoiceAgentController: ObservableObject {
         try self.requireContext()
         var payload: [String: Any] = ["type": "tool_result", "request_id": request,
           "call_id": callID, "dataset_id": self.wireDatasetID, "context_id": self.contextID]
-        if name == "open_dataset", !notApplied {
-          guard let opened = self.openingContext, bridge.context == opened else { throw VoiceAgentError.contextChanged }
-          self.context = opened
-          self.scopeOpening = opened
-          self.datasetOpeningID = opened.openingID
+        let previousScope = self.context
+        if VoiceAgentPolicy.datasetTransitions.contains(name), !notApplied {
+          let next = bridge.context
+          switch name {
+            case "open_dataset":
+              guard let opened = self.openingContext, next == opened else { throw VoiceAgentError.contextChanged }
+            case "close_dataset":
+              guard next == nil, bridge.applicationDatasetContext == nil, bridge.datasetID == nil else { throw VoiceAgentError.contextChanged }
+            case "select_edit_state":
+              let receipt = result["structuredContent"] as? [String: Any]
+              let wanted = (arguments["id"] as? String).flatMap(UUID.init(uuidString:))
+              guard let next, let previousScope, next.hasSameOpening(as: previousScope), next != previousScope,
+                    (receipt?["activeStateID"] as? String).flatMap(UUID.init(uuidString:)) == wanted else {
+                throw VoiceAgentError.contextChanged
+              }
+            default: throw VoiceAgentError.protocolViolation
+          }
+          self.context = next
+          self.scopeOpening = next
+          self.datasetOpeningID = next?.openingID
           self.contextID = UUID().uuidString
           self.catalog = self.availableTools()
           self.readState = false
@@ -759,7 +1144,7 @@ final class VoiceAgentController: ObservableObject {
           self.collaborationQuestion = nil
           self.ruleProposals = []
           self.changedDomains = []
-          payload["dataset_transition"] = ["dataset_id": opened.datasetID, "context_id": self.contextID, "tools": self.catalog]
+          payload["dataset_transition"] = ["dataset_id": self.wireDatasetID, "context_id": self.contextID, "tools": self.catalog]
           self.updatingContext = true
           self.connectionState = .connecting
           self.contextAckDeadline = Task { @MainActor [weak self] in
@@ -770,6 +1155,7 @@ final class VoiceAgentController: ObservableObject {
         self.openingTarget = nil
         self.openingContext = nil
         self.openingPreviousContext = nil
+        self.datasetChange = nil
         if self.collaborationEnabled { payload["view_revision"] = expectedRevision ?? 0 }
         if name == "capture_screenshot" {
           guard let contents = result["content"] as? [[String: Any]],
@@ -777,8 +1163,13 @@ final class VoiceAgentController: ObservableObject {
                 let png = Data(base64Encoded: encoded) else { throw VoiceAgentError.imageTooLarge }
           let image = try Self.agentImage(png)
           payload["image_png_base64"] = image.data.base64EncodedString()
-          payload["result"] = ["width": image.width, "height": image.height,
-                               "renderedFrame": (result["structuredContent"] as? [String: Any])?["renderedFrame"] ?? 0]
+          let metadata = result["structuredContent"] as? [String: Any]
+          var imageResult: [String: Any] = ["width": image.width, "height": image.height,
+                                            "renderedFrame": metadata?["renderedFrame"] ?? 0]
+          if let screenshotID = metadata?["screenshotId"] as? String {
+            imageResult["screenshotId"] = screenshotID
+          }
+          payload["result"] = imageResult
         } else {
           let state = VoiceAgentPolicy.compactResult(result["structuredContent"] as? [String: Any] ?? [:], tool: name)
           _ = try VoiceAgentPolicy.encoded(state, limit: VoiceAgentPolicy.maximumResultBytes)
@@ -786,6 +1177,15 @@ final class VoiceAgentController: ObservableObject {
         }
         let reply = try VoiceAgentPolicy.encoded(payload)
         try self.ledger.finish(id: callID, reply: reply)
+        if !notApplied, let output = payload["result"] as? [String: Any] {
+          // A confirmed local result still exists if sending its reply loses the socket.
+          // Image bytes are on a separate wire field and are deliberately never retained.
+          self.commandHistory.append(scope: self.context, tool: name, arguments: arguments, result: output)
+          if name == "close_dataset", previousScope != self.context {
+            self.commandHistory.append(scope: previousScope, tool: name, arguments: arguments, result: output)
+          }
+          if name != VoiceAgentPolicy.commandHistoryTool { self.scheduleConversationSave() }
+        }
         if name == "get_application_state" { self.readState = !self.userIsInteracting && (!self.collaborationEnabled || expectedRevision == self.viewRevision) }
         self.pendingCallID = nil
         self.toolTask = nil
@@ -800,6 +1200,68 @@ final class VoiceAgentController: ObservableObject {
         self.disconnect(reason: error is VoiceAgentError ? error : VoiceAgentError.commandFailed)
       }
     }
+  }
+
+  private func rejectedVolumeEdit(_ code: String, _ note: String) -> [String: Any] {
+    ["structuredContent": ["ok": false, "not_applied": true, "code": code, "note": note]]
+  }
+
+  private func checkCommandHistoryOwner() {
+    if let owner = historyOwner,
+       (!settings.enabled && !settings.savesConversation) || owner.address != settings.address || owner.revision != settings.revision {
+      commandHistory.clear()
+      restoredHistoryScopes.removeAll()
+      historyOwner = nil
+    }
+  }
+
+  private func rebindStoredHistory(to current: VoiceAgentContext?) {
+    guard let current, let editState = current.editStateID, !restoredHistoryScopes.isEmpty else { return }
+    let matching = restoredHistoryScopes.filter { $0.datasetID == current.datasetID && $0.editStateID == editState }
+    guard !matching.isEmpty else { return }
+    // Only a saved, matching edit state may see history from a previous application opening.
+    commandHistory.rebindScopes { $0.map(matching.contains) == true ? current : $0 }
+    restoredHistoryScopes.subtract(matching)
+    scheduleConversationSave()
+  }
+
+  private func updateConversationStoragePreference() {
+    let ownerChanged = archiveOwner != settings.archiveOwnerID
+    if ownerChanged || (savingConversation && !settings.savesConversation) { removeSavedConversation() }
+    archiveOwner = settings.archiveOwnerID
+    if !savingConversation && settings.savesConversation { scheduleConversationSave() }
+    savingConversation = settings.savesConversation
+  }
+
+  private func scheduleConversationSave() {
+    guard settings.savesConversation, !commandHistory.isEmpty else { return }
+    conversationDirty = true
+    guard conversationSaveTask == nil else { return }
+    conversationSaveTask = Task { @MainActor [weak self] in
+      do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+      self?.flushConversationSave()
+    }
+  }
+
+  private func flushConversationSave() {
+    conversationSaveTask?.cancel()
+    conversationSaveTask = nil
+    guard conversationDirty, settings.savesConversation, archiveOwner == settings.archiveOwnerID else { return }
+    do {
+      try conversationStore.save(commandHistory, owner: archiveOwner)
+      conversationDirty = false
+      conversationStorageError = nil
+    } catch { conversationStorageError = voiceAgentText("Could not save or restore the local conversation.") }
+  }
+
+  private func removeSavedConversation() {
+    conversationSaveTask?.cancel()
+    conversationSaveTask = nil
+    conversationDirty = false
+    do {
+      try conversationStore.remove()
+      conversationStorageError = nil
+    } catch { conversationStorageError = voiceAgentText("Could not remove the local conversation.") }
   }
 
   private func logFailure(_ error: Error, operation: String) {
@@ -903,11 +1365,12 @@ final class VoiceAgentController: ObservableObject {
     } catch { errorText = error.localizedDescription }
   }
 
-  static func agentImage(_ png: Data) throws -> (data: Data, width: Int, height: Int) {
+  static func agentImage(_ png: Data, sizes: [Int] = [1024, 768, 512, 256],
+                         maximumBytes: Int = 2 * 1024 * 1024) throws -> (data: Data, width: Int, height: Int) {
     guard png.count <= 64 * 1024 * 1024,
           let source = CGImageSourceCreateWithData(png as CFData, nil), CGImageSourceGetCount(source) == 1
     else { throw VoiceAgentError.imageTooLarge }
-    for size in [1024, 768, 512, 256] {
+    for size in sizes {
       let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
         kCGImageSourceThumbnailMaxPixelSize: size, kCGImageSourceCreateThumbnailWithTransform: true]
       guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
@@ -917,7 +1380,7 @@ final class VoiceAgentController: ObservableObject {
       guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)
       else { throw VoiceAgentError.imageTooLarge }
       CGImageDestinationAddImage(destination, image, nil)
-      if CGImageDestinationFinalize(destination), data.length <= 2 * 1024 * 1024 {
+      if CGImageDestinationFinalize(destination), data.length <= maximumBytes {
         return (data as Data, image.width, image.height)
       }
     }
@@ -925,6 +1388,10 @@ final class VoiceAgentController: ObservableObject {
   }
 
   private func append(user: Bool, text: String) {
+    if user {
+      commandHistory.appendMessage(scope: context, user: true, text: text)
+      scheduleConversationSave()
+    }
     messages.append(VoiceAgentMessage(user: user, text: text))
     if messages.count > 100 { messages.removeFirst(messages.count - 100) }
   }

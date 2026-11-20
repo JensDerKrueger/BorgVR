@@ -144,6 +144,7 @@ struct OpenDatasetView: View {
       Label("Import", systemImage: "square.and.arrow.down")
     }
     .help("dataset_open_import_help")
+    .disabled(appModel.backgroundImportID != nil)
   }
 
   private var openButton: some View {
@@ -152,7 +153,7 @@ struct OpenDatasetView: View {
         .frame(maxWidth: .infinity)
     }
     .buttonStyle(.borderedProminent)
-    .disabled(workflow.selectedDataset == nil || workflow.isLoading || workflow.isOpening)
+    .disabled(workflow.selectedDataset == nil || workflow.isLoading || workflow.isOpening || appModel.backgroundImportID != nil)
     .help("dataset_open_open_help")
   }
 

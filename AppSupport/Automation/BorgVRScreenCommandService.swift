@@ -411,13 +411,19 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
           let height = properties[kCGImagePropertyPixelHeight] as? Int else {
       throw BorgVRMCPCommandError.screenshotUnavailable
     }
+    let capture = appModel.screenshotCache.lookup(requestID)
     let image = BorgVRMCPImage(
       pngData: data,
       width: width,
       height: height,
-      renderedFrame: appModel.completedRenderFrameCount
+      renderedFrame: capture?.renderedFrame ?? appModel.completedRenderFrameCount,
+      screenshotID: capture == nil ? nil : requestID
     )
     return includeAlpha ? image : try image.composited(over: session.settingsState.resolvedAutomationBackground)
+  }
+
+  func screenshotPositions(id: UUID) -> BorgVRScreenshotPositions? {
+    session.runtimeState.screenshotCache.lookup(id)?.positions
   }
 
   private var platformName: String {

@@ -9,13 +9,14 @@ import httpx
 from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic_ai import BinaryContent
-from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+from pydantic_ai.messages import ModelResponse, SystemPromptPart, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
 from pydantic_ai.models.function import FunctionModel
 import pytest
 from starlette.websockets import WebSocketDisconnect
 from model_config import ModelConfig, profile_values
 
-from borgvr_agent.app import Settings, bounded_history, create_app
+from borgvr_agent.app import SPATIAL_PICKING_GUIDANCE, Settings, bounded_history, create_app
+from borgvr_agent.context import ContextMaintenance, compact_history
 from borgvr_agent.protocol import (
     Hello, MAX_MESSAGE_BYTES, ProtocolError, ToolDefinition,
     decode_image, decode_message, select_tools, validate_arguments,
@@ -32,6 +33,17 @@ def definition(name, properties=None, required=None):
 
 
 STATE = definition("get_application_state")
+EDIT_STATUS = definition("get_volume_edit_state")
+RESET = definition("reset_state", {"scope": {"type": "string"}})
+EDIT = definition("edit_volume", {
+    "mode": {"type": "string"},
+    "samples": {"type": "array", "items": {"type": "object",
+        "properties": {"center_meters": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+                       "radius_meters": {"type": "number", "exclusiveMinimum": 0}},
+        "required": ["center_meters", "radius_meters"], "additionalProperties": False}},
+}, ["mode", "samples"])
+WAIT_EDITS = definition("wait_volume_edits", {"timeout_seconds": {"type": "number"}})
+COMMAND_HISTORY = definition("get_command_history", {"tool": {"type": "string"}})
 ROTATE = definition("rotate_view", {"axis": {"type": "array", "minItems": 3, "maxItems": 3,
                                             "items": {"type": "number"}},
                                     "degrees": {"type": "number"}}, ["axis", "degrees"])
@@ -176,9 +188,10 @@ def test_confirmed_annotation_is_reported_as_applied_on_later_model_failure():
             call = ws.receive_json()
             assert call["name"] == name
             ws.send_json(reply(call))
-        error = ws.receive_json()
-        assert error["type"] == "error" and error["changes_applied"] is True
-        assert error["requires_reconnect"] is False
+        partial = ws.receive_json()
+        assert partial["type"] == "assistant_message" and partial["final"]
+        assert partial["partial"] == {"reason": "run_failed", "confirmed_volume_edits": 0}
+        assert ws.receive_json()["type"] == "completed"
 
 
 def test_real_agent_loop_with_external_tools_and_image():
@@ -230,7 +243,10 @@ def test_readiness_requires_auth_without_contacting_model():
 
 
 @pytest.mark.parametrize("response,expected", [
-    ({"data": [{"id": SETTINGS.model}]}, 200), ({"data": [{"id": "wrong-model"}]}, 503),
+    ({"data": [{"id": SETTINGS.model}]}, 200),
+    ({"data": [{"id": SETTINGS.model, "max_model_len": 65536}]}, 200),
+    ({"data": [{"id": SETTINGS.model, "max_model_len": True}]}, 200),
+    ({"data": [{"id": "wrong-model"}]}, 503),
     ({"data": [], "large": "a" * 65536}, 503), ({"data": None}, 503),
 ])
 def test_model_readiness_is_bounded_and_checks_model(monkeypatch, response, expected):
@@ -239,12 +255,19 @@ def test_model_readiness_is_bounded_and_checks_model(monkeypatch, response, expe
 
     def handler(request):
         assert request.headers["Authorization"] == f"Bearer {SETTINGS.vllm_token}"
+        assert request.url.path == "/v1/models"
         return httpx.Response(200, json=response)
 
     monkeypatch.setattr(module.httpx, "AsyncClient", lambda **kwargs: original_client(
         **kwargs, transport=httpx.MockTransport(handler)))
     with connection() as client:
-        assert client.get("/readyz", headers=AUTH).status_code == expected
+        ready = client.get("/readyz", headers=AUTH)
+        assert ready.status_code == expected
+        if expected == 200:
+            result = ready.json()
+            limit = response["data"][0].get("max_model_len")
+            assert result["agent_context_tokens"] == SETTINGS.inference.context
+            assert result.get("model_context_tokens") == (limit if type(limit) is int else None)
 
 
 @pytest.mark.parametrize("custom", [False, True])
@@ -449,6 +472,122 @@ def test_mutation_requires_current_state_read():
         assert ws.receive_json()["type"] == "completed"
 
 
+def test_edit_status_is_read_only_and_reset_requires_explicit_scope_and_current_state():
+    model = model_steps(("get_volume_edit_state", {}), ("reset_state", {"scope": "clipping"}),
+                        ("get_application_state", {}), ("reset_state", {"scope": "clipping"}), "Reset complete")
+    with connection(model) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, EDIT_STATUS, RESET]))
+        assert set(ws.receive_json()["tools"]) == {"get_application_state", "get_volume_edit_state", "reset_state"}
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        for name in ("get_volume_edit_state", "get_application_state", "reset_state"):
+            call = ws.receive_json()
+            assert call["name"] == name
+            ws.send_json(reply(call))
+        assert ws.receive_json()["text"] == "Reset complete"
+        assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("arguments", [{}, {"scope": "settings"}, {"scope": "all", "output_path": "/private"}])
+def test_reset_rejects_implicit_or_invalid_scopes(arguments):
+    with pytest.raises(ProtocolError):
+        validate_arguments(ToolDefinition.model_validate(RESET), arguments)
+
+
+def test_volume_edit_requires_state_and_respects_decline_for_the_turn():
+    edit = ("edit_volume", {"mode": "erase", "samples": [{"center_meters": [0.25, 0.25, 0.25], "radius_meters": 0.1}]})
+    status = ("get_volume_edit_state", {})
+    model = model_steps(("get_application_state", {}), edit, status, edit, status, edit, "No edit")
+    with connection(model) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, EDIT_STATUS, EDIT, WAIT_EDITS]))
+        assert "edit_volume" in ws.receive_json()["tools"]
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        for expected, body in [
+            ("get_application_state", {"rendererReady": True}),
+            ("get_volume_edit_state", {"available": True, "shared": False}),
+            ("edit_volume", {"not_applied": True, "code": "user_declined"}),
+            ("get_volume_edit_state", {"available": True, "shared": False}),
+        ]:
+            call = ws.receive_json()
+            assert call["name"] == expected
+            ws.send_json({**reply(call), "result": body})
+        assert ws.receive_json()["text"] == "No edit"
+        assert ws.receive_json()["type"] == "completed"
+
+
+def test_pending_bricks_survive_a_bounded_wait_and_can_finish_later():
+    model = model_steps(("wait_volume_edits", {"timeout_seconds": 2}),
+                        ("get_volume_edit_state", {}), "Finished")
+    with connection(model) as client, open_session(client) as ws:
+        ws.send_json(hello([EDIT_STATUS, WAIT_EDITS]))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        call = ws.receive_json()
+        assert call["name"] == "wait_volume_edits"
+        ws.send_json({**reply(call), "result": {"bricksReady": False, "timedOut": True, "pendingBrickCount": 1}})
+        call = ws.receive_json()
+        assert call["name"] == "get_volume_edit_state"
+        ws.send_json({**reply(call), "result": {"bricksReady": True, "pendingBrickCount": 0}})
+        assert ws.receive_json()["text"] == "Finished"
+        assert ws.receive_json()["type"] == "completed"
+
+
+def test_client_command_receipt_is_retrievable_after_prior_tool_turn_is_compacted(monkeypatch):
+    original = ContextMaintenance.before_model_request
+    compacted = False
+    args = {"axis": [0, 1, 0], "degrees": 17.25}
+    receipt = {"id": "099483dd-656f-461f-95bf-2494b0ec8ad9", "tool": "rotate_view",
+               "arguments": args, "result": {"renderedFrame": 44}}
+
+    async def compress_followup(self, ctx, request_context):
+        nonlocal compacted
+        if not compacted and any(isinstance(part, UserPromptPart) and part.content == "Which exact rotation?"
+                                 for msg in request_context.messages for part in msg.parts):
+            messages = compact_history(request_context.messages)
+            assert not any(isinstance(part, ToolCallPart) and part.tool_name == "rotate_view"
+                           for msg in messages for part in msg.parts)
+            request_context.messages = messages
+            ctx.messages[:] = messages
+            compacted = True
+        return await original(self, ctx, request_context)
+
+    monkeypatch.setattr(ContextMaintenance, "before_model_request", compress_followup)
+    model = model_steps(("get_application_state", {}), ("rotate_view", args), "Turned.",
+                        ("get_command_history", {"tool": "rotate_view"}), "Recovered.")
+    with connection(model) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, ROTATE, COMMAND_HISTORY]))
+        assert "get_command_history" in ws.receive_json()["tools"]
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        for name in ("get_application_state", "rotate_view"):
+            call = ws.receive_json()
+            assert call["name"] == name
+            ws.send_json(reply(call))
+        assert ws.receive_json()["text"] == "Turned."
+        assert ws.receive_json()["type"] == "completed"
+        ws.send_json({**user("turn-2"), "text": "Which exact rotation?"})
+        assert ws.receive_json()["type"] == "started"
+        call = ws.receive_json()
+        assert call["name"] == "get_command_history" and call["arguments"] == {"tool": "rotate_view"}
+        ws.send_json({**reply(call), "result": {"history": [receipt], "historicalOnly": True}})
+        assert ws.receive_json()["text"] == "Recovered."
+        assert ws.receive_json()["type"] == "completed" and compacted
+
+
+@pytest.mark.parametrize("tool,arguments", [
+    (EDIT, {"mode": "erase", "samples": []}),
+    (EDIT, {"mode": "erase", "samples": [{"center_meters": [0, 0, 0], "radius_meters": 1}] * 257}),
+    (EDIT, {"mode": "erase", "samples": [{"center_meters": [0, 0, 0], "radius_meters": 0}]}),
+    (EDIT, {"mode": "erase", "samples": [{"center_meters": [0, 0, 0], "radius_meters": 1}], "confirm": True}),
+    (WAIT_EDITS, {"timeout_seconds": 40}),
+])
+def test_agent_volume_tool_bounds(tool, arguments):
+    with pytest.raises(ProtocolError):
+        validate_arguments(ToolDefinition.model_validate(tool), arguments)
+
+
 def test_cancel_propagates_and_blocks_unsafe_followup():
     with connection(model_steps(("get_application_state", {}))) as client, open_session(client) as ws:
         ws.send_json(hello([STATE]))
@@ -600,6 +739,75 @@ def test_history_keeps_only_two_images():
     message = ModelRequest(parts=[UserPromptPart([BinaryContent(b"image", media_type="image/png") for _ in range(4)])])
     result = asyncio.run(bounded_history([message]))
     assert sum(isinstance(value, BinaryContent) for value in result[0].parts[0].content) == 2
+
+
+def screenshot_picker_definition():
+    catalog_path = Path(__file__).resolve().parents[1] / "diagnostic_catalog.json"
+    return next(item for item in json.loads(catalog_path.read_text()) if item["name"] == "pick_screenshot_positions")
+
+
+def test_agent_gets_only_bounded_picking_not_the_full_position_buffer():
+    selected, = select_tools([ToolDefinition.model_validate(item) for item in
+                              [screenshot_picker_definition(), definition("capture_extended_screenshot")]])
+    assert selected.name == "pick_screenshot_positions"
+    args = {"screenshot_id": "C957EFFE-02CE-4A07-8AA0-56136EE347D7",
+            "points": [{"x": 0.5, "y": 0.25}]}
+    validate_arguments(selected, args)
+    for invalid in ({**args, "screenshot_id": "stale"}, {**args, "points": args["points"] * 65},
+                    {**args, "points": [{"x": True, "y": 0.5}]}, {**args, "output_path": "/tmp/capture"}):
+        with pytest.raises(ProtocolError):
+            validate_arguments(selected, invalid)
+
+
+def test_spatial_picking_guidance_follows_the_current_image_and_handles_expiry():
+    ids = ["C957EFFE-02CE-4A07-8AA0-56136EE347D7", "0F866FE7-D7EC-4D55-BAF7-6B1BF30997C6"]
+    point = {"x": 0.25, "y": 0.75}
+    async def model(messages, info):
+        assert any(isinstance(part, SystemPromptPart) and SPATIAL_PICKING_GUIDANCE in part.content
+                   for message in messages for part in message.parts)
+        returns = [part for message in messages for part in message.parts if isinstance(part, ToolReturnPart)]
+        if not returns or (len(returns) == 2 and not returns[-1].content["available"]):
+            return ModelResponse(parts=[ToolCallPart("capture_screenshot", {}, tool_call_id=f"image-{len(returns)}")])
+        if len(returns) in {1, 3}:
+            assert any(isinstance(value, BinaryContent) for message in messages for part in message.parts
+                       if isinstance(part, UserPromptPart) and not isinstance(part.content, str) for value in part.content)
+            identifier = returns[-1].content["screenshotId"]
+            return ModelResponse(parts=[ToolCallPart("pick_screenshot_positions",
+                {"screenshot_id": identifier, "points": [point]}, tool_call_id=f"pick-{len(returns)}")])
+        assert returns[-1].content["positions"] == [[0.2, 0.3, 0.7]]
+        return ModelResponse(parts=[TextPart("Normalized position: (0.2, 0.3, 0.7).")])
+
+    with connection(FunctionModel(model)) as client, open_session(client) as ws:
+        ws.send_json(hello([SCREENSHOT, screenshot_picker_definition()]))
+        assert set(ws.receive_json()["tools"]) == {"capture_screenshot", "pick_screenshot_positions"}
+        ws.send_json({**user(), "text": "What is the 3D position of the landmark?"})
+        assert ws.receive_json()["type"] == "started"
+        for i, identifier in enumerate(ids):
+            capture = ws.receive_json()
+            assert capture["name"] == "capture_screenshot"
+            ws.send_json({**reply(capture, image_png_base64=png()),
+                          "result": {"screenshotId": identifier, "renderedFrame": i + 1}})
+            pick = ws.receive_json()
+            assert pick["name"] == "pick_screenshot_positions"
+            assert pick["arguments"] == {"screenshot_id": identifier, "points": [point]}
+            ws.send_json({**reply(pick), "result": {"available": bool(i),
+                          "positions": [[0.2, 0.3, 0.7]] if i else []}})
+        assert ws.receive_json()["text"] == "Normalized position: (0.2, 0.3, 0.7)."
+        assert ws.receive_json()["type"] == "completed"
+
+
+def test_spatial_picking_guidance_absent_with_screenshot_only():
+    async def model(messages, info):
+        assert not any(isinstance(part, SystemPromptPart) and "pick_screenshot_positions" in part.content
+                       for message in messages for part in message.parts)
+        return ModelResponse(parts=[TextPart("No position tool.")])
+    with connection(FunctionModel(model)) as client, open_session(client) as ws:
+        ws.send_json(hello([SCREENSHOT]))
+        assert ws.receive_json()["tools"] == ["capture_screenshot"]
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        assert ws.receive_json()["text"] == "No position tool."
+        assert ws.receive_json()["type"] == "completed"
 
 
 def test_progress_is_separate_from_final_answer():

@@ -62,12 +62,15 @@ def read_inventory(root=ROOT):
     if mcp != handlers:
         raise ValueError(f"MCP definitions/dispatch differ: {sorted(mcp ^ handlers)}")
     tree = ast.parse(read("BorgVRAgentServer/borgvr_agent/protocol.py"))
-    assignment = next(node for node in tree.body if isinstance(node, ast.Assign) and
-                      any(isinstance(target, ast.Name) and target.id == "ALLOWED_TOOLS" for target in node.targets))
-    agent = set(ast.literal_eval(assignment.value.args[0]))
+    def tool_set(name):
+        assignment = next(node for node in tree.body if isinstance(node, ast.Assign) and
+                          any(isinstance(target, ast.Name) and target.id == name for target in node.targets))
+        return set(ast.literal_eval(assignment.value.args[0]))
+    agent = tool_set("ALLOWED_TOOLS")
+    local_client = tool_set("LOCAL_CLIENT_TOOLS")
     client = swift_set(read("AppSupport/Voice/VoiceAgentProtocol.swift"), "allowed")
     diagnostic = {item["name"] for item in json.loads(read("BorgVRAgentServer/diagnostic_catalog.json"))}
-    if not agent == client == diagnostic or not agent <= mcp:
+    if not agent == client == diagnostic or agent - mcp != local_client:
         raise ValueError("Agent server/client/diagnostic catalogs differ")
     internal = set()
     for file in ("BorgVRAgentServer/borgvr_agent/app.py", "BorgVRAgentServer/borgvr_agent/collaboration.py"):
@@ -81,7 +84,8 @@ def read_inventory(root=ROOT):
     settings = {platform: registered_settings(read(file)) for platform, file in SETTINGS.items()}
     if recorded & local or not set.union(*settings.values()) <= recorded | local:
         raise ValueError("A registered setting has no unambiguous GSC recording policy")
-    return {"symbols": symbols, "mcp": mcp, "agent": agent, "internal_agent": internal, "gsc": gsc,
+    return {"symbols": symbols, "mcp": mcp, "agent": agent, "local_client": local_client,
+            "internal_agent": internal, "gsc": gsc,
             "settings": settings, "recorded_settings": recorded, "local_settings": local}
 
 
@@ -93,6 +97,8 @@ def validate(catalog, inventory, root=ROOT):
         errors.append("Duplicate operation IDs")
     if {tool["name"] for tool in catalog["internal_agent_tools"]} != inventory["internal_agent"]:
         errors.append("Unclassified or stale internal agent tool")
+    if {tool for operation in operations for tool in operation.get("local_agent", [])} != inventory["local_client"]:
+        errors.append("Unclassified or stale local client agent tool")
     for field in ("symbols", "mcp", "gsc"):
         covered = {value for operation in operations for value in operation[field]}
         missing, stale = inventory[field] - covered, covered - inventory[field]
@@ -129,7 +135,7 @@ def render(catalog, inventory):
         "Generiert aus `capabilities.json` und den Quellcode-Registern mit `python3 audit_capabilities.py --write`.",
         "Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nachweis ausgeführter Tests.",
         "Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.",
-        "Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets` und `open_dataset` verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.", "",
+        "Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets`, `open_dataset` und die kontextgebundene Befehlshistorie verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.", "",
         f"Erfasst: **{len(ops)} Funktionsgruppen**, **{len(inventory['mcp'])} MCP-Werkzeuge**, "
         f"**{len(inventory['agent'])} maximal erlaubte native Agentenwerkzeuge**, "
         f"**{len(inventory['symbols'])} Command-/UI-Registereinträge**, **{len(inventory['gsc'])} unterschiedliche GSC-Namen**.", "",
@@ -140,8 +146,9 @@ def render(catalog, inventory):
         "## Übersicht", "", "| Bereich | Funktion | Kontext | Command-Pfad | MCP | Agent |", "|---|---|---|---|---|---|"]
     status = {"command": "vorhanden", "service": "Service/Abfrage", "partial": "teilweise", "ui": "nur UI", "local": "lokale Funktion", "internal": "intern"}
     for op in ops:
-        allowed = set(op["mcp"]) & inventory["agent"]
-        agent = "nein" if not allowed else ("ja*" if allowed == set(op["mcp"]) else "teilweise*")
+        defined = set(op["mcp"]) | set(op.get("local_agent", []))
+        allowed = defined & inventory["agent"]
+        agent = "nein" if not allowed else ("ja*" if allowed == defined else "teilweise*")
         lines.append(f"| {labels[op['category']]} | [{op['label']}](#{op['id'].replace('.', '-')}) | {op['context']} | {status[op['core']]} | {'ja' if op['mcp'] else 'nein'} | {agent} |")
     lines += ["", "* Kontextabhängig: App-Zustand, begrenzte Metadatensuche und autorisiertes Öffnen sind ohne Renderer nutzbar; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.", "",
               "## Interne Agentenwerkzeuge", "", "| Werkzeug | Zweck |", "|---|---|"]
@@ -152,7 +159,8 @@ def render(catalog, inventory):
             f"- Kennung: `{op['id']}`; Plattformen: {', '.join(op['platforms'])}; Kontext: `{op['context']}`; Wirkung: {op['risk']}.",
             "- Register: " + (", ".join(f"`{value}`" for value in op["symbols"]) or "kein spezifischer Command/UI-Registereintrag"),
             "- MCP: " + (", ".join(f"`{value}`" for value in op["mcp"]) or "fehlt"),
-            "- Native Agentenwerkzeuge: " + (", ".join(f"`{value}`" for value in sorted(set(op["mcp"]) & inventory["agent"])) or "fehlen"),
+            "- Native Agentenwerkzeuge: " + (", ".join(f"`{value}`" for value in sorted(
+                (set(op["mcp"]) | set(op.get("local_agent", []))) & inventory["agent"])) or "fehlen"),
             "- Benannte GSC-Befehle (macOS): " + (", ".join(f"`{value}`" for value in op["gsc"]) or "keine; Command-Payloads ggf. separat verfügbar"),
             f"- Zustandsabfrage: {op['query']}", f"- Lücke: {op['gap']}", f"- Nächster Schritt: {op['next']}",
             "- Quellen: " + ", ".join(f"[{path}](../{path})" for path in op["evidence"]),

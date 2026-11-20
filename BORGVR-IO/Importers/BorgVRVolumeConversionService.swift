@@ -544,6 +544,7 @@ public struct BorgVRVolumeConversionRequest: Sendable {
   public let meta: String
   public let toolIdentification: String
   public let resampling: BorgVRVolumeResampling?
+  public let replaceExisting: Bool
 
   public init(
     source: BorgVRVolumeConversionSource,
@@ -557,7 +558,8 @@ public struct BorgVRVolumeConversionRequest: Sendable {
     provenance: [BORGVRProvenanceEntry] = [],
     meta: String = "",
     toolIdentification: String = BorgVRVolumeConversionService.toolIdentification,
-    resampling: BorgVRVolumeResampling? = nil
+    resampling: BorgVRVolumeResampling? = nil,
+    replaceExisting: Bool = true
   ) {
     self.source = source
     self.destinationURL = destinationURL
@@ -571,6 +573,7 @@ public struct BorgVRVolumeConversionRequest: Sendable {
     self.meta = meta
     self.toolIdentification = toolIdentification
     self.resampling = resampling
+    self.replaceExisting = replaceExisting
   }
 }
 
@@ -696,7 +699,7 @@ public enum BorgVRVolumeConversionService {
     }
 
     try cancellationToken?.checkCancellation()
-    try installStagedOutput(stagedURL, at: request.destinationURL)
+    try installStagedOutput(stagedURL, at: request.destinationURL, replaceExisting: request.replaceExisting)
   }
 
   private static func convertBorgVR(
@@ -1148,9 +1151,9 @@ public enum BorgVRVolumeConversionService {
     )
   }
 
-  private static func installStagedOutput(_ stagedURL: URL, at destinationURL: URL) throws {
+  private static func installStagedOutput(_ stagedURL: URL, at destinationURL: URL, replaceExisting: Bool) throws {
     let fileManager = FileManager.default
-    if fileManager.fileExists(atPath: destinationURL.path) {
+    if replaceExisting, fileManager.fileExists(atPath: destinationURL.path) {
       _ = try fileManager.replaceItemAt(
         destinationURL,
         withItemAt: stagedURL,

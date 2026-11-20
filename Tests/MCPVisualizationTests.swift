@@ -2,12 +2,65 @@ import AppKit
 import Foundation
 import ImageIO
 import Metal
+import simd
 import UniformTypeIdentifiers
 @testable import BorgVR
 
 private enum Failure: Error { case failed(String) }
 private func expect(_ condition: Bool, _ message: String) throws {
   if !condition { throw Failure.failed(message) }
+}
+
+private func testPairedScreenshotReadback() throws -> BorgVRScreenshotPositions {
+  guard let device = MTLCreateSystemDefaultDevice(),
+        let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer() else {
+    throw Failure.failed("Metal is unavailable for the screenshot test")
+  }
+  func texture(_ format: MTLPixelFormat) -> MTLTexture {
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format, width: 4, height: 4, mipmapped: false)
+    descriptor.storageMode = .shared
+    return device.makeTexture(descriptor: descriptor)!
+  }
+  let rgba = texture(.bgra8Unorm), depth = texture(.r32Float)
+  let region = MTLRegionMake2D(0, 0, 4, 4)
+  let colors = [UInt8](repeating: 255, count: 64)
+  colors.withUnsafeBytes { rgba.replace(region: region, mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: 16) }
+  var depths = [Float](repeating: -1, count: 16)
+  depths[0] = 0.25
+  func writeDepth() {
+    depths.withUnsafeBytes { depth.replace(region: region, mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: 16) }
+  }
+  writeDepth()
+  var projection = matrix_identity_float4x4
+  projection.columns.0.x = 2
+  projection.columns.1.y = 2
+  projection.columns.3.x = -1
+  projection.columns.3.y = -1
+  let readback = try MetalScreenshotEncoder.encodePairedReadback(
+    color: rgba, depth: depth, textureToClip: projection, commandBuffer: commandBuffer
+  )
+  commandBuffer.commit()
+  commandBuffer.waitUntilCompleted()
+  try expect(commandBuffer.status == .completed, "Paired Metal readback failed")
+  depths[0] = 0.75
+  writeDepth()
+  guard let positions = readback.positionReadback?.positions() else { throw Failure.failed("Missing position buffer") }
+  try expect(positions.position(x: 0.125, y: 0.125) == SIMD3(0.125, 0.875, 0.25)
+             && positions.position(x: 1, y: 1) == nil, "Snapshot pixels were not paired or immutable")
+  let png = try MetalScreenshotEncoder.pngData(from: readback.color)
+  let archive = try positions.archive(png: png)
+  try expect(archive.prefix(8) == Data("BVRPOS1\n".utf8) && archive.subdata(in: 20..<(20 + png.count)) == png,
+    "Invalid extended screenshot header or PNG payload")
+  let offset = (20 + png.count + 3) & ~3
+  let firstZ = archive.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset + 8, as: UInt32.self) }
+  let nextX = archive.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset + 12, as: UInt32.self) }
+  try expect(archive.count == offset + 16 * 12 && Float(bitPattern: UInt32(littleEndian: firstZ)) == 0.25
+             && Float(bitPattern: UInt32(littleEndian: nextX)).isNaN, "Invalid XYZ encoding or no-hit marker")
+  do {
+    _ = try positions.archive(png: png, maximumBytes: archive.count - 1)
+    throw Failure.failed("Inline size limit was not enforced")
+  } catch MetalScreenshotError.inlineCaptureTooLarge {}
+  return positions
 }
 
 // Drive AppKit notifications explicitly without changing the user's desktop Space.
@@ -241,9 +294,14 @@ struct MCPVisualizationTests {
     let lastRow = gradientImage.bytesPerRow * 3
     try expect(stride >= 3 && gradientBytes[0] > gradientBytes[2] &&
       gradientBytes[lastRow] < gradientBytes[lastRow+2], "Screenshot gradient is upside down")
-    model.renderScreenshotHandler = { _, url, _, completion in
-      do { try (imageData as Data).write(to: url!); completion(.success(url!)) }
-      catch { completion(.failure(error)) }
+    let screenshotPositions = try testPairedScreenshotReadback()
+    model.renderScreenshotHandler = { id, url, _, completion in
+      do {
+        try (imageData as Data).write(to: url!)
+        model.screenshotCache.begin(id)
+        model.screenshotCache.store(screenshotPositions, id: id, renderedFrame: 17)
+        completion(.success(url!))
+      } catch { completion(.failure(error)) }
     }
     _ = try await tool("start_command_recording")
     for alpha in [true, false] {
@@ -255,10 +313,27 @@ struct MCPVisualizationTests {
       let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as! [CFString: Any]
       try expect((properties[kCGImagePropertyHasAlpha] as? Bool ?? false) == alpha, "Screenshot alpha option ignored")
     }
+    let extendedURL = root.appendingPathComponent("extended.borgvrcapture")
+    let saved = try await tool("capture_extended_screenshot", ["output_path": extendedURL.path])
+    let savedID = (saved["structuredContent"] as! [String: Any])["screenshotId"] as! String
+    let pickArgs: [String: Any] = ["screenshot_id": savedID,
+      "points": [["x": 0.125, "y": 0.125], ["x": 0.875, "y": 0.875]]]
+    let picked = try await tool("pick_screenshot_positions", pickArgs)
+    let positions = (picked["structuredContent"] as! [String: Any])["positions"] as! [Any]
+    try expect(positions[0] as? [Double] == [0.125, 0.875, 0.25] && positions[1] is NSNull,
+      "Picking returned an incorrect position or background hit: \(picked)")
+    let inline = try await tool("capture_extended_screenshot")
+    let resource = (inline["content"] as! [[String: Any]])[0]["resource"] as! [String: Any]
+    let savedBytes = try Data(contentsOf: extendedURL)
+    try expect(Data(base64Encoded: resource["blob"] as! String) == savedBytes, "Inline and file captures differ")
+    let expired = try await tool("pick_screenshot_positions", pickArgs)
+    try expect((expired["structuredContent"] as? [String: Any])?["available"] as? Bool == false,
+      "The previous screenshot remained accessible")
     let screenshotRecordingURL = root.appendingPathComponent("screenshot-recording.gsc")
     let screenshotRecording = try await tool("stop_command_recording", ["output_path": screenshotRecordingURL.path])
     try expect(screenshotRecording["isError"] as? Bool != true, "Screenshot recording failed: \(screenshotRecording)")
     for alpha in [true, false] { try FileManager.default.removeItem(at: root.appendingPathComponent("capture-\(alpha).png")) }
+    try FileManager.default.removeItem(at: extendedURL)
     session.startCommandRecording()
     try service.setBackground(background)
     try await session.finishCommandRecording()
@@ -291,7 +366,8 @@ struct MCPVisualizationTests {
     }
     try expect(runner.scriptLogText.contains("Script finished") &&
       FileManager.default.fileExists(atPath: root.appendingPathComponent("capture-true.png").path) &&
-      FileManager.default.fileExists(atPath: root.appendingPathComponent("capture-false.png").path),
+      FileManager.default.fileExists(atPath: root.appendingPathComponent("capture-false.png").path) &&
+      FileManager.default.fileExists(atPath: extendedURL.path),
       "Screenshot destinations did not round-trip: \(runner.scriptLogText)")
     let scriptURL = root.appendingPathComponent("roundtrip.gsc")
     let script = """
@@ -316,6 +392,7 @@ struct MCPVisualizationTests {
     resetsettings
     loadsettings "\(root.path)/script.borgvrsettings"
     screenshot "\(root.path)/script.png" false
+    extendedscreenshot "\(root.path)/script-extended" false
     """
     try script.write(to: scriptURL, atomically: true, encoding: .utf8)
     runner.runScript(at: scriptURL)
@@ -325,6 +402,8 @@ struct MCPVisualizationTests {
       try await Task.sleep(for: .milliseconds(10))
     }
     try expect(runner.scriptLogText.contains("Script finished"), "GSC failed: \(runner.scriptLogText)")
+    let scriptedCapture = try Data(contentsOf: root.appendingPathComponent("script-extended.borgvrcapture"))
+    try expect(scriptedCapture.prefix(8) == Data("BVRPOS1\n".utf8), "GSC did not save the extended screenshot")
     try expect(try service.windowState().frameSizePixels == [frameWidth, frameHeight] &&
       runner.scriptLogText.contains("backingScaleFactor"), "GSC window commands/getter failed")
     try expect(try service.transferFunction(channel: 0).samples.last == [12, 34, 56, 255], "GSC TF restore failed")

@@ -32,6 +32,10 @@ struct VoiceAgentPolicyTests {
     try rejects { try VoiceAgentPolicy.validate(["visible": true, "output_path": "/secret"], schema: schema) }
     try rejects { _ = try VoiceAgentPolicy.decode("[]") }
     try rejects { _ = try VoiceAgentPolicy.encoded(["text": String(repeating: "x", count: 1024)], limit: 64) }
+    try check(VoiceAgentPolicy.outputName(" Result.DATA ", extension: "data") == "Result.data", "Filename extension not normalized")
+    for name in ["", ".", "..", "../test", "/tmp/test", "folder\\test", ".hidden", "a:b", "a\u{0}b"] {
+      try check(VoiceAgentPolicy.outputName(name, extension: "data") == nil, "Unsafe output filename accepted")
+    }
     let rows = (0..<65536).map { [$0 % 256, 0, 0, 255] }
     let preview = VoiceAgentPolicy.compactResult(["channel": 0, "samples": rows], tool: "get_transfer_function")
     try check(preview["originalSampleCount"] as? Int == 65536 && preview["samplesArePreview"] as? Bool == true,
@@ -60,8 +64,53 @@ struct VoiceAgentPolicyTests {
       try ledger.finish(id: "long-\(index)", reply: "ok")
     }
     try check(VoiceAgentPolicy.allowed.contains("open_dataset") && VoiceAgentPolicy.reads.contains("search_datasets") &&
-              !VoiceAgentPolicy.allowed.contains("edit_volume") &&
-              !VoiceAgentPolicy.allowed.contains("load_settings"), "Agent gained unsafe capabilities")
+              VoiceAgentPolicy.allowed.contains("edit_volume") && !VoiceAgentPolicy.reads.contains("edit_volume") &&
+              VoiceAgentPolicy.reads.contains("wait_volume_edits") &&
+              !VoiceAgentPolicy.allowed.contains("discard_volume_edits") &&
+              !VoiceAgentPolicy.allowed.contains("load_settings"), "Wrong permissions for volume edits or unsafe capabilities")
+    var history = VoiceAgentCommandHistory<String>()
+    let exact = ["degrees": 13.125]
+    history.append(scope: "opening-a", tool: "rotate_view", arguments: exact, result: ["frame": 17])
+    history.append(scope: "opening-a", tool: "rotate_view", arguments: ["degrees": 99],
+                   result: ["not_applied": true])
+    history.append(scope: "opening-a", tool: "get_command_history", arguments: [:], result: ["history": []])
+    history.appendMessage(scope: "opening-a", user: true, text: "Turn the volume slightly.")
+    history.appendMessage(scope: "opening-a", user: false, text: "Turned.")
+    for index in 0..<30 {
+      history.append(scope: "opening-a", tool: "get_application_state", arguments: [:], result: ["frame": index])
+    }
+    let rotation = history.lookup(scope: "opening-a", query: ["kind": "mutation"])["history"] as? [[String: Any]]
+    try check(rotation?.count == 1 && rotation?.first?["arguments"] as? [String: Double] == exact &&
+              (rotation?.first?["result"] as? [String: Int])?["frame"] == 17,
+              "Polling, rejected actions, or readback corrupted a confirmed command")
+    let browse = history.lookup(scope: "opening-a", query: ["kind": "read", "limit": 2])
+    let cursor = browse["nextCursor"] as? String ?? ""
+    let older = history.lookup(scope: "opening-a", query: ["kind": "read", "limit": 2, "cursor": cursor])
+    try check((older["history"] as? [[String: Any]])?.first?["id"] as? String != cursor &&
+              older["nextCursor"] != nil, "History did not page older records")
+    let chat = history.lookup(scope: "opening-a", query: ["source": "chat"])["chat"] as? [[String: Any]]
+    try check(chat?.count == 2 && chat?.last?["text"] as? String == "Turn the volume slightly." &&
+              (history.lookup(scope: "opening-b", query: ["source": "chat"])["chat"] as? [[String: Any]])?.isEmpty == true,
+              "History lost chat context or crossed an opening boundary")
+    let large = String(repeating: "\u{00E9}\u{6F22}\"", count: 5000)
+    history.append(scope: "opening-a", tool: "list_objects", arguments: [:], result: ["text": large])
+    let item = (history.lookup(scope: "opening-a", query: ["tool": "list_objects"])["history"] as? [[String: Any]])!.first!
+    let receiptID = item["id"] as! String
+    try check(item["result"] == nil && item["resultBytes"] != nil, "Large fields were sent inline or lost")
+    var assembled = ""
+    var offset: Int? = 0
+    while let current = offset {
+      let page = history.lookup(scope: "opening-a", query: ["id": receiptID, "field": "result", "offset": current])
+      assembled += page["fragment"] as? String ?? ""
+      offset = page["nextOffset"] as? Int
+    }
+    let reconstructed = try JSONSerialization.jsonObject(with: Data(assembled.utf8)) as? [String: String]
+    try check(reconstructed?["text"] == large &&
+              history.lookup(scope: "opening-b", query: ["id": receiptID, "field": "result"])["ok"] as? Bool == false,
+              "Large field was not recovered exactly or leaked into another context")
+    history.clear()
+    try check((history.lookup(scope: "opening-a", query: [:])["history"] as? [[String: Any]])?.isEmpty == true,
+              "A new conversation retained old command history")
     let sphereSchema = VoiceAgentAnnotationPolicy.schema(for: "upsert_sphere_marker")!
     try VoiceAgentPolicy.validate(["position": [0.2, 0.3, 0.4], "radius": 0.01], schema: sphereSchema)
     for arguments: [String: Any] in [["position": [-0.1, 0.3, 0.4]], ["position": [0.2, 1.1, 0.4]],

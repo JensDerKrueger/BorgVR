@@ -378,6 +378,7 @@ class RuntimeAppModel {
   private(set) var datasetSessionState = DatasetSessionState.inactive {
     didSet {
       guard oldValue != datasetSessionState else { return }
+      if case .rendering = datasetSessionState {} else { mcpRenderBridge.invalidateScreenshot() }
       logger.dev(
         "Dataset session: \(oldValue.logDescription) -> \(datasetSessionState.logDescription)"
       )

@@ -452,6 +452,7 @@ struct BorgVRMCPImage: Sendable {
   var width: Int
   var height: Int
   var renderedFrame: UInt64
+  var screenshotID: UUID? = nil
 }
 
 struct BorgVRMCPIsoSurfaceExport: Codable, Sendable {
@@ -567,9 +568,44 @@ protocol BorgVRMCPCommandService: AnyObject {
     normalizedIsoValue: Float?
   ) async throws -> BorgVRMCPIsoSurfaceExport
   func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage
+  func screenshotPositions(id: UUID) -> BorgVRScreenshotPositions?
 }
 
 extension BorgVRMCPCommandService {
+  func screenshotPositions(id: UUID) -> BorgVRScreenshotPositions? { nil }
+
+  func captureExtendedScreenshot(to outputURL: URL?, includeAlpha: Bool, overwrite: Bool) async throws
+    -> (image: BorgVRMCPImage, id: UUID, archive: Data?) {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return try await commandExecutor.performAction(
+        .captureExtendedScreenshot(path: outputURL?.path, includeAlpha: includeAlpha),
+        source: BorgVRCommandExecutionContext.source
+      ) {
+        try await self.captureExtendedScreenshot(to: outputURL, includeAlpha: includeAlpha, overwrite: overwrite)
+      }
+    }
+    let image = try await captureScreenshot(includeAlpha: includeAlpha)
+    guard let id = image.screenshotID, let positions = screenshotPositions(id: id),
+          positions.width == image.width, positions.height == image.height else {
+      throw MetalScreenshotError.positionBufferUnavailable
+    }
+    let encoding = Task.detached(priority: .userInitiated) { () throws -> Data? in
+      let archive = try positions.archive(png: image.pngData, maximumBytes: outputURL == nil ? 12 * 1024 * 1024 : nil)
+      try Task.checkCancellation()
+      if let outputURL {
+        try BorgVRAutomationFile.write(archive, to: outputURL, overwrite: overwrite)
+        return nil
+      }
+      return archive
+    }
+    let archive = try await withTaskCancellationHandler {
+      try await encoding.value
+    } onCancel: {
+      encoding.cancel()
+    }
+    return (image, id, archive)
+  }
+
   func openDataset(id: String, validateContext: @escaping () throws -> Void,
                    didBegin: @escaping () throws -> Void) async throws {
     try await openDataset(id: id, validateContext: validateContext)
@@ -639,6 +675,9 @@ extension BorgVRMCPCommandService {
         case .closeDataset: try await closeDataset()
         case .captureScreenshot(let path, let alpha):
           _ = try await captureScreenshot(to: path.map { URL(fileURLWithPath: $0) }, includeAlpha: alpha, overwrite: true)
+        case .captureExtendedScreenshot(let path, let alpha):
+          _ = try await captureExtendedScreenshot(to: path.map { URL(fileURLWithPath: $0) },
+            includeAlpha: alpha, overwrite: true)
         case .resizeWindow(let width, let height, let units, let area):
           _ = try await resizeWindow(width: width, height: height, units: units, area: area)
         case .setFullscreen(let enabled): _ = try await setFullscreen(enabled)
@@ -930,7 +969,8 @@ extension BorgVRMCPImage {
     }
     CGImageDestinationAddImage(destination, output, nil)
     guard CGImageDestinationFinalize(destination) else { throw BorgVRMCPCommandError.screenshotUnavailable }
-    return Self(pngData: result as Data, width: width, height: height, renderedFrame: renderedFrame)
+    return Self(pngData: result as Data, width: width, height: height,
+                renderedFrame: renderedFrame, screenshotID: screenshotID)
   }
 }
 

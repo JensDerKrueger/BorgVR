@@ -75,6 +75,8 @@ fullscreen(bool)
 getwindowstate() -> string
 screenshot(string,bool)
 screenshot(bool)
+extendedscreenshot(string)
+extendedscreenshot(string,bool)
 # The bool preserves alpha when true; false composites the configured background.
 waitframes(int)
 waitloaded()

@@ -26,7 +26,12 @@ final class VoiceAgentSettings: ObservableObject {
   private let defaults: UserDefaults
   private let tokenAccount: String
   @Published var enabled: Bool { didSet { defaults.set(enabled, forKey: "voiceAgent.enabled") } }
-  @Published var address: String { didSet { defaults.set(address, forKey: "voiceAgent.address") } }
+  @Published var address: String {
+    didSet {
+      defaults.set(address, forKey: "voiceAgent.address")
+      if address != oldValue { changeArchiveOwner() }
+    }
+  }
   @Published var speaks: Bool { didSet { defaults.set(speaks, forKey: "voiceAgent.speaks") } }
   @Published var speechRateMultiplier: Double {
     didSet {
@@ -36,6 +41,8 @@ final class VoiceAgentSettings: ObservableObject {
     }
   }
   @Published var sharesImages: Bool { didSet { defaults.set(sharesImages, forKey: "voiceAgent.images") } }
+  @Published var savesConversation: Bool { didSet { defaults.set(savesConversation, forKey: "voiceAgent.saveConversation") } }
+  @Published var confirmsVolumeEdits: Bool { didSet { defaults.set(confirmsVolumeEdits, forKey: "voiceAgent.confirmVolumeEdits") } }
   @Published var onDeviceOnly: Bool { didSet { defaults.set(onDeviceOnly, forKey: "voiceAgent.onDeviceOnly") } }
   @Published var workMinutes: Int {
     didSet {
@@ -55,6 +62,7 @@ final class VoiceAgentSettings: ObservableObject {
   @Published private(set) var knowledgeRules: [VoiceAgentRule]
   @Published private(set) var hasToken: Bool
   @Published private(set) var revision = UUID()
+  private(set) var archiveOwnerID: UUID
 
   var identity: VoiceAgentConnectionIdentity {
     .init(address: address, revision: revision, enabled: enabled, images: sharesImages,
@@ -70,6 +78,10 @@ final class VoiceAgentSettings: ObservableObject {
     speechRateMultiplier = VoiceAgentSpeechRate.normalized(
       defaults.object(forKey: "voiceAgent.speechRateMultiplier") as? Double ?? VoiceAgentSpeechRate.defaultMultiplier)
     sharesImages = defaults.object(forKey: "voiceAgent.images") as? Bool ?? true
+    savesConversation = defaults.bool(forKey: "voiceAgent.saveConversation")
+    confirmsVolumeEdits = defaults.object(forKey: "voiceAgent.confirmVolumeEdits") as? Bool ?? true
+    archiveOwnerID = defaults.string(forKey: "voiceAgent.archiveOwner").flatMap(UUID.init(uuidString:)) ?? UUID()
+    defaults.set(archiveOwnerID.uuidString, forKey: "voiceAgent.archiveOwner")
     onDeviceOnly = defaults.object(forKey: "voiceAgent.onDeviceOnly") as? Bool ?? true
     workMinutes = min(max(defaults.object(forKey: "voiceAgent.workMinutes") as? Int ?? 30, 1), 120)
     maximumCalls = min(max(defaults.object(forKey: "voiceAgent.maximumCalls") as? Int ?? 256, 24), 1024)
@@ -99,6 +111,7 @@ final class VoiceAgentSettings: ObservableObject {
     }
     hasToken = !token.isEmpty
     revision = UUID()
+    changeArchiveOwner()
   }
 
   func rememberRule(_ text: String) throws {
@@ -120,12 +133,19 @@ final class VoiceAgentSettings: ObservableObject {
     certificate = der
     defaults.set(der, forKey: "voiceAgent.certificate")
     revision = UUID()
+    changeArchiveOwner()
   }
 
   func removeCertificate() {
     certificate = Data()
     defaults.removeObject(forKey: "voiceAgent.certificate")
     revision = UUID()
+    changeArchiveOwner()
+  }
+
+  private func changeArchiveOwner() {
+    archiveOwnerID = UUID()
+    defaults.set(archiveOwnerID.uuidString, forKey: "voiceAgent.archiveOwner")
   }
 
   var fingerprint: String {

@@ -556,6 +556,33 @@ Der Abbrechen-Button beendet sofort auch einen vorgemerkten Folgeauftrag; bereit
 ausgeführte Änderungen werden nicht zurückgesetzt. Netzwerk-, Einzelbefehls- und
 Kontextgrenzen bleiben unabhängig vom längeren Arbeitsbudget aktiv.
 
+### Gespräch lokal speichern
+
+Unter **Einstellungen > KI-Assistent** kann BorgVR das aktuelle Gespräch samt
+Befehlshistorie speichern und beim App-Start laden. Die Option ist standardmäßig
+aus. Die Datei wird auf dem Gerät verschlüsselt, enthält keine Screenshots und
+wird nicht automatisch an den Server gesendet. Beim Abschalten wird die Datei
+gelöscht; **Neues Gespräch** leert auch den aktuellen Verlauf. Gespeicherte
+Datensatzbefehle werden nur für denselben Datensatz und Editierstand freigegeben.
+
+### Volumenbereiche bearbeiten
+
+Der Assistent kann im persönlichen Editierstand mit den aktiven Pinselkanälen
+kugelförmige Bereiche löschen oder wiederherstellen. Die Position und der Radius
+müssen im lokalen XYZ-Koordinatensystem des Datensatzes in Metern bekannt sein.
+Vor dem Ausführen zeigt BorgVR standardmäßig eine lokale Bestätigung mit Bereich, Kanälen und
+Anzahl der Pinselabdrücke. Der Originaldatensatz bleibt unverändert; in einer
+SharePlay-Sitzung führt der Assistent diese Bearbeitung nicht aus.
+Mit **Volumenbearbeitungen immer genehmigen** wird die aktuelle Bearbeitung
+genehmigt und **Volumenbearbeitungen bestätigen** ausgeschaltet. Der Schalter
+lässt sich jederzeit wieder einschalten. Freigaben für andere Funktionen
+bleiben davon unberührt.
+
+Das Assistentenfenster zeigt nach dem Auftrag die ausstehenden Bricks und meldet
+den lokalen Berechnungs- und Speicherabschluss auch dann, wenn das Modell schon
+geantwortet hat. Ein kurzes Timeout beim Warten stoppt die Berechnung nicht. Die
+Meldung garantiert nicht, dass sämtliche aktualisierten Bricks im GPU-Atlas liegen.
+
 ### Gemeinsame Bearbeitung und bestätigte Regeln
 
 Während der Agent arbeitet, können Sie die Szene selbst bedienen. Manuelle Command-Ereignisse
@@ -565,25 +592,16 @@ geprüfte Ansichtsrevisionen verhindern veraltete Agentenbefehle. Bereits gestar
 enden genau einmal; sie werden nicht wiederholt. Die neue Nutzeransicht ersetzt die alte
 Ausgangsansicht und darf nicht durch ein späteres Wiederherstellen überschrieben werden.
 
-Der Agent kann nachfragen, was Sie mit Ihrem Eingriff beabsichtigt haben. Antworten per Text,
-Sprache oder Gesprächsbuttons setzen denselben Auftrag fort; gewöhnliche neue Prompts
-unterbrechen ihn weiterhin. Bei unklaren Ergebnissen kann er um konkrete Hilfe bitten.
-Zeit-, Aufruf- und Kontextgrenzen gelten weiterhin, auch während einer Rückfrage.
+Fehlt dem Agenten eine brauchbare Ansicht, kann er gezielt um Hilfe bitten. Sie können per
+Text oder Sprache antworten oder die Ansicht direkt einstellen. In beiden Fällen setzt er
+denselben Auftrag fort. Er fragt weder nach der Absicht hinter einer manuellen Änderung
+noch routinemäßig nach der Erlaubnis für eine neue Ansicht. Lokale Freigaben bleiben
+unverändert; ein neuer Prompt kann den laufenden Auftrag weiterhin unterbrechen.
 
-Eine Ja/Nein-Frage enthält immer nur eine Entscheidung. Die Frage, ob eine Änderung als
-Hilfe gedacht war, ist von der Erlaubnis für eine weitere Ansicht getrennt. Ein Nein zu
-einer anderen Ansicht sperrt weitere Darstellungsänderungen im laufenden Auftrag; Lesen
-und Screenshots bleiben möglich. Bedingte Antworten gelten nicht als uneingeschränkte
-Erlaubnis. Ein Ja zur Hilfe-Frage erlaubt weder automatisch weitere Änderungen noch das
-Speichern einer Regel. Die Fragen werden serverseitig auf Deutsch oder Englisch formuliert.
-
-Wiederverwendbare Präferenzen bleiben Vorschläge, bis Sie **Regel merken** bestätigen.
-Höchstens 16 Regeln mit je 500 Zeichen werden auf diesem Gerät gespeichert und künftigen
-Gesprächen mitgegeben, außerhalb von SharePlay und GSC. Löschen ist unter **Einstellungen >
-KI-Assistent > Gemerkte Regeln** möglich; beginnen Sie danach ein neues Gespräch, damit die
-Regel auch aus dem aktiven Modellkontext verschwindet. Unbestätigte Vorschläge werden nicht
-gespeichert. Das ist Kontextwissen, kein Training der Gewichte oder LoRA, keine gesicherte
-wissenschaftliche Erkenntnis und keine Aufhebung der Werkzeug-Schutzmaßnahmen.
+Manuelle Änderungen dienen dem laufenden Auftrag und werden nicht als neue Regeln
+gespeichert. Bereits bestätigte Regeln bleiben auf diesem Gerät und werden neuen Gesprächen
+mitgegeben. Zum Löschen öffnen Sie **Einstellungen > KI-Assistent > Gemerkte Regeln**
+und beginnen anschließend ein neues Gespräch.
 
 Der Assistent ist über einen einzigen App-Adapter und das dokumentierte Netzwerkprotokoll
 angebunden. [Architektur und Ausbaugrenzen](../AppSupport/Voice/ARCHITECTURE.md) sind separat beschrieben.

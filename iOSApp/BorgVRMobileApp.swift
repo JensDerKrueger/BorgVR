@@ -188,7 +188,11 @@ struct BorgVRMobileApp: App {
     .handlesExternalEvents(matching: [BorgVRSharePlayActivity.activityIdentifier])
     .onChange(of: scenePhase, initial: true) { _, phase in
       BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
-      if phase == .background { voiceAgent.disconnect(); saveOpenDatasetState() }
+      if phase == .background {
+        voiceAgent.pauseDemonstration()
+        voiceAgent.disconnect()
+        saveOpenDatasetState()
+      }
     }
   }
 
@@ -210,11 +214,18 @@ struct BorgVRMobileApp: App {
     voiceAgent.configure(service: service, isReady: {
       !appModel.volumeBrush.isOpeningState && !appModel.volumeBrush.isRestoringPersonalState &&
         !appModel.volumeBrush.isWaitingForSharedState
+    }, beginImport: {
+      let id = try appModel.beginBackgroundImport()
+      return VoiceAgentImportLease(directory: URL.documentsDirectory,
+        brickSize: appSettings.brickSize, overlap: appSettings.brickOverlap,
+        compression: appSettings.enableCompression, borderMode: appSettings.borderMode,
+        quantize: appSettings.quantizeImportsTo8Bit, colorCompression: appSettings.importColorCompression,
+        filter: appSettings.dicomResamplingFilter, release: { appModel.finishBackgroundImport(id) })
     }) {
       switch appModel.datasetSessionState {
         case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
           return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
-                                   editStateID: appModel.volumeBrush.activeState?.id)
+                                   editStateID: appModel.volumeBrush.editingContextID)
         default: return nil
       }
     }
@@ -237,6 +248,7 @@ struct BorgVRMobileApp: App {
   @MainActor
   private func openMCPDataset(id: String, validateContext: @escaping () throws -> Void,
                               didBegin: @escaping () throws -> Void) async throws {
+    guard appModel.backgroundImportID == nil else { throw BorgVRVolumeEditingCommandError.busy }
     let records = try await loadMCPDatasetRecords()
     try validateContext()
     guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
@@ -270,6 +282,7 @@ struct BorgVRMobileApp: App {
       datasetURL: entry.editStorageURL(directoryURL: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first),
       interactive: false, restoreLastSelection: false)
     try validateContext()
+    guard appModel.backgroundImportID == nil else { throw BorgVRVolumeEditingCommandError.busy }
     appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true,
                          automaticallyLoadState: false)
     try didBegin()

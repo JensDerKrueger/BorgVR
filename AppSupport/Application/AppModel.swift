@@ -143,7 +143,25 @@ final class AppModel: ObservableObject {
     }
   }
 
-  @Published var navigationState: NavigationState = .start
+  @Published var navigationState: NavigationState = .start {
+    didSet {
+      if navigationState == .importData, backgroundImportID != nil { navigationState = oldValue }
+    }
+  }
+  @Published private(set) var backgroundImportID: UUID?
+
+  func beginBackgroundImport() throws -> UUID {
+    guard case .inactive = datasetSessionState, navigationState != .importData, backgroundImportID == nil else {
+      throw BorgVRVolumeEditingCommandError.busy
+    }
+    let id = UUID()
+    backgroundImportID = id
+    return id
+  }
+
+  func finishBackgroundImport(_ id: UUID) {
+    if backgroundImportID == id { backgroundImportID = nil }
+  }
   @Published private(set) var datasetSessionState = DatasetSessionState.inactive {
     didSet {
       guard oldValue != datasetSessionState else { return }
@@ -151,13 +169,16 @@ final class AppModel: ObservableObject {
         "Dataset session: \(oldValue.logDescription) -> \(datasetSessionState.logDescription)"
       )
       switch datasetSessionState {
+        case .rendering:
+          break
         case .inactive, .waitingForSharePlay, .resolving:
+          screenshotCache.begin(nil)
           // The render view may already be gone, so its cleanup is not a
           // reliable owner of edit-worker shutdown or the active-state lifetime.
           volumeBrush.close()
           trackDatasetStreaming(nil)
-        case .opening, .rendering, .closing:
-          break
+        case .opening, .closing:
+          screenshotCache.begin(nil)
       }
     }
   }
@@ -222,6 +243,7 @@ final class AppModel: ObservableObject {
   let atlasPagingModel = AtlasPagingGraphModel()
   let logger = GUILogger()
   var renderScreenshotHandler: RenderScreenshotHandler?
+  let screenshotCache = BorgVRScreenshotCache()
   var renderScreenshotCancelHandler: RenderScreenshotCancelHandler?
   var renderDisplaySyncHandler: RenderDisplaySyncHandler?
   var renderAtlasPurgeHandler: (() -> Void)?
@@ -301,6 +323,7 @@ final class AppModel: ObservableObject {
 
   func openDataset(_ dataset: DatasetEntry, asGroupSessionHost: Bool? = nil,
                    automaticallyLoadState: Bool = true) {
+    guard backgroundImportID == nil else { return }
     if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
       commandExecutor.performAction(.openDataset(dataset.uniqueId), source: BorgVRCommandExecutionContext.source) {
         self.openDataset(dataset, asGroupSessionHost: asGroupSessionHost, automaticallyLoadState: automaticallyLoadState)

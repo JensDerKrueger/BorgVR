@@ -74,6 +74,7 @@ struct VoiceAgentEndpoint: Equatable {
 }
 
 enum VoiceAgentPolicy {
+  static let commandHistoryTool = "get_command_history"
   static func failure(code: String?, changesApplied: Bool, completionUncertain: Bool) -> VoiceAgentError {
     if completionUncertain { return .completionUncertain }
     if code == "context_limit" { return changesApplied ? .changesAppliedContextLimit : .contextLimit }
@@ -82,29 +83,91 @@ enum VoiceAgentPolicy {
 
   static let maximumFrameBytes = 4 * 1024 * 1024
   static let maximumResultBytes = 256 * 1024
+  static let maximumTools = 48
+  static let conversionTools: Set<String> = ["import_volume", "fuse_volumes"]
+  static let fileTools: Set<String> = conversionTools.union(["save_visualization_state", "export_edited_dataset"])
+  static let datasetTransitions: Set<String> = ["open_dataset", "close_dataset", "select_edit_state"]
+
+  static func outputName(_ value: Any?, extension suffix: String) -> String? {
+    guard let raw = value as? String else { return nil }
+    var name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if name.lowercased().hasSuffix("." + suffix) { name = String(name.dropLast(suffix.count + 1)) }
+    guard !name.isEmpty, name.utf8.count <= 160, !name.hasPrefix("."),
+          !name.unicodeScalars.contains(where: {
+            CharacterSet.controlCharacters.contains($0) || CharacterSet(charactersIn: "/\\:").contains($0)
+          }) else { return nil }
+    return name + "." + suffix
+  }
   static let allowed: Set<String> = [
-    "search_datasets", "open_dataset",
+    "search_datasets", "open_dataset", "close_dataset", "get_command_history",
     "get_application_state", "get_transfer_function", "get_background", "set_render_mode",
     "set_transform", "rotate_view", "set_iso_value", "set_clipping", "set_lighting",
-    "set_background", "set_transfer_function", "set_bounding_box", "set_screen_projection",
+    "set_background", "set_transfer_function", "set_bounding_box", "set_screen_projection", "reset_state",
+    "get_volume_edit_state", "select_edit_state", "configure_volume_brush", "edit_volume", "wait_volume_edits",
+    "save_visualization_state", "export_edited_dataset", "cancel_volume_export",
+    "import_volume", "fuse_volumes", "get_import_status", "cancel_import",
     "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
     "list_measurements", "upsert_measurement", "set_annotation_visibility",
     "remove_object", "remove_measurement", "clear_annotations",
-    "wait_until_rendered", "capture_screenshot"
+    "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions"
   ]
   static let reads: Set<String> = ["search_datasets", "get_application_state", "get_transfer_function", "get_background",
-                                    "wait_until_rendered", "capture_screenshot", "list_objects", "list_measurements"]
-  static let applicationTools: Set<String> = ["get_application_state", "search_datasets", "open_dataset"]
+                                    "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions", "list_objects", "list_measurements",
+                                    "get_volume_edit_state", "wait_volume_edits", "get_command_history", "get_import_status"]
+  static let maximumVolumeEditSamples = 256
+  static let applicationTools: Set<String> = conversionTools.union([
+    "get_application_state", "search_datasets", "open_dataset", "get_command_history", "get_import_status", "cancel_import",
+  ])
+
+  static var importCatalog: [[String: Any]] {
+    func tool(_ name: String, _ text: String, _ properties: [String: Any], _ required: [String] = []) -> [String: Any] {
+      ["name": name, "description": text, "inputSchema": ["type": "object", "additionalProperties": false,
+        "properties": properties, "required": required]]
+    }
+    let filename: [String: Any] = ["type": "string", "minLength": 1, "maxLength": 120]
+    let description: [String: Any] = ["type": "string", "maxLength": 300]
+    let fusionKinds: [String: Any] = ["type": "string", "enum": ["file", "zarr", "dicom"]]
+    return [
+      tool("import_volume", "Import a user-selected local volume file, Zarr folder, DICOM series folder, or image sequence as new BorgVR .data, using current app import settings. Start with no dataset open. Ask for missing physical sizes for image sequences (meters, XYZ). No file paths. Returns a job; use get_import_status.", [
+        "filename": filename, "description": description,
+        "source_kind": ["type": "string", "enum": ["file", "zarr", "dicom", "images"]],
+        "size_meters": ["type": "array", "minItems": 3, "maxItems": 3,
+                         "items": ["type": "number", "exclusiveMinimum": 0]],
+      ], ["filename", "source_kind"]),
+      tool("fuse_volumes", "Register the second user-selected local volume to the first and save the fused .data in the dataset catalog. Use scalar inputs with matching sample precision. Start with no dataset open. No file paths. Returns a job; use get_import_status.", [
+        "filename": filename, "description": description, "reference_kind": fusionKinds, "moving_kind": fusionKinds,
+      ], ["filename", "reference_kind", "moving_kind"]),
+      tool("get_import_status", "Read the latest local import/fusion job's progress and status (no source paths). Optionally wait up to 10 seconds. For a long-running job, report that it is running and let the local progress indicator show updates rather than repeatedly polling. After completion, search the dataset catalog to open the result.", [
+        "wait_seconds": ["type": "number", "minimum": 0, "maximum": 10],
+      ]),
+      tool("cancel_import", "Cancel the active import or fusion using its exact job ID. Does not remove completed datasets.", [
+        "id": ["type": "string", "maxLength": 36],
+      ], ["id"]),
+    ]
+  }
 
   static func catalog(_ definitions: [[String: Any]], vision: Bool, transferFunctions: Bool,
                       images: Bool, datasetReady: Bool = true) -> [[String: Any]] {
-    definitions.compactMap { original in
+    let history: [String: Any] = ["name": commandHistoryTool,
+      "description": "Read confirmed historical BorgVR tool executions in this conversation and current app/dataset/edit context. Use source 'chat' for the user's earlier messages and final assistant text. Filter command receipts by tool or kind, then pass nextCursor as cursor for older matches. Larger fields can be read by id, field and nextOffset (byte offset). History is not current state, permission, or a replay command.",
+      "inputSchema": ["type": "object", "additionalProperties": false, "properties": [
+        "source": ["type": "string", "enum": ["commands", "chat"]],
+        "tool": ["type": "string", "maxLength": 64],
+        "kind": ["type": "string", "enum": ["all", "read", "mutation"]],
+        "limit": ["type": "integer", "minimum": 1, "maximum": 8],
+        "cursor": ["type": "string", "maxLength": 36],
+        "id": ["type": "string", "maxLength": 36],
+        "field": ["type": "string", "enum": ["arguments", "result", "text"]],
+        "offset": ["type": "integer", "minimum": 0, "maximum": maximumResultBytes],
+      ]] as [String: Any]]
+    return (definitions.filter { $0["name"] as? String != commandHistoryTool } + [history]).compactMap { original in
       guard let name = original["name"] as? String, allowed.contains(name) else { return nil }
       if !datasetReady && !applicationTools.contains(name) { return nil }
+      if datasetReady && conversionTools.contains(name) { return nil }
       if vision && ["set_background", "set_screen_projection", "get_background"].contains(name) { return nil }
       if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_render_mode",
                                 "set_iso_value", "set_lighting"].contains(name) { return nil }
-      if !images && name == "capture_screenshot" { return nil }
+      if !images && ["capture_screenshot", "pick_screenshot_positions"].contains(name) { return nil }
       var value = original
       if let schema = VoiceAgentAnnotationPolicy.schema(for: name) {
         value["inputSchema"] = schema
@@ -125,6 +188,46 @@ enum VoiceAgentPolicy {
       if name == "capture_screenshot" {
         value["inputSchema"] = ["type": "object", "properties": ["include_alpha": ["type": "boolean"]],
                                  "additionalProperties": false] as [String: Any]
+      }
+      if name == "reset_state" {
+        var scopes = ["transform", "clipping"]
+        if transferFunctions { scopes += ["transfer_function", "lighting", "all"] }
+        value["description"] = "Reset the specified visualization group to its defaults. 'all' resets the rendering parameters, not voxel edits or annotations. Use the smallest applicable scope."
+        value["inputSchema"] = ["type": "object", "properties": ["scope": ["type": "string", "enum": scopes]],
+                                "required": ["scope"], "additionalProperties": false] as [String: Any]
+      }
+      if name == "get_volume_edit_state" {
+        value["description"] = "Read saved edit states (ID and display name), active state ID (absent for original), brush channels, brick readiness and export progress. No file paths. This never edits the volume."
+      }
+      if name == "configure_volume_brush" {
+        value["description"] = "Choose the editable channels for subsequent erase/restore operations. Read componentCount in get_volume_edit_state first. Channel numbers start at 1. Pass every channel number to edit all channels."
+        value["inputSchema"] = ["type": "object", "additionalProperties": false, "required": ["channels"],
+          "properties": ["channels": ["type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true,
+            "items": ["type": "integer", "minimum": 1, "maximum": 4]]]] as [String: Any]
+      }
+      if fileTools.contains(name) && !conversionTools.contains(name) {
+        value["description"] = name == "save_visualization_state"
+          ? "Save the current view configuration (not voxel edits or annotations) as JSON. The user chooses the folder locally. Supply a filename only. Existing files are never overwritten."
+          : "Export the current volume and active edits as a new .data dataset. The user chooses the folder locally. Supply a filename only. Poll get_volume_edit_state for completion before closing. This does not alter the source."
+        value["inputSchema"] = ["type": "object", "additionalProperties": false, "required": ["filename"],
+          "properties": ["filename": ["type": "string", "minLength": 1, "maxLength": 120]]] as [String: Any]
+      }
+      if name == "cancel_volume_export" {
+        value["description"] = "Cancel only an export this assistant started. Use its exact job ID from the export receipt or status. Does not change voxel edits."
+      }
+      if name == "edit_volume", var schema = value["inputSchema"] as? [String: Any],
+         var properties = schema["properties"] as? [String: Any],
+         var samples = properties["samples"] as? [String: Any] {
+        samples["maxItems"] = maximumVolumeEditSamples
+        properties["samples"] = samples
+        schema["properties"] = properties
+        value["inputSchema"] = schema
+        value["description"] = "Apply one locally approved batch of spherical erase or restore stamps to the current personal edit state and channels. The original dataset is not changed. Centers and radii are dataset-local meters from the minimum corner, independent of the view. Do not guess a 3D position from a 2D screenshot. Read get_application_state and get_volume_edit_state first. Submission does not imply bricks are ready: check bricksReady or use wait_volume_edits."
+      }
+      if name == "wait_volume_edits" {
+        value["description"] = "Wait briefly for local edit-brick rebuild and persistence. A timeout returns pending status, not failure or cancellation of the edit. This does not verify that every updated brick has been uploaded to the GPU atlas."
+        value["inputSchema"] = ["type": "object", "properties": ["timeout_seconds": ["type": "number", "minimum": 0.1, "maximum": 10]],
+                                "additionalProperties": false] as [String: Any]
       }
       if name == "wait_until_rendered", var schema = value["inputSchema"] as? [String: Any],
          var properties = schema["properties"] as? [String: Any] {
@@ -160,6 +263,7 @@ enum VoiceAgentPolicy {
         if schema["type"] as? String == "integer", n.rounded() != n { throw VoiceAgentError.protocolViolation }
         if let min = schema["minimum"] as? NSNumber, n < min.doubleValue { throw VoiceAgentError.protocolViolation }
         if let max = schema["maximum"] as? NSNumber, n > max.doubleValue { throw VoiceAgentError.protocolViolation }
+        if let min = schema["exclusiveMinimum"] as? NSNumber, n <= min.doubleValue { throw VoiceAgentError.protocolViolation }
       case "boolean":
         guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID()
         else { throw VoiceAgentError.protocolViolation }
@@ -181,7 +285,7 @@ enum VoiceAgentPolicy {
 
   static func compactResult(_ original: [String: Any], tool: String) -> [String: Any] {
     var value = original
-    if tool == "get_application_state" { value.removeValue(forKey: "volumeEditing") }
+    value.removeValue(forKey: "volumeEditing")
     if ["get_transfer_function", "set_transfer_function"].contains(tool),
        let rows = value["samples"] as? [[Any]] {
       value["originalSampleCount"] = rows.count
@@ -198,6 +302,169 @@ enum VoiceAgentPolicy {
     guard data.count <= limit, let string = String(data: data, encoding: .utf8)
     else { throw VoiceAgentError.protocolViolation }
     return string
+  }
+}
+
+/// Confirmed tool receipts belong to the conversation, not to the WebSocket replay ledger.
+struct VoiceAgentCommandHistory<Scope: Equatable & Codable>: Codable {
+  private struct Receipt: Codable {
+    let id: UUID
+    var scope: Scope
+    let tool: String
+    let read: Bool
+    let arguments: Data
+    let result: Data
+
+    var bytes: Int { arguments.count + result.count }
+  }
+  private struct ChatMessage: Codable {
+    let id: UUID
+    var scope: Scope
+    let role: String
+    let text: Data
+  }
+
+  private var receipts: [Receipt] = []
+  private var chat: [ChatMessage] = []
+  private static var inlineBudget: Int { 12 * 1024 }
+  private static var pageBytes: Int { 4096 }
+
+  var transcript: [(user: Bool, text: String)] {
+    chat.map { ($0.role == "user", String(decoding: $0.text, as: UTF8.self)) }
+  }
+  var scopes: [Scope] { receipts.map(\.scope) + chat.map(\.scope) }
+  var isEmpty: Bool { receipts.isEmpty && chat.isEmpty }
+
+  mutating func rebindScopes(_ replacement: (Scope) -> Scope) {
+    for i in receipts.indices { receipts[i].scope = replacement(receipts[i].scope) }
+    for i in chat.indices { chat[i].scope = replacement(chat[i].scope) }
+  }
+
+  mutating func clear() {
+    receipts.removeAll()
+    chat.removeAll()
+  }
+
+  mutating func appendMessage(scope: Scope, user: Bool, text: String) {
+    let data = Data(text.utf8)
+    guard data.count <= 64 * 1024 else { return }
+    let role = user ? "user" : "assistant"
+    if let previous = chat.last, previous.scope == scope, previous.role == role, previous.text == data { return }
+    chat.append(.init(id: UUID(), scope: scope, role: role, text: data))
+    while chat.count > 100 || chat.reduce(0, { $0 + $1.text.count }) > 512 * 1024 {
+      chat.removeFirst()
+    }
+  }
+
+  mutating func append(scope: Scope, tool: String, arguments: [String: Any], result: [String: Any]) {
+    guard tool != VoiceAgentPolicy.commandHistoryTool, result["not_applied"] as? Bool != true,
+          result["ok"] as? Bool != false, result["error"] == nil,
+          let inputs = try? JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys]),
+          let output = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]),
+          inputs.count <= VoiceAgentPolicy.maximumResultBytes, output.count <= VoiceAgentPolicy.maximumResultBytes
+    else { return }
+    let read = VoiceAgentPolicy.reads.contains(tool)
+    receipts.append(Receipt(id: UUID(), scope: scope, tool: tool, read: read, arguments: inputs, result: output))
+    // Polling and screenshot metadata must not displace mutation receipts.
+    let countLimit = read ? 16 : 48
+    let byteLimit = read ? 512 * 1024 : 1024 * 1024
+    while true {
+      let partition = receipts.indices.filter { receipts[$0].read == read }
+      guard partition.count > countLimit || partition.reduce(0, { $0 + receipts[$1].bytes }) > byteLimit else { break }
+      receipts.remove(at: partition[0])
+    }
+  }
+
+  func lookup(scope: Scope, query: [String: Any]) -> [String: Any] {
+    if query["source"] as? String == "chat" { return lookupChat(scope: scope, query: query) }
+    let visible = receipts.reversed().filter { $0.scope == scope }
+    if let field = query["field"] as? String {
+      guard Set(query.keys).isSubset(of: ["source", "id", "field", "offset"]),
+            let id = (query["id"] as? String).flatMap(UUID.init(uuidString:)),
+            let receipt = visible.first(where: { $0.id == id }), ["arguments", "result"].contains(field)
+      else { return ["ok": false, "code": "history_receipt_unavailable"] }
+      let data = field == "arguments" ? receipt.arguments : receipt.result
+      return page(data, offset: query["offset"] as? Int ?? 0,
+                  metadata: ["id": id.uuidString, "tool": receipt.tool, "field": field, "format": "json"])
+    }
+    guard query["offset"] == nil else { return ["ok": false, "code": "history_offset_invalid"] }
+    let tool = query["tool"] as? String
+    let id = (query["id"] as? String).flatMap(UUID.init(uuidString:))
+    if query["id"] != nil, id == nil { return ["ok": false, "code": "history_receipt_unavailable"] }
+    let kind = query["kind"] as? String ?? "all"
+    var matches = visible.filter {
+      (tool == nil || $0.tool == tool) && (id == nil || $0.id == id) &&
+      (kind == "all" || kind == ($0.read ? "read" : "mutation"))
+    }
+    if let cursor = query["cursor"] as? String {
+      guard let cursorID = UUID(uuidString: cursor), let position = matches.firstIndex(where: { $0.id == cursorID })
+      else { return ["ok": false, "code": "history_cursor_unavailable"] }
+      matches = Array(matches.dropFirst(position + 1))
+    }
+    let limit = min(8, max(1, query["limit"] as? Int ?? 4))
+    var budget = Self.inlineBudget
+    let rows: [[String: Any]] = matches.prefix(limit).map { receipt in
+      var row: [String: Any] = ["id": receipt.id.uuidString, "tool": receipt.tool,
+        "kind": receipt.read ? "read" : "mutation", "argumentsBytes": receipt.arguments.count,
+        "resultBytes": receipt.result.count]
+      for (field, data) in [("arguments", receipt.arguments), ("result", receipt.result)] where data.count <= budget {
+        row[field] = try? JSONSerialization.jsonObject(with: data)
+        budget -= data.count
+      }
+      return row
+    }
+    var result: [String: Any] = ["history": rows, "historicalOnly": true]
+    if matches.count > limit { result["nextCursor"] = matches[limit - 1].id.uuidString }
+    return result
+  }
+
+  private func lookupChat(scope: Scope, query: [String: Any]) -> [String: Any] {
+    var matches = chat.reversed().filter { $0.scope == scope }
+    if query["field"] != nil {
+      guard Set(query.keys).isSubset(of: ["source", "id", "field", "offset"]),
+            query["field"] as? String == "text",
+            let id = (query["id"] as? String).flatMap(UUID.init(uuidString:)),
+            let message = matches.first(where: { $0.id == id })
+      else { return ["ok": false, "code": "history_message_unavailable"] }
+      return page(message.text, offset: query["offset"] as? Int ?? 0,
+                  metadata: ["id": id.uuidString, "role": message.role, "field": "text", "format": "text"])
+    }
+    guard Set(query.keys).isSubset(of: ["source", "cursor", "limit"]) else {
+      return ["ok": false, "code": "history_query_invalid"]
+    }
+    if let cursor = query["cursor"] as? String {
+      guard let id = UUID(uuidString: cursor), let position = matches.firstIndex(where: { $0.id == id })
+      else { return ["ok": false, "code": "history_cursor_unavailable"] }
+      matches = Array(matches.dropFirst(position + 1))
+    }
+    let limit = min(8, max(1, query["limit"] as? Int ?? 4))
+    var budget = Self.inlineBudget
+    let rows: [[String: Any]] = matches.prefix(limit).map { message in
+      var row: [String: Any] = ["id": message.id.uuidString, "role": message.role, "textBytes": message.text.count]
+      if message.text.count <= budget {
+        row["text"] = String(decoding: message.text, as: UTF8.self)
+        budget -= message.text.count
+      }
+      return row
+    }
+    var result: [String: Any] = ["chat": rows, "historicalOnly": true]
+    if matches.count > limit { result["nextCursor"] = matches[limit - 1].id.uuidString }
+    return result
+  }
+
+  private func page(_ data: Data, offset: Int, metadata: [String: Any]) -> [String: Any] {
+    // Use byte offsets but never split a UTF-8 scalar.
+    guard (0..<data.count).contains(offset), data[offset] & 0xc0 != 0x80 else {
+      return ["ok": false, "code": "history_offset_invalid"]
+    }
+    var end = min(data.count, offset + Self.pageBytes)
+    while end < data.count, data[end] & 0xc0 == 0x80 { end -= 1 }
+    var page = metadata
+    page["offset"] = offset
+    page["totalBytes"] = data.count
+    page["fragment"] = String(decoding: data[offset..<end], as: UTF8.self)
+    if end < data.count { page["nextOffset"] = end }
+    return page
   }
 }
 

@@ -339,6 +339,25 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   `capture_screenshot` supports `include_alpha` (default true) and an optional `output_path`.
   Without alpha, the configured screen background is composited into the PNG; on visionOS
   passthrough is replaced by black. With alpha, only the transparent render image is captured.
+- **Extended screenshot:** In the macOS **Rendering** menu, use **Extended Screenshot**.
+  In GSC, use `extendedscreenshot "view.borgvrcapture"` (optional second argument: alpha).
+  On macOS, iOS and visionOS, MCP `capture_extended_screenshot` accepts the same
+  `output_path`, `include_alpha` and `overwrite` options. Without an output path it returns
+  a base64 MCP resource, up to 12 MiB before encoding. Use a file path for larger captures.
+  PNG and positions come from the same render pass and the same eye on visionOS.
+  An ordinary PNG capture returns a `screenshotId` when picking is available.
+  Call `pick_screenshot_positions` with that ID as `screenshot_id` and up to 64
+  `points` of the form `{"x":0.5,"y":0.5}`, with the origin at the image's top left
+  and coordinates in 0...1. Each result is a normalized volume XYZ or `null`.
+  BorgVR keeps only the most recent map in RAM and drops it when another capture
+  starts or the dataset is closed. Picking uses the render interaction depth, not
+  semantic object detection or segmentation.
+
+  The `.borgvrcapture` file starts with the 8 ASCII bytes `BVRPOS1\n`, then
+  three little-endian uint32 values: width, height and PNG length. The PNG
+  starts at byte 20. Pad to the next 4-byte boundary, then read three little-endian
+  float32 values per pixel (XYZ, normalized volume coordinates), row-major from
+  top left. A triplet of NaNs means no hit.
 - `save_visualization_state` / `load_visualization_state` save and restore a named JSON picture
   configuration: all channel TFs, transform, render mode/isovalue, clipping, lighting, background,
   and screen projection. The same dataset must be open; visionOS uses the UI's head-relative pose.

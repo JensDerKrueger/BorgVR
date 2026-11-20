@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "BorgVRAgentServer"
 from configure import create_configuration
 from borgvr_agent.app import Settings, create_app
 from borgvr_agent.context import SUMMARY_MARKER
+from borgvr_agent.workflow_store import WorkflowStore
 from model_config import ModelConfig
 
 root = Path(sys.argv[1])
@@ -47,6 +48,9 @@ threading.Thread(target=catalog.serve_forever, daemon=True).start()
 
 
 async def model(messages, info):
+    resumed = any(isinstance(part, UserPromptPart) and not isinstance(part.content, str) and
+                  "explicitly chose to continue" in str(part.content)
+                  for message in messages for part in message.parts)
     latest = next((i for i in reversed(range(len(messages))) if any(
         isinstance(part, UserPromptPart) and isinstance(part.content, str) and
         not part.content.startswith(SUMMARY_MARKER) for part in messages[i].parts)), 0)
@@ -145,6 +149,38 @@ async def model(messages, info):
         if len(returned) >= len(steps):
             assert returned[-2].content["objects"] == [] and returned[-1].content["measurements"] == []
             return ModelResponse(parts=[TextPart("All annotations deleted and verified.")])
+    elif user in {"volume-edit-erase", "volume-edit-restore", "volume-edit-declined"}:
+        steps = [("get_application_state", {}), ("get_volume_edit_state", {})]
+        restoring = user == "volume-edit-restore"
+        if len(returned) >= 2:
+            status = returned[1].content
+            assert status["available"] and not status["shared"]
+            if restoring:
+                steps.append(("get_command_history", {"source": "chat", "limit": 4}))
+            else:
+                extent = status["physicalExtentMeters"]
+                sample = {"center_meters": [size / 2 for size in extent], "radius_meters": min(extent) / 5}
+                steps.append(("edit_volume", {"mode": "erase", "samples": [sample]}))
+        if restoring and len(returned) >= 3:
+            assert any(row.get("text") == "volume-edit-erase" for row in returned[2].content["chat"])
+            steps.append(("get_command_history", {"tool": "edit_volume", "limit": 1}))
+        if restoring and len(returned) >= 4:
+            history = returned[3].content["history"]
+            assert len(history) == 1 and history[0]["arguments"]["mode"] == "erase"
+            assert history[0]["result"]["hasEdits"] is True
+            steps.append(("edit_volume", {"mode": "restore", "samples": history[0]["arguments"]["samples"]}))
+        edit_result = 4 if restoring else 2
+        if len(returned) > edit_result:
+            receipt = returned[edit_result].content
+            if user == "volume-edit-declined":
+                assert receipt["code"] == "user_declined"
+                return ModelResponse(parts=[TextPart("Volume edit declined safely.")])
+            assert not receipt.get("not_applied")
+            steps.append(("wait_volume_edits", {"timeout_seconds": 8}))
+        if len(returned) > edit_result + 1:
+            waited = returned[edit_result + 1].content
+            assert waited["bricksReady"] and not waited["timedOut"]
+            return ModelResponse(parts=[TextPart("Edited bricks are ready.")])
     elif user == "catalog-search":
         steps = [("get_application_state", {}), ("search_datasets", {"query": "bone"})]
         if len(returned) >= 2:
@@ -166,26 +202,24 @@ async def model(messages, info):
             return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="app-state")])
         state = returned[-1].content
         return ModelResponse(parts=[TextPart("Dataset ready." if state["rendererReady"] else "Start menu ready.")])
+    elif user == "pick-position":
+        if not returned:
+            return ModelResponse(parts=[ToolCallPart("capture_screenshot", {}, tool_call_id="image")])
+        if len(returned) == 1:
+            capture_id = returned[0].content["screenshotId"]
+            return ModelResponse(parts=[ToolCallPart("pick_screenshot_positions",
+                {"screenshot_id": capture_id, "points": [{"x": 0.5, "y": 0.5}]}, tool_call_id="pick")])
+        assert returned[1].content == {"available": True, "positions": [[0.5, 0.5, 0]]}
+        return ModelResponse(parts=[TextPart("Screenshot position verified.")])
     elif user == "collaborate":
-        resumed = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
-                      '"current_state":{' in str(part.content) for message in messages for part in message.parts)
-        names = [part.tool_name for part in returned]
-        if "propose_visualization_rule" in names:
+        supplied_view = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
+                            '"user_supplied_requested_view":true' in str(part.content)
+                            for message in messages for part in message.parts)
+        if supplied_view:
+            assert "ask_collaboration_feedback" not in {tool.name for tool in info.function_tools}
             return ModelResponse(parts=[TextPart("Collaborative task completed without undoing your change.")])
-        if "ask_collaboration_feedback" in names:
-            feedback = next(part.content for part in returned if part.tool_name == "ask_collaboration_feedback")
-            assert feedback["user_feedback"] == "Yes, I wanted to show a better section."
-            name, args = "propose_visualization_rule", {"rule": "When asked to inspect contents, consider a section perpendicular to the viewing direction."}
-        elif resumed:
-            name, args = "ask_collaboration_feedback", {"purpose": "intervention_intent", "language": "en"}
-        elif "report_progress" in names:
-            await asyncio.sleep(30)
-            raise RuntimeError("Manual change did not cancel old planning")
-        elif "get_application_state" in names:
-            name, args = "report_progress", {"text": "Waiting for manual edit."}
-        else:
-            name, args = "get_application_state", {}
-        return ModelResponse(parts=[ToolCallPart(name, args, tool_call_id=f"collaboration-{len(returned)}")])
+        return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback",
+            {"purpose": "help", "language": "en"}, tool_call_id="collaboration-help")])
     elif user == "long-run":
         if len(returned) >= 32:
             return ModelResponse(parts=[TextPart("Long native run passed.")])
@@ -208,6 +242,9 @@ async def model(messages, info):
         if user != "context-before-change":
             steps.append(("rotate_view", {"axis": [0, 1, 0], "degrees": 10}))
         if len(returned) >= len(steps):
+            if resumed:
+                assert returned[-1].content["code"] == "already_applied_in_request"
+                return ModelResponse(parts=[TextPart("Continued without repeating the change.")])
             if user == "verification-failed":
                 raise RuntimeError("Synthetic verification failure")
             raise ModelContextWindowExceededError("test", "Synthetic context limit")
@@ -228,11 +265,14 @@ async def model(messages, info):
 listener = socket.socket()
 listener.bind(("127.0.0.1", 0))
 port = listener.getsockname()[1]
+workflow_path = root / "workflow.sqlite3"
+workflow = WorkflowStore(workflow_path)
+(root / "workflow-fixture.json").write_text(json.dumps([workflow.create_profile(), workflow.create_profile()]))
 server = uvicorn.Server(uvicorn.Config(create_app(Settings(token=token, vllm_token="test-token-" * 8,
     # FunctionModel estimates serialized SDK history, not real vLLM tokens. Keep
     # this execution-budget fixture separate from the dedicated context tests.
     inference=replace(ModelConfig.from_env({}), context=65536),
-    vllm_url=f"http://127.0.0.1:{catalog.server_port}/v1"), FunctionModel(model)),
+    vllm_url=f"http://127.0.0.1:{catalog.server_port}/v1", workflow_database=workflow_path), FunctionModel(model)),
     ssl_certfile=str(root / "runtime/tls/server.crt"), ssl_keyfile=str(root / "runtime/tls/server.key"),
     ws="websockets-sansio", ws_max_size=4194304, access_log=False, log_level="error"))
 thread = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)

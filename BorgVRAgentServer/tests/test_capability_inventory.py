@@ -13,8 +13,13 @@ def current():
 def test_all_declared_commands_tools_gsc_ui_registries_and_settings_are_classified():
     catalog, inventory = current()
     assert audit.validate(catalog, inventory) == []
-    assert inventory["agent"] < inventory["mcp"]
-    assert {"list_datasets", "edit_volume", "clear_objects", "clear_measurements", "upsert_mesh_instance"} <= inventory["mcp"] - inventory["agent"]
+    assert inventory["agent"] - inventory["local_client"] < inventory["mcp"]
+    assert inventory["agent"] - inventory["mcp"] == {
+        "get_command_history", "import_volume", "fuse_volumes", "get_import_status", "cancel_import",
+    }
+    assert {"edit_volume", "wait_volume_edits"} <= inventory["agent"]
+    assert {"list_datasets", "discard_volume_edits", "delete_edit_state", "clear_objects",
+            "clear_measurements", "upsert_mesh_instance"} <= inventory["mcp"] - inventory["agent"]
     assert {"search_datasets", "open_dataset", "upsert_measurement", "upsert_sphere_marker", "upsert_stroke_marker",
             "remove_object", "remove_measurement", "clear_annotations"} <= inventory["agent"]
     assert inventory["settings"]["screen"] and inventory["settings"]["vision"]
@@ -26,7 +31,8 @@ def test_checked_in_report_is_current_and_links_to_the_implementation_plan():
     assert report == audit.render(catalog, inventory)
     assert (audit.ROOT / "BorgVRAgentServer/CAPABILITY_PLAN.md").is_file()
     assert "CAPABILITY_PLAN.md" in report
-    assert "`get_application_state`, `search_datasets` und `open_dataset`" in report
+    assert all(f"`{name}`" in report for name in
+               ("get_application_state", "search_datasets", "open_dataset", "get_command_history"))
 
 
 @pytest.mark.parametrize("field,value", [("symbols", "BorgVRCommand.newOperation"),
@@ -83,12 +89,14 @@ def test_unsupported_grouped_enum_cases_fail_instead_of_undercounting(declaratio
         audit.enum_cases(f"enum Example {{\n  {declaration}\n}}", "Example")
 
 
-def test_app_start_import_and_fusion_gaps_are_not_mistaken_for_existing_commands():
+def test_app_start_import_and_fusion_are_native_jobs_not_external_mcp_commands():
     catalog, _ = current()
     operations = {operation["id"]: operation for operation in catalog["operations"]}
     for name in ("conversion.file", "conversion.dicom", "conversion.images", "conversion.fusion", "conversion.jobs"):
         assert not operations[name]["mcp"]
         assert operations[name]["core"] in {"partial", "service"}
+    assert operations["conversion.fusion"]["local_agent"] == ["fuse_volumes"]
+    assert operations["conversion.jobs"]["local_agent"] == ["get_import_status", "cancel_import"]
     assert operations["datasets.catalog"]["mcp"] == ["list_datasets"]
     assert operations["app.assistant"]["context"] == "application"
     assert operations["windows.immersive"]["platforms"] == ["visionOS"]

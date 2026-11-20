@@ -1,4 +1,6 @@
 import asyncio
+import json
+from dataclasses import replace
 from types import SimpleNamespace
 
 import httpx
@@ -18,8 +20,8 @@ from borgvr_agent.context import (
     ContextBudgetExceeded, ContextMaintenance, SUMMARY_MARKER, VLLMChatModel,
     bounded_history, compact_history, keep_images,
 )
-from borgvr_agent.protocol import ProtocolError
-from test_agent import ROTATE, STATE, connection, hello, open_session, reply, user
+from borgvr_agent.protocol import ProtocolError, json_bytes
+from test_agent import EDIT, EDIT_STATUS, ROTATE, SETTINGS, STATE, connection, hello, open_session, reply, user
 
 
 def history():
@@ -96,6 +98,97 @@ def test_tokenizer_prepares_sdk_settings_deltas_before_mapping(monkeypatch):
             assert any(isinstance(part, ModelSettingsDeltaPart) for part in messages[0].parts)
     asyncio.run(run())
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize("passes", [1, 2, 3])
+def test_merged_checkpoint_keeps_policy_first_for_tokenizer_and_generation(monkeypatch, passes):
+    import httpx2
+    from openai import AsyncOpenAI
+
+    from borgvr_agent.continuation import TaskContinuation
+
+    system, checkpoint = TaskContinuation().checkpoint(system_prompt="Trusted policy.", context_id="fixture",
+                                                       renderer_ready=True, receipts=[], observations=[])
+    # Reproduce the SDK grouping that hid the system prompt inside the preserved checkpoint.
+    messages = [
+        ModelRequest(parts=[*system.parts, *checkpoint.parts]),
+        ModelRequest(parts=[UserPromptPart("Continue the synthetic task.")]),
+        ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="fixture-call")]),
+        ModelRequest(parts=[ToolReturnPart("get_application_state", {"ok": True}, tool_call_id="fixture-call")]),
+    ]
+    observed = []
+    original = httpx.AsyncClient
+
+    def handler(request):
+        payload = json.loads(request.content)
+        wire = payload["messages"]
+        roles = [message["role"] for message in wire]
+        response_type = httpx.Response if request.url.path == "/tokenize" else httpx2.Response
+        if roles[:1] != ["system"] or roles.count("system") != 1:
+            return response_type(400, json={"error": {"message": "System message must be at the beginning."}})
+        assert wire[0]["content"] == "Trusted policy."
+        assert "BorgVR task checkpoint." in json.dumps(wire)
+        assert "Continue the synthetic task." in json.dumps(wire)
+        assert roles[-2:] == ["assistant", "tool"]
+        observed.append((request.url.path, wire))
+        if request.url.path == "/tokenize":
+            return httpx.Response(200, json={"count": 3500 if len(observed) <= passes else 1000,
+                                             "max_model_len": 4096})
+        assert request.url.path == "/v1/chat/completions"
+        return httpx2.Response(200, json={"id": "fixture", "object": "chat.completion", "created": 1,
+            "model": "synthetic-model", "choices": [
+                {"index": 0, "message": {"role": "assistant", "content": "Verified."}, "finish_reason": "stop"}
+            ]})
+
+    class TokenClient(original):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs, transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(httpx, "AsyncClient", TokenClient)
+
+    async def run():
+        async with AsyncOpenAI(api_key="synthetic", base_url="http://model.invalid/v1",
+                               http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler))) as client:
+            model = VLLMChatModel("synthetic-model", provider=OpenAIProvider(openai_client=client),
+                                  token_url="http://model.invalid/tokenize", token="synthetic")
+            ctx = SimpleNamespace(messages=list(messages))
+            request = SimpleNamespace(messages=messages, model=model, model_settings={},
+                                      model_request_parameters=ModelRequestParameters())
+            await ContextMaintenance(4096, 512).before_model_request(ctx, request)
+            response = await model.request(model.prepare_messages(request.messages, request.model_request_parameters),
+                                           request.model_settings, request.model_request_parameters)
+            assert response.parts[0].content == "Verified."
+
+    asyncio.run(run())
+    assert [path for path, _ in observed] == ["/tokenize"] * (passes + 1) + ["/v1/chat/completions"]
+    assert observed[-1][1] == observed[-2][1]
+
+
+@pytest.mark.parametrize("status", [400, 413, 503])
+def test_tokenize_failure_logs_only_status_and_structure(monkeypatch, caplog, status):
+    from borgvr_agent.continuation import TaskContinuation
+
+    original = httpx.AsyncClient
+    seen = []
+
+    def response(request):
+        seen.append(request)
+        return httpx.Response(status, json={"error": {"message": "private provider response"}})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**kwargs, transport=httpx.MockTransport(response)))
+    model = VLLMChatModel("test", provider=OpenAIProvider(api_key="private-api-key"),
+                          token_url="http://vllm:8000/tokenize", token="private-token")
+    checkpoint = TaskContinuation().checkpoint(system_prompt="private policy", context_id="private context",
+                                                renderer_ready=False, receipts=[], observations=[])
+    messages = [*checkpoint, ModelRequest(parts=[UserPromptPart([
+        "private user prompt", BinaryContent(b"private image bytes", media_type="image/png"),
+    ])])]
+    with pytest.raises(httpx.HTTPStatusError) as failure:
+        asyncio.run(model.count_tokens(messages, {}, ModelRequestParameters()))
+    assert failure.value.response.status_code == status and len(seen) == 1
+    assert f"Tokenization HTTP failure: status={status} checkpoint=True" in caplog.text
+    assert "tail_roles=" in caplog.text
+    assert "private" not in caplog.text and "data:image" not in caplog.text
 
 
 class CountingModel(FunctionModel):
@@ -198,6 +291,89 @@ def test_rejected_model_request_is_retried_without_replaying_mutation():
     assert applied == [True] and model_calls == 3
 
 
+def test_small_context_resumes_same_request_without_reapplying_confirmed_commands(caplog):
+    caplog.set_level("INFO", logger="uvicorn.error.borgvr")
+    calls = 0
+    large_edit = {"mode": "erase", "samples": [
+        {"center_meters": [0.123456789, index / 987.0, 0.023456789], "radius_meters": 0.0123456789}
+        for index in range(256)
+    ]}
+    rotate = {"axis": [0, 1, 0], "degrees": 20}
+    replay = {"degrees": 20.0, "axis": [0.0, 1.0, 0.0]}  # Different serialization, same command.
+    new_rotation = {"axis": [0, 1, 0], "degrees": 5}
+    steps = [
+        ("get_application_state", {}), ("rotate_view", rotate), ("get_volume_edit_state", {}),
+        ("edit_volume", large_edit), ("get_application_state", {}), ("rotate_view", replay),
+        ("edit_volume", large_edit),
+        ("rotate_view", new_rotation), ("rotate_view", new_rotation), "Verified from fresh state.",
+        ("get_application_state", {}), ("rotate_view", rotate), "New request applied.",
+    ]
+
+    async def function(messages, info):
+        nonlocal calls
+        prompts = [str(part.content) for part in parts(messages, UserPromptPart)]
+        if calls == 4:
+            assert not parts(messages, ToolCallPart), "A checkpoint retained the previous executable plan"
+            assert any("BorgVR task checkpoint." in text for text in prompts)
+            assert any("Turn the test volume." in text for text in prompts)
+            assert "BorgVR calls remaining=20" in parts(messages, SystemPromptPart)[0].content
+        if calls in (6, 7, 9):
+            result = parts(messages, ToolReturnPart)[-1].content
+            assert result["code"] == "already_applied_in_request"
+        if calls == 7:
+            assert parts(messages, ToolCallPart)[-1].args == {}
+            assert any("BorgVR task checkpoint." in text for text in prompts)
+        if calls == 10:
+            assert not any("BorgVR task checkpoint." in text for text in prompts)
+        step = steps[calls]
+        calls += 1
+        if isinstance(step, str):
+            return ModelResponse(parts=[TextPart(step)])
+        return ModelResponse(parts=[ToolCallPart(*step, tool_call_id=f"call-{calls}")])
+
+    class SmallContextModel(FunctionModel):
+        async def count_tokens(self, messages, settings, parameters):
+            # Deterministic substitute for vLLM tokenization; actual argument size drives pressure.
+            argument_bytes = sum(len(json_bytes(part.args)) for part in parts(messages, ToolCallPart))
+            return RequestUsage(input_tokens=850 + argument_bytes // 3, details={"context_window": 4096})
+
+    settings = replace(SETTINGS, inference=replace(SETTINGS.inference, context=4096, output_tokens=512))
+    with connection(SmallContextModel(function), settings) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, ROTATE, EDIT_STATUS, EDIT]))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        dispatched = []
+        for expected in ["get_application_state", "rotate_view", "get_volume_edit_state", "edit_volume",
+                         "get_application_state", "rotate_view"]:
+            call = ws.receive_json()
+            assert call["type"] == "tool_call" and call["name"] == expected and call["request_id"] == "turn-1"
+            dispatched.append((call["name"], call["arguments"]))
+            result = ({"available": True, "shared": False} if expected == "get_volume_edit_state" else
+                      {"ok": True, "private_result": "SECRET_SYNTHETIC_RESULT"})
+            ws.send_json(reply(call, result=result))
+        assert dispatched[-1] == ("rotate_view", new_rotation)
+        assert dispatched.count(("rotate_view", rotate)) == dispatched.count(("edit_volume", large_edit)) == 1
+        assert ws.receive_json()["text"] == "Verified from fresh state."
+        assert ws.receive_json()["type"] == "completed"
+        ws.send_json(user("turn-2"))
+        assert ws.receive_json()["type"] == "started"
+        ws.send_json(reply(ws.receive_json()))
+        new_call = ws.receive_json()
+        assert new_call["name"] == "rotate_view" and new_call["arguments"] == rotate
+        ws.send_json(reply(new_call))
+        assert ws.receive_json()["text"] == "New request applied."
+        assert ws.receive_json()["type"] == "completed"
+    assert "phase=preflight outcome=checkpoint" in caplog.text
+    assert caplog.text.count("Context continuation:") == 1
+    assert "'window': 4096" in caplog.text and "'input_tokens':" in caplog.text
+    assert "confirmed_mutation_tools=['edit_volume', 'rotate_view']" in caplog.text
+    assert ("outcome=completed checkpoints=1 confirmed={'rotate_view': 2, 'edit_volume': 1} "
+            "repeated_confirmed={} blocked_replays={'rotate_view': 2, 'edit_volume': 1} uncertain=False") in caplog.text
+    assert "SECRET_SYNTHETIC_RESULT" not in caplog.text and "Turn the test volume." not in caplog.text
+    assert "center_meters" not in caplog.text
+
+
 @pytest.mark.parametrize("mutation,error,expected_code", [
     (False, ContextBudgetExceeded("private"), "context_limit"),
     (True, ModelContextWindowExceededError("test", "private"), "context_limit"),
@@ -223,10 +399,111 @@ def test_error_receipt_distinguishes_applied_changes_and_context_limit(mutation,
         if mutation:
             ws.send_json(reply(ws.receive_json()))
         event = ws.receive_json()
-        assert event["type"] == "error" and event["code"] == expected_code
-        assert event["changes_applied"] is mutation
-        assert not event["requires_reconnect"]
+        if mutation:
+            assert event["type"] == "assistant_message" and event["final"]
+            assert event["partial"] == {"reason": expected_code, "confirmed_volume_edits": 0}
+            assert ws.receive_json()["type"] == "completed"
+        else:
+            assert event["type"] == "error" and event["code"] == expected_code
+            assert not event["changes_applied"] and not event["requires_reconnect"]
         assert "private" not in str(event) and "private" not in caplog.text
+
+
+def test_continue_after_partial_result_never_resends_confirmed_or_regrouped_edits(caplog):
+    original = "Edit the two regions and verify the result."
+    a, b, c = [
+        {"center_meters": [x, 0.02, 0.03], "radius_meters": 0.005} for x in [0.01, 0.02, 0.03]
+    ]
+    def erase(*samples):
+        return {"mode": "erase", "samples": list(samples)}
+    steps = iter([
+        ("get_application_state", {}), ("get_volume_edit_state", {}), ("edit_volume", erase(a, b)),
+        ContextBudgetExceeded("provider supplied private data"),
+        ("get_application_state", {}), ("get_volume_edit_state", {}),
+        ("edit_volume", erase(b, a)), ("edit_volume", erase(b, c)),
+        ("edit_volume", erase(c)), "Verification finished.",
+    ])
+    calls = 0
+
+    async def function(messages, info):
+        nonlocal calls
+        calls += 1
+        if calls == 5:
+            prompts = [part.content for part in parts(messages, UserPromptPart)]
+            assert original in prompts and "Weiter" not in prompts
+            assert any("explicitly chose to continue" in str(prompt) for prompt in prompts)
+            assert not parts(messages, ToolCallPart), "Old executable calls were injected into the resumed attempt"
+        if calls in (8, 9):
+            blocked = parts(messages, ToolReturnPart)[-1].content
+            assert blocked["code"] == "already_applied_in_request"
+            assert blocked["confirmed_sample_indices"] == ([0, 1] if calls == 8 else [0])
+        step = next(steps)
+        if isinstance(step, Exception):
+            raise step
+        if isinstance(step, str):
+            return ModelResponse(parts=[TextPart(step)])
+        return ModelResponse(parts=[ToolCallPart(*step, tool_call_id=f"c-{calls}")])
+
+    status = {"available": True, "shared": False, "channels": [1]}
+    with connection(FunctionModel(function)) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, EDIT_STATUS, EDIT]))
+        ws.receive_json()
+        ws.send_json({**user(), "text": original})
+        assert ws.receive_json()["type"] == "started"
+        for name in ["get_application_state", "get_volume_edit_state", "edit_volume"]:
+            call = ws.receive_json()
+            assert call["name"] == name
+            ws.send_json(reply(call, result=status))
+        event = ws.receive_json()
+        assert event["partial"] == {"reason": "context_limit", "confirmed_volume_edits": 1}
+        completed = ws.receive_json()
+        assert completed["type"] == "completed" and completed["outcome"] == "partial"
+        ws.send_json({**user("turn-2"), "text": "Weiter."})
+        assert ws.receive_json()["type"] == "started"
+        for name in ["get_application_state", "get_volume_edit_state", "edit_volume"]:
+            call = ws.receive_json()
+            assert call["name"] == name and call["request_id"] == "turn-2"
+            if name == "edit_volume":
+                assert call["arguments"] == erase(c)
+            ws.send_json(reply(call, result=status))
+        assert ws.receive_json()["text"] == "Verification finished."
+        assert ws.receive_json()["type"] == "completed"
+        ws.send_json({**user("turn-3"), "text": "Weiter"})
+        assert ws.receive_json()["type"] == "started"
+        assert ws.receive_json()["resume_unavailable"] is True
+        assert ws.receive_json()["type"] == "completed"
+    assert "provider supplied private data" not in caplog.text
+
+
+def test_continue_discards_paused_task_after_dataset_change():
+    class FailedAfterEdits:
+        calls = 0
+        async def __call__(self, messages, info):
+            self.calls += 1
+            if self.calls == 1:
+                return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="s")])
+            if self.calls == 2:
+                return ModelResponse(parts=[ToolCallPart("rotate_view", {"axis": [0, 1, 0], "degrees": 20}, tool_call_id="r")])
+            raise ContextBudgetExceeded("test")
+    model = FailedAfterEdits()
+    with connection(FunctionModel(model), SETTINGS) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, ROTATE]))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        for name in ("get_application_state", "rotate_view"):
+            call = ws.receive_json()
+            assert call["name"] == name
+            ws.send_json(reply(call))
+        assert ws.receive_json()["partial"]["reason"] == "context_limit"
+        assert ws.receive_json()["type"] == "completed"
+        ws.send_json({"type": "context_changed", "dataset_id": "test-volume", "context_id": "new-opening"})
+        assert ws.receive_json()["type"] == "context_updated"
+        ws.send_json({**user("turn-2"), "text": "weiter"})
+        assert ws.receive_json()["type"] == "started"
+        assert ws.receive_json()["resume_unavailable"] is True
+        assert ws.receive_json()["type"] == "completed"
+    assert model.calls == 3
 
 
 @pytest.mark.parametrize("body", [{"count": True, "max_model_len": 4096},

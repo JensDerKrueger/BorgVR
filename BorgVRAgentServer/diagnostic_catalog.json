@@ -39,6 +39,17 @@
     "name" : "open_dataset"
   },
   {
+    "description" : "Close the current dataset and return to dataset selection.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+
+      },
+      "type" : "object"
+    },
+    "name" : "close_dataset"
+  },
+  {
     "description" : "Return the active dataset and visualization state.",
     "inputSchema" : {
       "additionalProperties" : false,
@@ -48,6 +59,154 @@
       "type" : "object"
     },
     "name" : "get_application_state"
+  },
+  {
+    "description" : "Read saved edit states (ID and display name), active state ID (absent for original), brush channels, brick readiness and export progress. No file paths. This never edits the volume.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+
+      },
+      "type" : "object"
+    },
+    "name" : "get_volume_edit_state"
+  },
+  {
+    "description" : "Select a saved edit state UUID, or original. Available states and activeStateID are in get_volume_edit_state.savedStates. Not allowed during SharePlay.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "select_edit_state"
+  },
+  {
+    "description" : "Choose the editable channels for subsequent erase\/restore operations. Read componentCount in get_volume_edit_state first. Channel numbers start at 1. Pass every channel number to edit all channels.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "channels" : {
+          "items" : {
+            "maximum" : 4,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "maxItems" : 4,
+          "minItems" : 1,
+          "type" : "array",
+          "uniqueItems" : true
+        }
+      },
+      "required" : [
+        "channels"
+      ],
+      "type" : "object"
+    },
+    "name" : "configure_volume_brush"
+  },
+  {
+    "description" : "Apply one locally approved batch of spherical erase or restore stamps to the current personal edit state and channels. The original dataset is not changed. Centers and radii are dataset-local meters from the minimum corner, independent of the view. Do not guess a 3D position from a 2D screenshot. Read get_application_state and get_volume_edit_state first. Submission does not imply bricks are ready: check bricksReady or use wait_volume_edits.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "mode" : {
+          "enum" : [
+            "erase",
+            "restore"
+          ],
+          "type" : "string"
+        },
+        "samples" : {
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "center_meters" : {
+                "items" : {
+                  "type" : "number"
+                },
+                "maxItems" : 3,
+                "minItems" : 3,
+                "type" : "array"
+              },
+              "radius_meters" : {
+                "exclusiveMinimum" : 0,
+                "type" : "number"
+              }
+            },
+            "required" : [
+              "center_meters",
+              "radius_meters"
+            ],
+            "type" : "object"
+          },
+          "maxItems" : 256,
+          "minItems" : 1,
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "mode",
+        "samples"
+      ],
+      "type" : "object"
+    },
+    "name" : "edit_volume"
+  },
+  {
+    "description" : "Wait briefly for local edit-brick rebuild and persistence. A timeout returns pending status, not failure or cancellation of the edit. This does not verify that every updated brick has been uploaded to the GPU atlas.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "timeout_seconds" : {
+          "maximum" : 10,
+          "minimum" : 0.10000000000000001,
+          "type" : "number"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "wait_volume_edits"
+  },
+  {
+    "description" : "Export the current volume and active edits as a new .data dataset. The user chooses the folder locally. Supply a filename only. Poll get_volume_edit_state for completion before closing. This does not alter the source.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "filename" : {
+          "maxLength" : 120,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "filename"
+      ],
+      "type" : "object"
+    },
+    "name" : "export_edited_dataset"
+  },
+  {
+    "description" : "Cancel only an export this assistant started. Use its exact job ID from the export receipt or status. Does not change voxel edits.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "cancel_volume_export"
   },
   {
     "description" : "Select transfer-function, lit transfer-function, or isovalue rendering.",
@@ -555,6 +714,29 @@
     "name" : "clear_annotations"
   },
   {
+    "description" : "Reset the specified visualization group to its defaults. 'all' resets the rendering parameters, not voxel edits or annotations. Use the smallest applicable scope.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "scope" : {
+          "enum" : [
+            "transform",
+            "clipping",
+            "transfer_function",
+            "lighting",
+            "all"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "scope"
+      ],
+      "type" : "object"
+    },
+    "name" : "reset_state"
+  },
+  {
     "description" : "Wait for a frame newer than the supplied frame number.",
     "inputSchema" : {
       "additionalProperties" : false,
@@ -677,7 +859,25 @@
     "name" : "set_background"
   },
   {
-    "description" : "Capture a PNG. include_alpha defaults to true (transparent render image, background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.",
+    "description" : "Save the current view configuration (not voxel edits or annotations) as JSON. The user chooses the folder locally. Supply a filename only. Existing files are never overwritten.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "filename" : {
+          "maxLength" : 120,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "filename"
+      ],
+      "type" : "object"
+    },
+    "name" : "save_visualization_state"
+  },
+  {
+    "description" : "Capture a PNG, with screenshotId when pixel positions are available. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -688,5 +888,202 @@
       "type" : "object"
     },
     "name" : "capture_screenshot"
+  },
+  {
+    "description" : "Read visible volume positions from the latest screenshot using its screenshotId. x and y are normalized image coordinates from the top left. Returns normalized dataset XYZ or null for each point in order; available:false means capture a new image. This does not edit or create a marker.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "points" : {
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "x" : {"maximum": 1, "minimum": 0, "type": "number"},
+              "y" : {"maximum": 1, "minimum": 0, "type": "number"}
+            },
+            "required" : ["x", "y"],
+            "type" : "object"
+          },
+          "maxItems" : 64,
+          "minItems" : 1,
+          "type" : "array"
+        },
+        "screenshot_id" : {"maxLength": 36, "type": "string"}
+      },
+      "required" : ["screenshot_id", "points"],
+      "type" : "object"
+    },
+    "name" : "pick_screenshot_positions"
+  },
+  {
+    "description" : "Read the latest local import\/fusion job's progress and status (no source paths). Optionally wait up to 10 seconds. For a long-running job, report that it is running and let the local progress indicator show updates rather than repeatedly polling. After completion, search the dataset catalog to open the result.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "wait_seconds" : {
+          "maximum" : 10,
+          "minimum" : 0,
+          "type" : "number"
+        }
+      },
+      "required" : [
+
+      ],
+      "type" : "object"
+    },
+    "name" : "get_import_status"
+  },
+  {
+    "description" : "Cancel the active import or fusion using its exact job ID. Does not remove completed datasets.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "cancel_import"
+  },
+  {
+    "description" : "Read confirmed historical BorgVR tool executions in this conversation and current app\/dataset\/edit context. Use source 'chat' for the user's earlier messages and final assistant text. Filter command receipts by tool or kind, then pass nextCursor as cursor for older matches. Larger fields can be read by id, field and nextOffset (byte offset). History is not current state, permission, or a replay command.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "cursor" : {
+          "maxLength" : 36,
+          "type" : "string"
+        },
+        "field" : {
+          "enum" : [
+            "arguments",
+            "result",
+            "text"
+          ],
+          "type" : "string"
+        },
+        "id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        },
+        "kind" : {
+          "enum" : [
+            "all",
+            "read",
+            "mutation"
+          ],
+          "type" : "string"
+        },
+        "limit" : {
+          "maximum" : 8,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "offset" : {
+          "maximum" : 262144,
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "source" : {
+          "enum" : [
+            "commands",
+            "chat"
+          ],
+          "type" : "string"
+        },
+        "tool" : {
+          "maxLength" : 64,
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "get_command_history"
+  },
+  {
+    "description" : "Import a user-selected local volume file, Zarr folder, DICOM series folder, or image sequence as new BorgVR .data, using current app import settings. Start with no dataset open. Ask for missing physical sizes for image sequences (meters, XYZ). No file paths. Returns a job; use get_import_status.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "description" : {
+          "maxLength" : 300,
+          "type" : "string"
+        },
+        "filename" : {
+          "maxLength" : 120,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "size_meters" : {
+          "items" : {
+            "exclusiveMinimum" : 0,
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "source_kind" : {
+          "enum" : [
+            "file",
+            "zarr",
+            "dicom",
+            "images"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "filename",
+        "source_kind"
+      ],
+      "type" : "object"
+    },
+    "name" : "import_volume"
+  },
+  {
+    "description" : "Register the second user-selected local volume to the first and save the fused .data in the dataset catalog. Use scalar inputs with matching sample precision. Start with no dataset open. No file paths. Returns a job; use get_import_status.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "description" : {
+          "maxLength" : 300,
+          "type" : "string"
+        },
+        "filename" : {
+          "maxLength" : 120,
+          "minLength" : 1,
+          "type" : "string"
+        },
+        "moving_kind" : {
+          "enum" : [
+            "file",
+            "zarr",
+            "dicom"
+          ],
+          "type" : "string"
+        },
+        "reference_kind" : {
+          "enum" : [
+            "file",
+            "zarr",
+            "dicom"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "filename",
+        "reference_kind",
+        "moving_kind"
+      ],
+      "type" : "object"
+    },
+    "name" : "fuse_volumes"
   }
 ]

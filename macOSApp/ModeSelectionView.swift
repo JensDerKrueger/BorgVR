@@ -115,6 +115,7 @@ struct ModeSelectionView: View {
         ) {
           appModel.navigationState = .importData
         }
+        .disabled(appModel.backgroundImportID != nil)
 
         commandButton("modeselection_settings", systemImage: "gearshape") {
           appModel.navigationState = .settings

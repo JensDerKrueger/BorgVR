@@ -48,13 +48,22 @@ eingeführt. [Bisherige Grenzen](../AppSupport/Voice/ARCHITECTURE.md) gelten wei
 
 ## Befund des Funktionsabgleichs
 
-- 61 native MCP-Werkzeuge sind definiert; maximal 26 davon sind im nativen Agenten
-  auf beiden Seiten erlaubt. Plattform, RGB/RGBA und Bildfreigabe reduzieren sie weiter.
+- 61 native MCP-Werkzeuge sind definiert; maximal 30 davon sind im nativen Agenten
+  auf beiden Seiten erlaubt. Dazu kommt die separate lokale Abfrage
+  `get_command_history`. Plattform, RGB/RGBA und Bildfreigabe reduzieren sie weiter.
   Die weiteren vier Modellwerkzeuge dienen nur dem Agentenablauf, nicht der App-Steuerung.
+- Gezielter Darstellungsreset und lesender Status der Volumenbearbeitung nutzen vorhandene
+  Befehle. Der Reset braucht einen expliziten Bereich; der Bearbeitungsstatus enthält keine
+  lokalen Pfade, gespeicherten Namen oder Exportfehlertexte.
+- Der Agent kann nach lokaler Bestätigung einen räumlich begrenzten Erase-/Restore-Aufruf
+  im persönlichen Editierstand ausführen. BorgVR zeigt ausstehende Bricks und den Abschluss
+  der Edit-Verarbeitung unabhängig von der Modellantwort an. Das ist keine Bestätigung
+  eines vollständig aktualisierten GPU-Atlas. SharePlay, Pinselkonfiguration und das
+  Verwalten oder Verwerfen ganzer Editierstände bleiben getrennte Fähigkeiten.
 - Marker und Messungen sind über Commands, MCP und den begrenzten Annotation-Vertrag
   des Agenten erreichbar, einschließlich Anlegen, Bearbeiten, Sichtbarkeit und getesteter
   physischer Skalierung und Löschen. Sammellöschen benötigt lokale Bestätigung und schützt
-  platzierte Meshes. Mesh-Platzierung und Editing bleiben weitere Schritte.
+  platzierte Meshes. Mesh-Platzierung bleibt ein weiterer Schritt.
 - Katalogabfrage und Öffnen/Schließen existieren über MCP. Der Agent erhält eine begrenzte
   Metadatensuche und das autorisierte Öffnen eines kürzlich gelieferten Treffers. Schließen
   ist noch nicht freigeschaltet. Die KI-Verbindung funktioniert ohne Datensatz; im Leerlauf
@@ -97,7 +106,7 @@ Auf visionOS ist zusätzlich der Immersive-Space-Lebenszyklus unabhängig davon 
 Das Protokoll wird über ausgehandelte Fähigkeiten erweitert. Alte Clients behalten ihre
 heutigen sicheren Grenzen; App-Funktionen werden nicht mit einem scheinbar kompatiblen
 Hello ohne tatsächliche Unterstützung aktiviert. Bestehende Größen-/Zeit-/Eintragsgrenzen
-bleiben wirksam. 59 MCP-Werkzeuge einfach in den heutigen 32-Tool-Hello zu kopieren ist
+bleiben wirksam. 61 MCP-Werkzeuge einfach in den heutigen 48-Tool-Hello zu kopieren ist
 keine Lösung: begrenzte Fähigkeitsentdeckung und aufgabenbezogene Werkzeuggruppen planen.
 
 ## Drei exemplarische Abläufe
@@ -117,6 +126,11 @@ Quellen“ ist nicht dieselbe Aussage wie „Es gibt keinen solchen Datensatz“
 
 ### Daten importieren
 
+**Umgesetzt:** `import_volume`, `get_import_status` und `cancel_import` bieten bereits
+einen lokalen Importauftrag mit Dateiauswahl, Fortschritt und Abbruch. Unterstützte
+Quellen sind Volumendatei, Zarr, DICOM-Verzeichnis und Bildsequenz. Die folgenden Schritte
+beschreiben den weitergehenden Ausbau mit wiederverwendbaren Plänen und Quellen-Handles.
+
 1. Quelle aus dem Katalog wählen oder lokal eine Datei/ein Verzeichnis freigeben.
 2. Die App liefert einen opaken Source-Handle mit begrenztem Geltungsbereich.
 3. `prepare_import` prüft Quellformat, Zusatzdateien, Metadaten und Parameter. Der Benutzer
@@ -131,6 +145,10 @@ Handles werden auf dem App-Gerät aufgelöst. Ein Modellpfad gewährt keinen San
 Konvertierung und RAW-Zwischendaten bleiben auf dem App-Gerät, nicht auf dem KI-Server.
 
 ### Zwei Volumen fusionieren
+
+**Umgesetzt:** `fuse_volumes` wählt Referenz und Moving separat auf dem Gerät und nutzt
+denselben Konvertierungsdienst und Auftragsstatus. Registrierungsmetriken und überprüfbare
+Importpläne sind noch nicht Teil des Werkzeugvertrags.
 
 `prepare_fusion` referenziert zwei separat freigegebene Quellen und ihre Rollen
 Referenz/Moving. Unterstützte DICOM-/Datei-/Zarr-Inputs werden durch den bestehenden
@@ -179,9 +197,14 @@ Der Ausschluss von Import und Renderer bleibt auch ohne sichtbaren Wizard durchg
    Einheiten und Originaldatenerhalt testen; SharePlay-Wirkung und Standwechsel absichern.
 6. **Übrige Funktionsgruppen:** Settings, Dokumente, Diagnose, Panels, SharePlay, Geräte und
    generische App-Navigation abarbeiten. Plattformabweichungen bleiben sichtbare Capabilities.
-7. **Erfahrungslernen:** erst auf verlässlicher Ausführung Episoden/Gedächtnis/Fähigkeiten
-   aufbauen. Zunächst synthetische Testdaten und freigegebene Fälle; kein Training aus
-   unbewerteten Nutzeraktionen und kein stiller Upload fachlicher Daten.
+7. **Allgemeines Fachwissen:** gepflegte Begriffe, Werkzeugstrategien und Abwägungen
+   getrennt von Tool-Schemata und persönlichem Wissen versionieren. Zuerst an definierten
+   Aufträgen prüfen, ob der Assistent damit seine Werkzeuge sinnvoll kombiniert.
+8. **Erfahrungslernen:** erst danach Regeln aus beobachteten Arbeitsabläufen ableiten.
+   Ein Beobachter kann normale Command-Ereignisse nutzen, ohne dass der Nutzer in einen
+   Lehrmodus wechseln muss. Beobachten ist noch kein Lernen und keine Freigabe für
+   Bild-/Audioübertragung. Die bisherigen Demonstrationen bleiben ein Debug-Werkzeug,
+   nicht Teil der normalen Bedienung.
 
 Jeder Schritt braucht Source-/Command-/Tool-/Abfrage-/Ergebnis-Tests. Bestehende native
 TLS/WSS-, GSC-Roundtrip-, MCP-, Import- und Registrierungstests bleiben erhalten.

@@ -472,6 +472,12 @@ final class BorgVRScriptRunner: ObservableObject {
     register("screenshot", [.bool]) { [weak self] args in
       self?.takeScreenshot(filename: nil, includeAlpha: args.bool(0)) ?? .callbackError
     }
+    register("extendedscreenshot", [.string]) { [weak self] args in
+      self?.takeScreenshot(filename: args.string(0), extended: true) ?? .callbackError
+    }
+    register("extendedscreenshot", [.string, .bool]) { [weak self] args in
+      self?.takeScreenshot(filename: args.string(0), includeAlpha: args.bool(1), extended: true) ?? .callbackError
+    }
 
     for name in ["savestate", "savevisualizationstate"] {
       register(name, [.string]) { [weak self] args in
@@ -1523,8 +1529,8 @@ final class BorgVRScriptRunner: ObservableObject {
     }
   }
 
-  private func takeScreenshot(filename: String?, includeAlpha: Bool = true) -> CommandResultCode {
-    let key = "\(filename ?? "<default>"):\(includeAlpha)"
+  private func takeScreenshot(filename: String?, includeAlpha: Bool = true, extended: Bool = false) -> CommandResultCode {
+    let key = "\(filename ?? "<default>"):\(includeAlpha):\(extended)"
     if pendingScreenshotKey == key {
       if let result = pendingScreenshotResult {
         pendingScreenshotKey = nil
@@ -1534,7 +1540,7 @@ final class BorgVRScriptRunner: ObservableObject {
       return .waitingNoop
     }
 
-    let url = screenshotURL(filename: filename)
+    let url = screenshotURL(filename: filename, extension: extended ? BorgVRScreenshotPositions.fileExtension : "png")
     let accessURL = storedAppModel?.startAccessingDataDirectory()
     pendingScreenshotKey = key
     pendingScreenshotResult = nil
@@ -1546,8 +1552,12 @@ final class BorgVRScriptRunner: ObservableObject {
     Task { @MainActor [weak self] in
       defer { self?.storedAppModel?.stopAccessingDataDirectory(accessURL) }
       do {
-        _ = try await BorgVRCommandExecutionContext.$source.withValue(.gsc) {
-          try await service.captureScreenshot(to: url, includeAlpha: includeAlpha, overwrite: true)
+        try await BorgVRCommandExecutionContext.$source.withValue(.gsc) {
+          if extended {
+            _ = try await service.captureExtendedScreenshot(to: url, includeAlpha: includeAlpha, overwrite: true)
+          } else {
+            _ = try await service.captureScreenshot(to: url, includeAlpha: includeAlpha, overwrite: true)
+          }
         }
         self?.logInfo("Screenshot saved: \(url.path)")
         self?.pendingScreenshotResult = .success
@@ -2496,9 +2506,9 @@ final class BorgVRScriptRunner: ObservableObject {
     return base.appendingPathComponent(outputSubdirectory, isDirectory: true)
   }
 
-  private func screenshotURL(filename: String?) -> URL {
+  private func screenshotURL(filename: String?, extension fileExtension: String) -> URL {
     if let filename, !filename.isEmpty {
-      return scriptFileURL(filename: filename, defaultExtension: "png")
+      return scriptFileURL(filename: filename, defaultExtension: fileExtension)
     }
 
     let formatter = DateFormatter()
@@ -2506,7 +2516,7 @@ final class BorgVRScriptRunner: ObservableObject {
     formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
     return outputDirectoryURL()
       .appendingPathComponent("BorgVR-\(formatter.string(from: Date()))")
-      .appendingPathExtension("png")
+      .appendingPathExtension(fileExtension)
   }
 
   private func scriptFileURL(filename: String, defaultExtension: String) -> URL {

@@ -414,6 +414,7 @@ final class DatasetOpenWorkflow: ObservableObject {
     sharePlay: SharePlayCoordinator,
     storage: DatasetStorageAccess
   ) async {
+    guard appModel.backgroundImportID == nil else { return }
     isOpening = true
     statusText = String(localized: "Opening dataset ...")
     defer {
@@ -451,6 +452,7 @@ final class DatasetOpenWorkflow: ObservableObject {
       defer { storage.endAccess(access) }
       try await appModel.volumeBrush.prepareOpening(datasetID: openable.uniqueId,
         datasetURL: openable.editStorageURL(directoryURL: storage.directoryURL))
+      guard appModel.backgroundImportID == nil else { return }
       appModel.openDataset(
         openable,
         asGroupSessionHost: sharePlay.isInSession ? nil : true

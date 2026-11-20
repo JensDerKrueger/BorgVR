@@ -133,3 +133,64 @@ def test_old_batched_tool_plan_is_not_executed_after_opening():
         ws.send_json(reply(fresh))
         assert ws.receive_json()["text"] == "Fresh context, no old rotation."
         assert ws.receive_json()["type"] == "completed"
+
+
+EDIT_ID = "a83b8536-7d94-4852-8d6d-10bfc7ae8142"
+SELECT = definition("select_edit_state", {"id": {"type": "string"}}, ["id"])
+CLOSE = definition("close_dataset")
+IMPORT = definition("import_volume", {"filename": {"type": "string"}}, ["filename"])
+JOB = definition("get_import_status")
+WORKFLOW_TOOLS = [STATE, SELECT, CLOSE, IMPORT, JOB]
+
+
+def test_edit_selection_then_close_then_import_replans_with_current_tools():
+    steps = [("get_application_state", {}), ("select_edit_state", {"id": EDIT_ID}),
+             ("get_application_state", {}), ("close_dataset", {}), ("get_application_state", {}),
+             ("import_volume", {"filename": "next.data"}), ("get_import_status", {}), "Import started."]
+    with connection(model_steps(*steps)) as client, open_session(client) as ws:
+        ws.send_json({**navigation_hello(), "dataset_id": "head", "tools": WORKFLOW_TOOLS})
+        assert "import_volume" not in ws.receive_json()["tools"]
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        ws.send_json(reply(ws.receive_json()))
+        selected = ws.receive_json()
+        assert selected["name"] == "select_edit_state"
+        ws.send_json(reply(selected, result={"available": True, "activeStateID": EDIT_ID.upper()},
+                           dataset_transition={"dataset_id": "head", "context_id": "edit", "tools": WORKFLOW_TOOLS}))
+        assert ws.receive_json()["context_id"] == "edit"
+        state = ws.receive_json()
+        assert state["name"] == "get_application_state" and state["context_id"] == "edit"
+        ws.send_json(reply(state))
+        closed = ws.receive_json()
+        assert closed["name"] == "close_dataset"
+        ws.send_json(reply(closed, result={"rendererReady": False},
+                           dataset_transition={"dataset_id": None, "context_id": "menu", "tools": WORKFLOW_TOOLS}))
+        updated = ws.receive_json()
+        assert set(updated["tools"]) == {"get_application_state", "import_volume", "get_import_status"}
+        state = ws.receive_json()
+        assert state["name"] == "get_application_state" and state["dataset_id"] is None and state["context_id"] == "menu"
+        ws.send_json(reply(state, result={"rendererReady": False}))
+        call = ws.receive_json()
+        assert call["name"] == "import_volume" and call["arguments"] == {"filename": "next.data"}
+        ws.send_json(reply(call, result={"status": "running", "id": EDIT_ID}))
+        call = ws.receive_json()
+        assert call["name"] == "get_import_status"
+        ws.send_json(reply(call, result={"status": "running", "id": EDIT_ID, "progress": 0.3}))
+        assert ws.receive_json()["text"] == "Import started."
+        assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("result,dataset", [
+    ({"available": True, "activeStateID": "wrong"}, "head"),
+    ({"available": True, "activeStateID": EDIT_ID}, "different-dataset"),
+])
+def test_edit_state_transition_must_match_the_requested_scope(result, dataset):
+    with connection(model_steps(("get_application_state", {}), ("select_edit_state", {"id": EDIT_ID}))) as client, open_session(client) as ws:
+        ws.send_json({**navigation_hello(), "dataset_id": "head", "tools": WORKFLOW_TOOLS})
+        ws.receive_json()
+        ws.send_json(user())
+        ws.receive_json()
+        ws.send_json(reply(ws.receive_json()))
+        ws.send_json(reply(ws.receive_json(), result=result, dataset_transition={
+            "dataset_id": dataset, "context_id": "edit", "tools": WORKFLOW_TOOLS}))
+        assert ws.receive_json()["code"] == "invalid_message"

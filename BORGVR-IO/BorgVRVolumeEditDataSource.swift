@@ -143,6 +143,7 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   }
   var hasPendingBrickUpdates: Bool { editingStatus()?.isUpdatingBricks ?? false }
   var contentRevision: UInt64 { lock.withLock { baseRevision + (current?.contentRevision ?? 0) } }
+  var recordedBrushRevision: UInt64? { lock.withLock { transitioning || stopped ? nil : current?.recordedBrushRevision } }
   var gpuBrushGeneration: UInt64 { lock.withLock { generation } }
   func changedBrickIDs(since revision: UInt64) -> [Int] {
     lock.withLock {

@@ -154,6 +154,7 @@ struct ModeSelectionView: View {
           .frame(maxWidth: .infinity, minHeight: 32)
       }
       .buttonStyle(.bordered)
+      .disabled(appModel.backgroundImportID != nil)
 
       Button {
         appModel.navigationState = .settings

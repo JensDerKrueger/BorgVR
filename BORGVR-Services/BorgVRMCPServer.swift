@@ -681,7 +681,7 @@ final class BorgVRMCPToolRouter {
       case "edit_volume":
         let mode = try BorgVRVolumeEditingArguments.mode(string("mode", in: arguments))
         let samples = try BorgVRVolumeEditingArguments.samples(arguments["samples"])
-        try await service.volumeEditing.editVolume(mode: mode, samples: samples)
+        try await service.volumeEditing.editVolume(mode: mode, samples: samples, validateContext: validateContext)
         return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "discard_volume_edits":
         guard try BorgVRVolumeEditingArguments.boolean(arguments["confirm"]) == true else {
@@ -909,13 +909,14 @@ final class BorgVRMCPToolRouter {
         let outputURL = try arguments["output_path"].map { _ in try fileURL("output_path", in: arguments) }
         let image = try await service.captureScreenshot(to: outputURL, includeAlpha: includeAlpha,
           overwrite: optionalBool("overwrite", in: arguments) ?? false)
-        let metadata: [String: Any] = [
+        var metadata: [String: Any] = [
           "width": image.width,
           "height": image.height,
           "renderedFrame": image.renderedFrame,
           "includesAlpha": includeAlpha,
           "outputPath": outputURL?.path ?? ""
         ]
+        if let id = image.screenshotID { metadata["screenshotId"] = id.uuidString }
         return [
           "content": [
             [
@@ -926,6 +927,45 @@ final class BorgVRMCPToolRouter {
           ],
           "structuredContent": metadata
         ]
+      case "capture_extended_screenshot":
+        let includeAlpha = try optionalBool("include_alpha", in: arguments) ?? true
+        let outputURL = try arguments["output_path"].map { _ in try fileURL("output_path", in: arguments) }
+        let capture = try await service.captureExtendedScreenshot(to: outputURL, includeAlpha: includeAlpha,
+          overwrite: optionalBool("overwrite", in: arguments) ?? false)
+        let metadata: [String: Any] = [
+          "width": capture.image.width, "height": capture.image.height,
+          "renderedFrame": capture.image.renderedFrame, "screenshotId": capture.id.uuidString,
+          "includesAlpha": includeAlpha, "outputPath": outputURL?.path ?? "", "format": "BVRPOS1"
+        ]
+        let content: [[String: Any]]
+        if let archive = capture.archive {
+          content = [["type": "resource", "resource": [
+            "uri": "borgvr://screenshots/\(capture.id.uuidString).borgvrcapture",
+            "mimeType": "application/octet-stream", "blob": archive.base64EncodedString()
+          ]]]
+        } else {
+          content = [["type": "text", "text": "Extended screenshot saved."]]
+        }
+        return ["content": content, "structuredContent": metadata]
+      case "pick_screenshot_positions":
+        let id = try uuid("screenshot_id", in: arguments)
+        guard let samples = arguments["points"] as? [[String: Any]], (1...64).contains(samples.count) else {
+          throw BorgVRMCPCommandError.invalidArgument("Expected 1 to 64 screenshot points.")
+        }
+        let points = try samples.map { sample -> (Double, Double) in
+          let x = try BorgVRVolumeEditingArguments.number(sample["x"])
+          let y = try BorgVRVolumeEditingArguments.number(sample["y"])
+          guard Set(sample.keys) == ["x", "y"], (0...1).contains(x), (0...1).contains(y) else {
+            throw BorgVRMCPCommandError.invalidArgument("Screenshot points require x and y in 0...1.")
+          }
+          return (x, y)
+        }
+        guard let positions = service.screenshotPositions(id: id) else {
+          return structuredToolResult(ScreenshotPositionResult(available: false, positions: []))
+        }
+        return structuredToolResult(ScreenshotPositionResult(available: true, positions: points.map { x, y in
+          positions.position(x: x, y: y)?.mcpArray
+        }))
       default:
         throw BorgVRMCPServerError.unknownTool(name)
     }
@@ -1191,10 +1231,26 @@ final class BorgVRMCPToolRouter {
         properties: ["input_path": ["type": "string"]], required: ["input_path"]),
       tool("reset_settings", "Reset all registered settings to defaults EXCEPT the running MCP connection's settings. Save settings with include_credentials:true before resetting if you want to restore everything afterward. Does not reset the current visualization; use reset_state for that. Requires confirm:true.",
         properties: ["confirm": ["type": "boolean", "enum": [true]]], required: ["confirm"]),
-      tool("capture_screenshot", "Capture a PNG. include_alpha defaults to true (transparent render image, background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.", properties: [
+      tool("capture_screenshot", "Capture a PNG, with screenshotId when pixel positions are available. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.", properties: [
         "include_alpha": ["type": "boolean"], "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
-      ])
+      ]),
+      tool("capture_extended_screenshot", "Capture the PNG and matching XYZ position map as one .borgvrcapture file. Supply an absolute output_path for large captures; inline responses are limited to 12 MiB before base64. include_alpha defaults to true. Existing files require overwrite:true.", properties: [
+        "include_alpha": ["type": "boolean"], "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
+      ]),
+      tool("pick_screenshot_positions", "Read visible volume positions from the latest screenshot using its screenshotId. x and y are normalized image coordinates from the top left. Returns normalized dataset XYZ or null for each point in order; available:false means capture a new image. This does not edit or create a marker.", properties: [
+        "screenshot_id": ["type": "string", "maxLength": 36],
+        "points": ["type": "array", "minItems": 1, "maxItems": 64, "items": [
+          "type": "object", "additionalProperties": false, "required": ["x", "y"],
+          "properties": ["x": ["type": "number", "minimum": 0, "maximum": 1],
+                         "y": ["type": "number", "minimum": 0, "maximum": 1]]
+        ]]
+      ], required: ["screenshot_id", "points"])
     ]
+  }
+
+  private struct ScreenshotPositionResult: Encodable {
+    let available: Bool
+    let positions: [[Float]?]
   }
 
   private func tool(

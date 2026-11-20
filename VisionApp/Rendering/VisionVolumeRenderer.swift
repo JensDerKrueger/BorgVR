@@ -2172,15 +2172,15 @@ extension VisionVolumeRenderer {
     guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
     let mcpScreenshotRequest = runtimeAppModel.mcpRenderBridge.takeScreenshotRequest()
-    var mcpScreenshotReadback: MetalScreenshotReadback?
+    var mcpScreenshotReadback: MetalPairedScreenshotReadback?
     var mcpScreenshotError: Error?
     if mcpScreenshotRequest != nil {
       do {
-        mcpScreenshotReadback = try MetalScreenshotEncoder.encodeReadback(
-          from: drawable.colorTextures[0],
-          slice: 0,
-          commandBuffer: commandBuffer
-        )
+        guard let textureToClip = currentTextureToClipMatrices.first,
+              let viewport = viewports.first else { throw MetalScreenshotError.positionBufferUnavailable }
+        mcpScreenshotReadback = try MetalScreenshotEncoder.encodePairedReadback(
+          color: drawable.colorTextures[0], depth: interactionDepthTexture, textureToClip: textureToClip,
+          viewport: viewport, rateMap: rasterizationRateMap, commandBuffer: commandBuffer)
       } catch {
         mcpScreenshotError = error
       }
@@ -2226,11 +2226,17 @@ extension VisionVolumeRenderer {
       request.completion(.failure(error))
     } else if let request = mcpScreenshotRequest, let readback = mcpScreenshotReadback {
       do {
+        let png = try MetalScreenshotEncoder.pngData(from: readback.color)
+        let positions = readback.positionReadback?.positions()
+        if let positions {
+          runtimeAppModel.mcpRenderBridge.screenshotCache.store(positions, id: request.id, renderedFrame: completedFrame)
+        }
         request.completion(.success(BorgVRMCPImage(
-          pngData: try MetalScreenshotEncoder.pngData(from: readback),
-          width: readback.width,
-          height: readback.height,
-          renderedFrame: completedFrame
+          pngData: png,
+          width: readback.color.width,
+          height: readback.color.height,
+          renderedFrame: completedFrame,
+          screenshotID: positions == nil ? nil : request.id
         )))
       } catch {
         request.completion(.failure(error))

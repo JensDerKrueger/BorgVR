@@ -529,6 +529,31 @@ completion blocks automatic replacement. Cancel immediately stops the connection
 queued replacement; it does not undo committed changes. Network, individual-command and
 context limits remain independent of the longer task budget.
 
+### Saving a conversation locally
+
+In **Settings > AI Assistant**, opt in to saving and restoring the current
+conversation and its command history. The archive is encrypted on this device,
+does not contain screenshots and is not sent automatically to the server.
+Turning the option off removes the saved copy; **New conversation** also clears
+the in-memory history. Saved dataset receipts are only available for the
+matching dataset and edit state.
+
+### Editing volume regions
+
+The assistant can erase or restore spherical regions in the personal edit state
+using the active brush channels. It needs known positions and radii in
+dataset-local XYZ meters. By default, BorgVR shows a local approval with
+the bounds, channels, and stamp count. The original file is unchanged.
+The assistant does not perform these edits during SharePlay.
+**Always approve volume edits** approves the current operation and turns off
+**Confirm volume edits**. This setting can be turned back on and does not change
+the approval requirements for other operations.
+
+The assistant window shows pending bricks and reports completion of local
+rebuild and persistence even after the model has answered. A short wait timeout
+does not cancel background work. Completion does not guarantee that all edited
+bricks have been uploaded to the GPU atlas.
+
 ### Collaborative editing and approved preferences
 
 You can manipulate the scene while the agent works. Manual Command events pause unexecuted
@@ -537,23 +562,14 @@ state is sent and the same task resumes. Locally checked view revisions reject s
 agent commands. Already dispatched commands finish once; they are not replayed. The agent
 must treat the user's view as its new baseline, not restore an older view over it.
 
-The agent can ask what your intervention meant. Answer by text, voice, or the conversation
-buttons; this reply continues the same task. Ordinary new prompts still interrupt it.
-When investigation is inconclusive, it can ask for concrete help instead of claiming success.
-Native/time/context limits still apply, including while waiting for an answer.
+If missing visual evidence blocks the task, the agent can ask for a more informative
+view. You can answer with text or voice, or set the view directly to continue the same
+task. It does not ask whether your change was meant to help or request routine permission
+to change the view. Safe local approvals still apply; a new prompt can interrupt the task.
 
-Each yes/no question covers a single decision. Whether a change was intended as help is
-separate from permission to choose another view. Declining a new view makes the active task
-read-only; reads and screenshots remain available. Conditional replies do not grant
-unrestricted permission. Saying yes to help intent neither grants further permissions nor
-saves a rule. The server supplies single-purpose questions in German or English.
-
-Reusable preferences are only proposals until you explicitly choose **Remember rule**.
-Up to 16 approved rules (500 characters each) stay on the current device, outside SharePlay
-and GSC, and are sent to future conversations. Remove them under **Settings > AI Assistant >
-Remembered rules**; start a new conversation to remove them from the active model context.
-Unconfirmed suggestions are not saved. This is contextual knowledge, not weight updates,
-LoRA training, guaranteed scientific knowledge, or permission to bypass tool safeguards.
+Manual changes are context for the current task, not new rules. Previously approved rules
+remain on this device and are sent to future conversations. To remove them, use
+**Settings > AI Assistant > Remembered rules**, then start a new conversation.
 
 The assistant is isolated behind one application bridge and the documented network protocol.
 See [architecture and removal boundaries](../AppSupport/Voice/ARCHITECTURE.md).

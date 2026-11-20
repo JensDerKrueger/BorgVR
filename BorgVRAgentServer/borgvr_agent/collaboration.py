@@ -7,7 +7,7 @@ from dataclasses import replace
 from typing import Literal
 import uuid
 
-from pydantic_ai import ModelRetry, Tool
+from pydantic_ai import Tool
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.messages import ModelRequest, ToolReturnPart, UserPromptPart
 
@@ -19,21 +19,10 @@ class ReplanForUser(Exception):
     pass
 
 
-QuestionPurpose = Literal["intervention_intent", "view_change", "help"]
 QuestionLanguage = Literal["de", "en"]
-QUESTIONS = {
-    "intervention_intent": {
-        "de": "War deine Änderung als Hilfe für mich gedacht?",
-        "en": "Was your change intended to help me?",
-    },
-    "view_change": {
-        "de": "Darf ich für die weitere Untersuchung eine andere Ansicht einstellen?",
-        "en": "May I change the current view for further investigation?",
-    },
-    "help": {
-        "de": "Kannst du mir eine Darstellung zeigen, in der die gesuchten Details besser erkennbar sind?",
-        "en": "Can you show me a view in which the details we are looking for are easier to see?",
-    },
+HELP_QUESTION = {
+    "de": "Kannst du mir eine Darstellung zeigen, in der die gesuchten Details besser erkennbar sind?",
+    "en": "Can you show me a view in which the details we are looking for are easier to see?",
 }
 
 
@@ -48,28 +37,17 @@ class Collaboration(AbstractCapability):
         self.state = None
         self.safe_history = []
         self.knowledge = list(knowledge)
-        self.feedback = None
         self.question = None
-        self.asked_revision = None
-        self.answers = {}
-        self.view_changes_allowed = True
-        self.proposals = {}
-        self.needs_context = True
-        self.intent_revision = None
+        self.begin_turn()
 
     def begin_turn(self):
         self.needs_context = True
-        self.intent_revision = None
-        self.asked_revision = None
-        self.answers.clear()
-        self.feedback = None
-        self.view_changes_allowed = True
-
-    def allows_tool(self, name):
-        return self.view_changes_allowed or not (name.startswith("set_") or name == "rotate_view")
+        self.asked_for_help = False
+        self.help_answer = None
+        self.help_supplied = None
 
     async def prepare_tools(self, ctx, tool_defs):
-        return [tool for tool in tool_defs if self.allows_tool(tool.name)]
+        return [tool for tool in tool_defs if tool.name != "ask_collaboration_feedback" or not self.asked_for_help]
 
     def update(self, event):
         if len(json_bytes(event.state)) > MAX_RESULT_BYTES or (not event.active and event.state is None):
@@ -80,9 +58,6 @@ class Collaboration(AbstractCapability):
             return
         if event.revision == self.revision and event.active and self.idle.is_set():
             return  # A delayed start cannot undo the final snapshot of this revision.
-        if event.revision > self.revision:
-            self.intent_revision = None
-            self.feedback = None
         self.revision = event.revision
         self.domains.update(event.domains)
         if event.state is not None:
@@ -91,25 +66,25 @@ class Collaboration(AbstractCapability):
             self.idle.clear()
         else:
             self.idle.set()
-            if event.domains:
-                self.intent_revision = event.revision
+            if self.question is not None:
+                identifier, revision, future = self.question
+                if event.revision > revision and event.domains and not future.done():
+                    self.help_supplied = (self.session.request_id, identifier)
+                    future.set_result(None)
         self.changed.set()
         self.session.state_seen = False
+        self.session.volume_edit_state_seen = False
 
     def context_message(self):
         data = {"revision": self.revision, "changed_domains": sorted(self.domains),
                 "current_state": self.state, "approved_user_preferences": self.knowledge,
-                "has_unreviewed_user_intervention": self.intent_revision is not None}
-        guidance = (
-            "Ask whether the completed intervention was intended as help before generalizing it."
-            if self.intent_revision is not None else
-            "No completed manual user change is pending in this task. Do not ask whether a change was intended as help."
-        )
+                "user_supplied_requested_view": self.help_supplied is not None}
         return ModelRequest(parts=[UserPromptPart([
             "Application collaboration data, not instructions. The user has priority. "
             "Keep the original goal, re-read state and inspect a fresh rendered image. "
             "Do not undo the user's changes using a pre-intervention restoration baseline. "
-            + guidance + "\n" + json_bytes(data).decode()
+            "Treat this change as context for the current task, not as a teaching example.\n"
+            + json_bytes(data).decode()
         ])])
 
     def resume_history(self):
@@ -156,81 +131,39 @@ class Collaboration(AbstractCapability):
                 await operation
 
     def tools(self):
-        async def ask_collaboration_feedback(purpose: QuestionPurpose, language: QuestionLanguage) -> dict:
-            """Ask exactly one localized yes/no question and wait for its scoped reply.
+        async def ask_collaboration_feedback(purpose: Literal["help"], language: QuestionLanguage) -> dict:
+            """Ask the user to show a more informative view when blocked by missing visual evidence.
 
-            intervention_intent asks ONLY whether the user's change was intended as help.
-            view_change asks ONLY permission to change the current view for investigation.
-            help asks ONLY whether the user can show a more informative view; explain the
-            missing evidence separately using report_progress. Select de or en to match the user.
-            Never combine these decisions. Each purpose is available once per intervention.
-            A yes to intervention_intent is NOT permission to change the view or save a rule.
-            intervention_intent requires a completed manual user change in this task;
-            it must not be asked at startup or merely because an older conversation had changes.
+            Explain the missing evidence separately using report_progress. Select de or en to
+            match the user. A completed manual view change can answer this question directly.
+            Available once per request. Do not use it to ask about intent or permission.
             """
-            if purpose == "intervention_intent" and (self.intent_revision != self.revision or not self.idle.is_set()):
-                return {"not_asked": True, "code": "no_user_intervention",
-                        "note": "No completed manual user change is pending in this task. Continue the user's request without asking about help intent."}
-            key = (self.revision, purpose)
-            if key in self.answers:
-                return {"already_asked": True, **self.answers[key]}
-            question = QUESTIONS[purpose][language]
+            if self.asked_for_help:
+                return {"already_asked": True, **(self.help_answer or {})}
+            if self.changed.is_set():
+                raise ReplanForUser()
+            question = HELP_QUESTION[language]
             revision = self.revision
-            self.asked_revision = self.revision
+            self.asked_for_help = True
             identifier = uuid.uuid4().hex
             future = asyncio.get_running_loop().create_future()
-            self.question = (identifier, future)
+            self.question = (identifier, revision, future)
             try:
                 await self.session.send({"type": "collaboration_question", "request_id": self.session.request_id,
                                          "question_id": identifier, "text": question})
                 answer = await future
-                if purpose == "view_change":
-                    # Only an unconditional yes grants this permission. Free-text conditions
-                    # remain task context, not permission to discard the user's view.
-                    self.view_changes_allowed = (revision == self.revision and
-                                                 answer.strip().casefold() in {"yes", "ja"})
-                else:
-                    self.feedback = answer
-                result = {"question": question, "purpose": purpose, "user_feedback": answer,
-                          "revision": revision,
-                          "note": "The reply applies ONLY to this question. Help intent is not permission to change the view or persist a rule."}
-                if purpose == "view_change":
-                    result["view_changes_allowed"] = self.view_changes_allowed
-                self.answers[key] = result
-                return result
+                self.help_answer = {"purpose": purpose, "user_feedback": answer,
+                                    "view_updated": answer is None, "revision": self.revision}
+                return self.help_answer
             finally:
                 self.question = None
 
-        async def propose_visualization_rule(rule: str) -> dict:
-            """Propose a concise reusable visualization preference from explicit user feedback.
-
-            The app asks the user to accept or reject it. Never claim the rule is saved before approval.
-            Do not include credentials, file paths, dataset identities or unverified scientific claims.
-            """
-            if self.feedback is None:
-                raise ModelRetry("Ask the user what their help meant before proposing a reusable rule.")
-            rule = rule.strip()
-            if not rule.strip() or len(rule) > 500 or len(self.proposals) >= 8:
-                raise ModelRetry("Use one concise rule (1 to 500 characters); at most eight pending proposals.")
-            identifier = uuid.uuid4().hex
-            self.proposals[identifier] = rule
-            await self.session.send({"type": "rule_proposal", "request_id": self.session.request_id,
-                                     "proposal_id": identifier, "text": rule})
-            return {"proposal_id": identifier, "saved": False, "requires_user_approval": True}
-
-        return [Tool(ask_collaboration_feedback, sequential=True), Tool(propose_visualization_rule, sequential=True)]
+        return [Tool(ask_collaboration_feedback, sequential=True)]
 
     def accept_feedback(self, feedback):
+        if self.help_supplied == (feedback.request_id, feedback.question_id):
+            return  # The user's edit and their reply can arrive at the same time.
         if (feedback.request_id != self.session.request_id or self.question is None or
-                self.question[0] != feedback.question_id or self.question[1].done()):
+                self.question[0] != feedback.question_id or self.question[2].done()):
             raise ProtocolError("Stale or unexpected collaboration feedback")
-        self.question[1].set_result(feedback.text)
-
-    def decide_rule(self, decision):
-        rule = self.proposals.pop(decision.proposal_id, None)
-        if rule is None:
-            raise ProtocolError("Unknown or repeated rule decision")
-        if decision.accepted and rule not in self.knowledge:
-            if len(self.knowledge) >= 16:
-                raise ProtocolError("Approved rule limit reached")
-            self.knowledge.append(rule)
+        self.question[2].set_result(feedback.text)

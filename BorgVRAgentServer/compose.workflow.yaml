@@ -1,0 +1,11 @@
+# Explicit opt-in for experiments. Use a private, pre-created host directory.
+services:
+  agent:
+    environment:
+      BORGVR_WORKFLOW_DB: /var/lib/borgvr-workflow/workflow.sqlite3
+    volumes:
+      - type: bind
+        source: ${BORGVR_WORKFLOW_DATA:?Set a private workflow data directory}
+        target: /var/lib/borgvr-workflow
+        bind:
+          create_host_path: false

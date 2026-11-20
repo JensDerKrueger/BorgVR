@@ -139,8 +139,8 @@ async def main():
     if len(args.catalog_json.encode()) > 65536:
         parser.error("Catalog is too large")
     catalog = json.loads(args.catalog_json)
-    if not isinstance(catalog, list) or len(catalog) > 32:
-        parser.error("Expected at most 32 tool definitions")
+    if not isinstance(catalog, list) or len(catalog) > 48:
+        parser.error("Expected at most 48 tool definitions")
     settings = Settings.from_env()
     async with AsyncOpenAI(base_url=settings.vllm_url, api_key=settings.vllm_token,
         timeout=60, max_retries=0, http_client=DefaultAsyncHttpxClient(

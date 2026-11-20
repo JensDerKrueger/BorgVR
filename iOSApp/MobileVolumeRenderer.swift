@@ -65,6 +65,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
           completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
           return
         }
+        self.appModel.screenshotCache.begin(id)
         guard let view else {
           self.cancelScreenshot(id: id, error: AppModelError.rendererUnavailable)
           return
@@ -116,10 +117,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       return
     }
 
-    let screenshot = makeScreenshotReadback(
-      from: frame.drawable.texture,
-      commandBuffer: frame.commandBuffer
-    )
+    let screenshot = makeScreenshotReadback(from: frame)
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
         guard let self, self.core.isAttached else { return }
@@ -132,7 +130,11 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
           datasetKey: frame.datasetKey,
           missingBrickCount: missingBrickCount
         )
-        self.finishScreenshot(screenshot)
+        if commandBuffer.status == .completed {
+          self.finishScreenshot(screenshot)
+        } else if let screenshot {
+          self.finishScreenshotRequest(id: screenshot.id, result: .failure(MetalScreenshotError.readbackFailed))
+        }
         self.frameInFlight = false
       }
     }
@@ -142,20 +144,17 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
 
   private struct PendingScreenshot {
     let id: UUID
-    let readback: MetalScreenshotReadback
+    let readback: MetalPairedScreenshotReadback
   }
 
-  private func makeScreenshotReadback(
-    from texture: MTLTexture,
-    commandBuffer: MTLCommandBuffer
-  ) -> PendingScreenshot? {
+  private func makeScreenshotReadback(from frame: ScreenVolumeEncodedFrame) -> PendingScreenshot? {
     guard let request = screenshotRequests.takePending() else { return nil }
     do {
       return PendingScreenshot(
         id: request.id,
-        readback: try MetalScreenshotEncoder.encodeReadback(
-          from: texture,
-          commandBuffer: commandBuffer
+        readback: try MetalScreenshotEncoder.encodePairedReadback(
+          color: frame.drawable.texture, depth: frame.interactionDepthTexture,
+          textureToClip: frame.textureToClip, commandBuffer: frame.commandBuffer
         )
       )
     } catch {
@@ -168,8 +167,11 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     guard let screenshot,
           let request = screenshotRequests.complete(id: screenshot.id) else { return }
     do {
-      let data = try MetalScreenshotEncoder.pngData(from: screenshot.readback)
+      let data = try MetalScreenshotEncoder.pngData(from: screenshot.readback.color)
       try data.write(to: request.url, options: .atomic)
+      if let positions = screenshot.readback.positionReadback?.positions() {
+        appModel.screenshotCache.store(positions, id: request.id, renderedFrame: appModel.completedRenderFrameCount)
+      }
       request.completion(.success(request.url))
     } catch {
       request.completion(.failure(error))

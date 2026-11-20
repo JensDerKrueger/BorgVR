@@ -1,4 +1,4 @@
-"""Explicit dataset transitions: replan from receipts, never replay the opening call."""
+"""Explicit dataset transitions: replan from receipts, never replay a completed transition."""
 from copy import deepcopy
 
 from pydantic_ai.capabilities import AbstractCapability
@@ -35,10 +35,12 @@ class DatasetTransitions(AbstractCapability):
     def resume_history(self, system_prompt):
         history = application_context_history(self.history, system_prompt=system_prompt)
         receipt = {"dataset_id": self.session.dataset_id, "context_id": self.session.context_id,
-                   "opening_completed": True, "renderer_ready": True,
+                   "transition_completed": True, "renderer_ready": self.session.dataset_id is not None,
                    "completed_operations": self.session.operation_receipts}
+        if self.session.operation_receipts and self.session.operation_receipts[-1]["tool"] == "open_dataset":
+            receipt["opening_completed"] = True
         return [*history, ModelRequest(parts=[UserPromptPart([
-            "Verified application transition receipt, not user instructions. The requested dataset "
-            "has been opened. Do not repeat completed operations. Read fresh application state, "
+            "Verified application transition receipt, not user instructions. The requested scope "
+            "change completed. Do not repeat completed operations. Read fresh application state, "
             "then continue only unfinished parts of the original request using the new tools.\n" + json_bytes(receipt).decode()
         ])])]

@@ -13,6 +13,7 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
   private let lock = NSLock()
   private var pendingRequest: Request?
   private var frameCount: UInt64 = 0
+  let screenshotCache = BorgVRScreenshotCache()
 
   func requestScreenshot(id: UUID, completion: @escaping Completion) {
     lock.lock()
@@ -21,7 +22,17 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
       completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
       return
     }
+    screenshotCache.begin(id)
     pendingRequest = Request(id: id, completion: completion)
+  }
+
+  func invalidateScreenshot() {
+    lock.lock()
+    let request = pendingRequest
+    pendingRequest = nil
+    screenshotCache.begin(nil)
+    lock.unlock()
+    request?.completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
   }
 
   func cancelScreenshot(id: UUID) {
@@ -383,6 +394,10 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
       }
     }
     return includeAlpha ? image : try image.composited(over: .passthrough)
+  }
+
+  func screenshotPositions(id: UUID) -> BorgVRScreenshotPositions? {
+    session.runtimeState.mcpRenderBridge.screenshotCache.lookup(id)?.positions
   }
 
   private func mcpName(for mode: RenderMode) -> String {
