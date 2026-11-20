@@ -242,6 +242,9 @@ private struct HarnessCanvas: View {
 }
 
 private struct HarnessControls: View {
+  @EnvironmentObject private var docking: DockingController
+  @Environment(\.openWindow) private var openWindow
+  @Environment(\.dismissWindow) private var dismissWindow
   var panel: DockablePanelID = .lightingEditor
   @State private var value = 0.5
   @State private var lastAction = "None"
@@ -249,6 +252,20 @@ private struct HarnessControls: View {
 
   var body: some View {
     VStack(spacing: 16) {
+      if panel == .renderControls {
+        // Exercise real child-button taps, not just the direct controller test above the canvas.
+        HStack {
+          ForEach([DockablePanelID.lightingEditor, .transferFunctionEditor, .markerEditor,
+            .measurementEditor, .volumeBrushEditor]) { target in
+            Button(target.displayTitle) {
+              docking.togglePresentation(target, openWindow: { openWindow(id: $0) },
+                dismissWindow: { dismissWindow(id: $0) })
+            }
+            .buttonStyle(ScreenControlButtonStyle(accent: target.tint,
+              isSelected: docking.isVisible(target), showsAccent: true))
+          }
+        }
+      }
       Slider(value: $value)
       Text("Last action: \(lastAction)")
       HStack {

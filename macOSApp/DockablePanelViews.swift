@@ -278,9 +278,11 @@ private struct DockablePanelTitleBar: View {
         PanelActionButtons(items: window.configuration.leading)
           .padding(.leading, 8)
       }
+      // Ordering gestures belong to the title, not to an ancestor of the content buttons.
       title.gesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("dockablePanelCanvas"))
           .onChanged { onDragChanged?($0.translation) }
           .onEnded { _ in onDragEnded?() })
+        .onTapGesture { docking.bringToFront(panel) }
       PanelActionButtons(items: window.configuration.actions)
       DockToggleButton(panel: panel)
       Button {
@@ -362,7 +364,6 @@ struct PositionedDockablePanel<Content: View>: View {
     }
     .offset(x: origin.x, y: origin.y)
     .zIndex(docking.zIndex(for: panel))
-    .simultaneousGesture(TapGesture().onEnded { docking.bringToFront(panel) })
   }
 }
 

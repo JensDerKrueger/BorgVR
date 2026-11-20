@@ -9,6 +9,7 @@ swiftc -target "$(uname -m)-apple-macosx15.2" -module-cache-path "$BUILD_DIR/swi
   "$ROOT/macOSApp/DockingController.swift" \
   "$ROOT/macOSApp/PanelWindow.swift" \
   "$ROOT/AppSupport/UI/FractionProgressLine.swift" \
+  "$ROOT/AppSupport/Rendering/ScreenControlStyle.swift" \
   "$ROOT/macOSApp/NativePanelToolbar.swift" \
   "$ROOT/macOSApp/DockablePanelViews.swift" \
   "$ROOT/Tests/PanelWindowHarness.swift" \
