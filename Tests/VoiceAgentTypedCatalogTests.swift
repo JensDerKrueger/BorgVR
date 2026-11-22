@@ -70,6 +70,7 @@ struct VoiceAgentTypedCatalogTests {
       let expertise = source + "\n[tests.connection]\ngoal = \"Fixture only\"\nsteps = [\"\(request.uppercased())\"]\n"
       let controller = VoiceAgentController(settings: settings, expertKnowledgeSource: expertise)
       controller.configure(bridge: bridge)
+      let before = session.currentSnapshot().transform
       await controller.submit(request)
       let clock = ContinuousClock()
       let deadline = clock.now.advanced(by: .seconds(20))
@@ -79,8 +80,11 @@ struct VoiceAgentTypedCatalogTests {
       guard controller.errorText == nil, controller.messages.last?.text == "Catalog and rules received." else {
         throw Failure.failed("\(request): \(controller.errorText ?? "No response")")
       }
+      guard !rendering || session.currentSnapshot().transform != before else {
+        throw Failure.failed("The new server did not execute the typed rotation")
+      }
       controller.cancel()
     }
-    print("Native typed catalog and per-connection knowledge reached the model over TLS/WSS; 270 calls completed.")
+    print("Native typed catalog and per-connection knowledge reached the model over TLS/WSS; 270 state reads and a rotation completed.")
   }
 }

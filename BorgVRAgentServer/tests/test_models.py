@@ -28,7 +28,7 @@ def test_custom_model_has_no_qwen_request_or_parser_assumptions():
     values = profile_values("custom")
     values.update(BORGVR_MODEL="Other/Vision-Instruct", BORGVR_MODEL_REVISION="main", BORGVR_TOOL_PARSER="hermes")
     config = ModelConfig.from_env(values)
-    assert "extra_body" not in config.request_settings()
+    assert config.thinking == "default"
     assert "qwen3" not in config.arguments() and "--reasoning-parser" not in config.arguments()
     assert "hermes" in config.arguments()
 

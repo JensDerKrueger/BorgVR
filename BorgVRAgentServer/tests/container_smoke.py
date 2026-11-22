@@ -41,6 +41,7 @@ async def check(url, certificate, token):
                         raise
                     await asyncio.sleep(0.2)
             assert (await client.get(url + "/readyz")).status_code == 401
+            assert (await client.head(url + "/healthz")).headers["BorgVR-Time-Only-Turns"] == "1"
             # No vLLM on this CPU build runner: do not pretend the model is ready.
             assert (await client.get(url + "/readyz", headers={"Authorization": "Bearer " + token})).status_code == 503
         endpoint = url.replace("https://", "wss://", 1) + "/v1/session"
@@ -53,7 +54,8 @@ async def check(url, certificate, token):
                                  additional_headers={"Authorization": "Bearer " + token}) as socket:
             await socket.send(json.dumps({"type": "hello", "protocol": 1, "dataset_id": "container-test",
                                           "context_id": "test-opening", "tools": []}))
-            assert json.loads(await socket.recv())["type"] == "ready"
+            ready = json.loads(await socket.recv())
+            assert ready["type"] == "ready" and ready["execution_limits"] == {"timeout_seconds": 3600}
 
 
 def main():
@@ -63,6 +65,7 @@ def main():
     info = json.loads(docker("image", "inspect", args.image))[0]
     assert info["Architecture"] == "amd64" and info["Os"] == "linux"
     assert info["Config"]["User"] == "10001:10001"
+    assert info["Config"]["Labels"]["org.borgvr.runtime"] == "typed-v1"
     compose = yaml.safe_load((Path(__file__).resolve().parents[1] / "compose.yaml").read_text())
     cuda = yaml.safe_load((Path(__file__).resolve().parents[1] / "compose.cuda.yaml").read_text())
     tmpfs_args = [arg for mount in compose["services"]["agent"]["tmpfs"] for arg in ("--tmpfs", mount)]
@@ -104,13 +107,15 @@ def main():
                 "--label", f"{LABEL}={PROJECT}", "--label", f"com.docker.compose.project.working_dir={root}",
                 "--network", "borgvr-ai_default", "-v", "borgvr-ai_model-cache:/test-model-cache:ro",
                 "-e", "BORGVR_VLLM_URL=http://127.0.0.1:9/v1",
+                "-e", "BORGVR_MODEL=fixture/model", "-e", "BORGVR_TOKEN_FILE=/run/secrets/agent_token",
+                "-e", "BORGVR_VLLM_TOKEN_FILE=/run/secrets/vllm_token",
                 "-v", f"{runtime / 'secrets'}:/run/secrets:ro", "-v", f"{runtime / 'tls'}:/run/tls:ro", args.image,
             )
             port = docker("port", container, "8766/tcp").split(":")[-1]
             asyncio.run(check(f"https://127.0.0.1:{port}", runtime / "tls/server.crt",
                               (runtime / "secrets/agent_token").read_text().strip()))
             docker("exec", container, "python", "-c",
-                   "from pathlib import Path; assert not Path('/app/runtime').exists(); assert not Path('/app/.env').exists(); assert Path('/app/LICENSE').exists()")
+                   "from pathlib import Path; assert not Path('/app/runtime').exists(); assert not Path('/app/.env').exists(); assert Path('/app/LICENSE').exists(); assert not Path('/app/borgvr_agent').exists()")
             client = Docker()
             plan = docker_plan(root, client, remove_images=False)
             assert plan["containers"] == [container] and plan["volumes"] == ["borgvr-ai_model-cache"]

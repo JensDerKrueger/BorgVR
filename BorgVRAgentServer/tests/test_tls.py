@@ -8,11 +8,9 @@ import time
 import urllib.request
 
 import pytest
-from pydantic_ai.messages import ModelResponse, TextPart
-from pydantic_ai.models.function import FunctionModel
 import uvicorn
 
-from borgvr_agent.app import Settings, create_app
+from borgvr_next.app import create_app
 from client import talk
 from configure import create_configuration
 
@@ -22,10 +20,13 @@ def test_real_tls_websocket_and_hostname_verification(tmp_path, capsys):
     cert, key = tmp_path / "runtime/tls/server.crt", tmp_path / "runtime/tls/server.key"
     token = (tmp_path / "runtime/secrets/agent_token").read_text().strip()
 
-    async def model(messages, info):
-        return ModelResponse(parts=[TextPart("TLS test ready")])
+    class Model:
+        name = "fixture"
 
-    app = create_app(Settings(token=token, vllm_token="b" * 64), FunctionModel(model))
+        async def complete(self, messages, tools):
+            return "TLS test ready"
+
+    app = create_app(token=token, model=Model())
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
     port = listener.getsockname()[1]

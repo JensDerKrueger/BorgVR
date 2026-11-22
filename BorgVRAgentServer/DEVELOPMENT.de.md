@@ -136,7 +136,7 @@ Im lokalen `BorgVRAgentServer`-Verzeichnis, **ohne sudo**:
 ```
 
 Für einen anderen SSH-Port jeweils `--port PORT` ergänzen. Der erste Befehl überträgt nur
-`borgvr_agent/**/*.py`, `client.py`, `model_config.py` und `requirements.txt`; keine `.env`,
+`borgvr_next/**/*.py`, `client.py`, `model_config.py` und `requirements.txt`; keine `.env`,
 Zertifikate, Schlüssel, Datensätze oder Git-Metadaten. Er wartet auf den bestätigten Start
 des neuen Agenten. Es gibt Upload-, Größen-, Eintrags- und Zeitlimits. Links, Pfad-Traversierung,
 Spezialdateien und geänderte Bibliotheksabhängigkeiten werden abgelehnt. Alte Snapshots und

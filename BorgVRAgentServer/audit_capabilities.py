@@ -1,7 +1,6 @@
 """Static product inventory, not a tool allowlist or proof of runtime support."""
 
 import argparse
-import ast
 import json
 from pathlib import Path
 import re
@@ -61,26 +60,12 @@ def read_inventory(root=ROOT):
     handlers = set(re.findall(r'case "([a-z_]+)":', dispatch))
     if mcp != handlers:
         raise ValueError(f"MCP definitions/dispatch differ: {sorted(mcp ^ handlers)}")
-    tree = ast.parse(read("BorgVRAgentServer/borgvr_agent/protocol.py"))
-    def tool_set(name):
-        assignment = next(node for node in tree.body if isinstance(node, ast.Assign) and
-                          any(isinstance(target, ast.Name) and target.id == name for target in node.targets))
-        return set(ast.literal_eval(assignment.value.args[0]))
-    agent = tool_set("ALLOWED_TOOLS")
-    local_client = tool_set("LOCAL_CLIENT_TOOLS")
     voice_policy = read("AppSupport/Voice/VoiceAgentProtocol.swift")
-    client = swift_set(voice_policy, "allowed")
-    typed_only = swift_set(voice_policy, "typedOnlyTools")
+    agent = swift_set(voice_policy, "allowed") | swift_set(voice_policy, "typedOnlyTools")
+    local_client = agent - mcp
     diagnostic = {item["name"] for item in json.loads(read("BorgVRAgentServer/diagnostic_catalog.json"))}
-    if not agent == client == diagnostic or agent - mcp != local_client:
-        raise ValueError("Agent server/client/diagnostic catalogs differ")
-    if typed_only & agent or not typed_only <= mcp:
-        raise ValueError("Typed-only tools must be MCP tools outside the legacy catalog")
-    internal = set()
-    for file in ("BorgVRAgentServer/borgvr_agent/agent_factory.py", "BorgVRAgentServer/borgvr_agent/collaboration.py"):
-        internal.update(node.args[0].id for node in ast.walk(ast.parse(read(file))) if isinstance(node, ast.Call) and
-                        isinstance(node.func, ast.Name) and node.func.id == "Tool" and node.args and
-                        isinstance(node.args[0], ast.Name))
+    if agent != diagnostic:
+        raise ValueError("Native client catalog and test fixture differ")
     gsc = set(re.findall(r"^([A-Za-z][A-Za-z0-9_]*)\(", read("Scripts/borgvr.gsccommands"), re.M))
     archive = read("BORGVR-IO/BorgVRSettingsArchive.swift")
     recorded = swift_set(archive, "recordingKeys")
@@ -88,8 +73,8 @@ def read_inventory(root=ROOT):
     settings = {platform: registered_settings(read(file)) for platform, file in SETTINGS.items()}
     if recorded & local or not set.union(*settings.values()) <= recorded | local:
         raise ValueError("A registered setting has no unambiguous GSC recording policy")
-    return {"symbols": symbols, "mcp": mcp, "agent": agent | typed_only, "local_client": local_client,
-            "internal_agent": internal, "gsc": gsc,
+    return {"symbols": symbols, "mcp": mcp, "agent": agent, "local_client": local_client,
+            "internal_agent": set(), "gsc": gsc,
             "settings": settings, "recorded_settings": recorded, "local_settings": local}
 
 
@@ -146,7 +131,7 @@ def render(catalog, inventory):
         "Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.",
         "GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;",
         "daraus folgt weder eine Agentenfreigabe noch eine benannte DSL-Funktion. Tool-Definitionen sind nicht automatisch UI-/Zustands-/Test-Vollständigkeit.", "",
-        "Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvorschläge sind keine nativen Benutzerfunktionen und werden separat gezählt.", "",
+        "Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.", "",
         "## Übersicht", "", "| Bereich | Funktion | Kontext | Command-Pfad | MCP | Agent |", "|---|---|---|---|---|---|"]
     status = {"command": "vorhanden", "service": "Service/Abfrage", "partial": "teilweise", "ui": "nur UI", "local": "lokale Funktion", "internal": "intern"}
     for op in ops:
@@ -155,9 +140,7 @@ def render(catalog, inventory):
         agent = "nein" if not allowed else ("ja*" if allowed == defined else "teilweise*")
         lines.append(f"| {labels[op['category']]} | [{op['label']}](#{op['id'].replace('.', '-')}) | {op['context']} | {status[op['core']]} | {'ja' if op['mcp'] else 'nein'} | {agent} |")
     lines += ["", "* Kontextabhängig: App-Zustand, begrenzte Metadatensuche und autorisiertes Öffnen sind ohne Renderer nutzbar; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.", "",
-              "## Interne Agentenwerkzeuge", "", "| Werkzeug | Zweck |", "|---|---|"]
-    lines += [f"| `{tool['name']}` | {tool['purpose']} |" for tool in catalog["internal_agent_tools"]]
-    lines += ["", "## Details", ""]
+              "## Details", ""]
     for op in ops:
         lines += [f"<a id=\"{op['id'].replace('.', '-')}\"></a>", f"### {op['label']}", "",
             f"- Kennung: `{op['id']}`; Plattformen: {', '.join(op['platforms'])}; Kontext: `{op['context']}`; Wirkung: {op['risk']}.",

@@ -8,6 +8,7 @@ if [[ "${1:-}" == dev ]]; then
 fi
 COMMAND=install
 PREBUILT_AGENT=1
+LOCAL_AGENT_IMAGE=borgvr-agent:next
 AGENT_IMAGE_SET=0
 AGENT_IMAGE=""
 HAS_INIT_OPTIONS=0
@@ -23,8 +24,8 @@ usage() {
   printf '%s\n' \
     'Usage: sudo ./setup.sh [install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
     'Run setup-host.sh separately if Docker/GPU prerequisites are missing.' \
-    '  --prebuilt-agent    Use a local/published agent image (default; never build).' \
-    '  --build-agent       Developer mode: build the agent from source instead.' \
+    '  --prebuilt-agent    Use a built or published typed-v1 image; never build.' \
+    '  --build-agent       Build the current agent (default in a source checkout).' \
     '  --agent-image REF   Agent image reference (install/init or explicit update).' \
     '  --host HOST         Certificate DNS name/IP (install/init; initially localhost).' \
     '  --bind IPV4         Listen address (install/init; initially 127.0.0.1).' \
@@ -43,7 +44,7 @@ usage() {
     '  --profile NAME      Model preset; list with: ./setup.sh profiles.' \
     '  --model REPO --model-revision REV --tool-parser NAME  Custom image-capable model.' \
     '  --vllm-image REF --dtype auto|float16|bfloat16|float32 --quantization NAME' \
-    '  --context-length N --max-seqs N --max-output-tokens N --gpu-memory-fraction F' \
+    '  --context-length N --max-seqs N --gpu-memory-fraction F' \
     '  --reasoning-parser NAME|none --thinking default|off|on --min-free-gib N' \
     '  --enforce-eager true|false --cpu-offload-gb N  Optional memory/performance controls.' \
     'Update pulls configured images, checks access, starts services and tests the model.' \
@@ -62,7 +63,7 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
     install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up|_dev-agent-health) COMMAND="$1"; shift ;;
-    --gpu|--tensor-parallel-size|--nccl-p2p-disable|--disable-custom-all-reduce|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
+    --gpu|--tensor-parallel-size|--nccl-p2p-disable|--disable-custom-all-reduce|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
     --yes|--remove-images|--remove-checkout|--files-only) UNINSTALL_ARGS+=("$1"); shift ;;
@@ -107,7 +108,13 @@ fi
 if [[ -n "$IMAGE_MODE" && "$COMMAND" != install ]]; then
   die 'Agent image modes apply only to install.'
 fi
-if ((!PREBUILT_AGENT && !AGENT_IMAGE_SET)); then INIT_ARGS+=(--agent-image borgvr-agent:3.9); fi
+if [[ "$COMMAND" == install && -z "$IMAGE_MODE" && "$AGENT_IMAGE_SET" == 0 && -f "$DIR/Dockerfile" ]]; then
+  PREBUILT_AGENT=0
+fi
+if ((!PREBUILT_AGENT && !AGENT_IMAGE_SET)); then
+  AGENT_IMAGE="$LOCAL_AGENT_IMAGE"
+  INIT_ARGS+=(--agent-image "$AGENT_IMAGE")
+fi
 if ((${#UNINSTALL_ARGS[@]})) && [[ "$COMMAND" != uninstall ]]; then
   die 'Deletion options apply only to uninstall.'
 fi
@@ -127,6 +134,34 @@ choose_docker() {
   "${DOCKER[@]}" info >/dev/null 2>&1 \
     || die 'Cannot access the local Docker daemon. Run sudo ./setup.sh, and check that Docker is running.'
   "${DOCKER[@]}" compose version >/dev/null || die 'Docker Compose v2 plugin is required.'
+}
+require_current_agent() {
+  local image="$1" runtime
+  runtime="$("${DOCKER[@]}" image inspect --format '{{index .Config.Labels "org.borgvr.runtime"}}' "$image")" \
+    || die 'The configured agent image is not available. Install from source or supply a typed-v1 image.'
+  [[ "$runtime" == typed-v1 ]] \
+    || die 'The image is not the current typed-v1 agent. Build it from source or supply a current release image.'
+}
+build_agent() {
+  [[ -f "$DIR/Dockerfile" && "$1" != *@* ]] \
+    || die 'Building the agent requires the source checkout and a writable local image tag.'
+  "${DOCKER[@]}" build --pull --tag "$1" "$DIR"
+}
+prepare_install_agent() {
+  local image="${AGENT_IMAGE:-}"
+  if [[ -z "$image" && -f "$DIR/.env" ]]; then
+    image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
+  fi
+  image="${image:-$LOCAL_AGENT_IMAGE}"
+  if ((!PREBUILT_AGENT)); then
+    build_agent "$image"
+  elif ! "${DOCKER[@]}" image inspect "$image" >/dev/null 2>&1; then
+    [[ "$image" != "$LOCAL_AGENT_IMAGE" ]] \
+      || die 'Load a current image and pass --agent-image, or install from a source checkout.'
+    "${DOCKER[@]}" pull "$image"
+  fi
+  require_current_agent "$image"
+  export BORGVR_AGENT_IMAGE="$image"
 }
 compose() {
   local extra=()
@@ -238,10 +273,11 @@ case "$COMMAND" in
   init) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}; exit 0 ;;
   install)
     python3 "$DIR/configure.py" install --check ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
+    choose_docker
+    prepare_install_agent
     if [[ -f "$DIR/.env" ]]; then
       BACKEND="$(python3 "$DIR/configure.py" get BORGVR_BACKEND)"
       [[ "$BACKEND" == cuda || "$BACKEND" == rocm ]] || die 'Backend must be cuda or rocm.'
-      choose_docker
       compose config --quiet
       printf '%s\n' 'Recreating BorgVR containers; model cache, images and access tokens are retained.'
       compose down || die 'Could not remove existing BorgVR containers; configuration was not changed.'
@@ -275,34 +311,34 @@ case "$COMMAND" in
     min_free_gib="$(python3 "$DIR/configure.py" get BORGVR_MIN_FREE_GIB)"
     ((available_kib >= min_free_gib * 1024 * 1024)) || die "Keep at least $min_free_gib GiB free in Docker storage for this model profile (configurable)."
     check_gpu
-    if ((PREBUILT_AGENT)); then
-      agent_image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
-      if ! "${DOCKER[@]}" image inspect "$agent_image" >/dev/null 2>&1; then
-        [[ "$agent_image" != borgvr-agent:3.9 ]] \
-          || die 'Load the trusted local image, or set BORGVR_AGENT_IMAGE in the existing .env to a published image.'
-        compose pull agent
-      fi
-    else
-      agent_image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
-      [[ "$agent_image" != *@* ]] || die 'Source builds need a writable image tag in .env, not a registry digest.'
-      "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-        -f "$DIR/compose.yaml" -f "$DIR/compose.$BACKEND.yaml" -f "$DIR/compose.build.yaml" build --pull agent
-    fi
     check_service_secrets
     start_services
     test_server
     printf '%s\n' 'Server is running. Run: sudo ./setup.sh test' \
       'Configure Settings > AI Assistant in the native BorgVR app; see README.md for client setup.' ;;
   doctor) check_gpu; check_firewall ;;
-  start) check_service_secrets; start_services ;;
-  restart) check_service_secrets; compose stop; start_services ;;
+  start|restart)
+    agent_image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
+    require_current_agent "$agent_image"
+    export BORGVR_AGENT_IMAGE="$agent_image"
+    check_service_secrets
+    if [[ "$COMMAND" == restart ]]; then compose stop; fi
+    start_services ;;
   update)
     if ((AGENT_IMAGE_SET)); then
       python3 "$DIR/configure.py" validate-image "$AGENT_IMAGE"
       export BORGVR_AGENT_IMAGE="$AGENT_IMAGE"
     fi
     compose config --quiet
-    compose pull
+    agent_image="${AGENT_IMAGE:-$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)}"
+    if [[ "$agent_image" == "$LOCAL_AGENT_IMAGE" && -f "$DIR/Dockerfile" ]]; then
+      build_agent "$agent_image"
+    elif ((AGENT_IMAGE_SET)) || [[ "$agent_image" == */* || "$agent_image" == *@* ]]; then
+      "${DOCKER[@]}" pull "$agent_image"
+    fi
+    require_current_agent "$agent_image"
+    export BORGVR_AGENT_IMAGE="$agent_image"
+    compose pull vllm
     if [[ "$(python3 "$DIR/configure.py" get BORGVR_TENSOR_PARALLEL_SIZE)" != 1 ]]; then check_gpu; fi
     check_service_secrets
     if ((AGENT_IMAGE_SET)); then python3 "$DIR/configure.py" set-agent-image "$AGENT_IMAGE"; fi

@@ -46,8 +46,8 @@ def test_bundle_only_contains_agent_source_and_matches_dependencies():
         dev.unpack_source(archive(), "0" * 64)
 
 
-@pytest.mark.parametrize("name", ["../outside.py", "/etc/ssh/authorized_keys", "borgvr_agent/../../outside.py",
-                                  "runtime/secrets/agent_token", ".env", "borgvr_agent/a.pth", "borgvr_agent/.hidden.py"])
+@pytest.mark.parametrize("name", ["../outside.py", "/etc/ssh/authorized_keys", "borgvr_next/../../outside.py",
+                                  "runtime/secrets/agent_token", ".env", "borgvr_next/a.pth", "borgvr_next/.hidden.py"])
 def test_archive_refuses_unexpected_paths(name):
     extra = tarfile.TarInfo(name)
     with pytest.raises(ValueError):
@@ -56,7 +56,7 @@ def test_archive_refuses_unexpected_paths(name):
 
 @pytest.mark.parametrize("kind", [tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.FIFOTYPE, tarfile.DIRTYPE])
 def test_archive_refuses_links_and_special_files(kind):
-    member = tarfile.TarInfo("borgvr_agent/new.py")
+    member = tarfile.TarInfo("borgvr_next/new.py")
     member.type, member.linkname = kind, "/etc/passwd"
     with pytest.raises(ValueError):
         dev.unpack_source(archive(extra=member), HASH)
@@ -68,18 +68,18 @@ def test_archive_limits_duplicates_and_compression():
         dev.unpack_source(archive(extra=duplicate), HASH)
     with pytest.raises(ValueError):
         dev.unpack_source(b"x" * (dev.MAX_ARCHIVE + 1), HASH)
-    files = {**{name: b"# test source\n" for name in dev.REQUIRED}, "borgvr_agent/huge.py": b"x" * (512 * 1024 + 1)}
+    files = {**{name: b"# test source\n" for name in dev.REQUIRED}, "borgvr_next/huge.py": b"x" * (512 * 1024 + 1)}
     with pytest.raises(ValueError):
         dev.unpack_source(archive(files), HASH)
     with pytest.raises(tarfile.TarError):
         import gzip
         dev.unpack_source(gzip.compress(archive()), HASH)
     files = {name: b"# test source\n" for name in dev.REQUIRED}
-    files.update({f"borgvr_agent/file_{i}.py": b"x" for i in range(dev.MAX_FILES)})
+    files.update({f"borgvr_next/file_{i}.py": b"x" for i in range(dev.MAX_FILES)})
     with pytest.raises(ValueError):
         dev.unpack_source(archive(files), HASH)
     files = {name: b"# test source\n" for name in dev.REQUIRED}
-    files.update({f"borgvr_agent/large_{i}.py": b"x" * (500 * 1024) for i in range(5)})
+    files.update({f"borgvr_next/large_{i}.py": b"x" * (500 * 1024) for i in range(5)})
     with pytest.raises(ValueError):
         dev.unpack_source(archive(files), HASH)
 
@@ -87,8 +87,8 @@ def test_archive_limits_duplicates_and_compression():
 def test_bundle_refuses_symlinks_and_hardlinks(tmp_path):
     for name in dev.TOP_FILES:
         shutil.copyfile(ROOT / name, tmp_path / name)
-    shutil.copytree(ROOT / "borgvr_agent", tmp_path / "borgvr_agent", ignore=shutil.ignore_patterns("__pycache__"))
-    path = tmp_path / "borgvr_agent/sneaky.py"
+    shutil.copytree(ROOT / "borgvr_next", tmp_path / "borgvr_next", ignore=shutil.ignore_patterns("__pycache__"))
+    path = tmp_path / "borgvr_next/sneaky.py"
     path.symlink_to(ROOT / "client.py")
     with pytest.raises((ValueError, OSError)):
         dev.bundle_source(tmp_path)
@@ -118,11 +118,11 @@ def deployment(tmp_path, monkeypatch):
 def test_snapshot_is_complete_before_request_and_old_release_is_immutable(deployment):
     one = dev.stage_source(archive(), {"requirements_sha256": HASH}, wait=False)
     files = {name: b"# test source\n" for name in dev.REQUIRED}
-    files["borgvr_agent/app.py"] = b"# new version\n"
+    files["borgvr_next/app.py"] = b"# new version\n"
     two = dev.stage_source(archive(files), {"requirements_sha256": HASH}, wait=False)
     assert one["release"] != two["release"]
-    assert (deployment / "releases" / one["release"] / "borgvr_agent/app.py").read_bytes() == b"# test source\n"
-    assert (deployment / "releases" / two["release"] / "borgvr_agent/app.py").read_bytes() == b"# new version\n"
+    assert (deployment / "releases" / one["release"] / "borgvr_next/app.py").read_bytes() == b"# test source\n"
+    assert (deployment / "releases" / two["release"] / "borgvr_next/app.py").read_bytes() == b"# new version\n"
     assert dev.read_json(deployment / "control/request.json")["release"] == two["release"]
     for _ in range(12):
         dev.stage_source(archive(files), {"requirements_sha256": HASH}, wait=False)
@@ -234,7 +234,7 @@ def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monk
     source.mkdir()
     for name in dev.TOP_FILES:
         shutil.copyfile(ROOT / name, source / name)
-    shutil.copytree(ROOT / "borgvr_agent", source / "borgvr_agent", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(ROOT / "borgvr_next", source / "borgvr_next", ignore=shutil.ignore_patterns("__pycache__"))
     (source / "runtime").mkdir()
     (source / ".env").write_text("BORGVR_AGENT_IMAGE=" + __import__("configure").DEFAULT_AGENT_IMAGE + "\n")
     key = tmp_path / "key.pub"
@@ -386,7 +386,7 @@ d.supervise(root/'releases',control,command=[sys.executable,'-u','-c',child],hea
     try:
         state = dev.wait_ready(deployment / "control", initial["request"], timeout=5)
         files = {name: b"# test source\n" for name in dev.REQUIRED}
-        files["borgvr_agent/app.py"] = b"# second worker\n"
+        files["borgvr_next/app.py"] = b"# second worker\n"
         next_state = dev.stage_source(archive(files), {"requirements_sha256": HASH})
         assert state["release"] != next_state["release"] and next_state["phase"] == "ready"
         assert next_state["sha256"] == hashlib.sha256(archive(files)).hexdigest()

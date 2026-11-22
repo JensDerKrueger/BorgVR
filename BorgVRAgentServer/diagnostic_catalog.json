@@ -866,6 +866,30 @@
     "name" : "set_transfer_function"
   },
   {
+    "description" : "Replace just one component of a zero-based channel's TF. Components 0/1/2/3 are red/green/blue/alpha. Pass normalized [position,value] pairs in [0,1] with strictly increasing positions. BorgVR interpolates linearly, holding the first and last values outside the points. All other components and channels are preserved. For example, blue from 0 at 25% to 1 at 75% uses component 2 and points [[0.25,0],[0.75,1]].",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "channel" : { "maximum" : 3, "minimum" : 0, "type" : "integer" },
+        "component" : { "maximum" : 3, "minimum" : 0, "type" : "integer" },
+        "points" : {
+          "items" : {
+            "items" : { "maximum" : 1, "minimum" : 0, "type" : "number" },
+            "maxItems" : 2,
+            "minItems" : 2,
+            "type" : "array"
+          },
+          "maxItems" : 65536,
+          "minItems" : 1,
+          "type" : "array"
+        }
+      },
+      "required" : ["channel", "component", "points"],
+      "type" : "object"
+    },
+    "name" : "set_transfer_function_component"
+  },
+  {
     "description" : "Read mode and primary\/secondary RGBA colors (0...1). visionOS uses passthrough.",
     "inputSchema" : {
       "additionalProperties" : false,

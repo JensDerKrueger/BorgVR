@@ -128,7 +128,7 @@ From the local source `BorgVRAgentServer` directory, **without sudo**:
 ./setup.sh dev restart --host 134.91.11.251 --key ~/.ssh/borgvr-ai1-dev
 ```
 
-Add `--port PORT` for a custom SSH port. Push uploads only `borgvr_agent/**/*.py`, `client.py`,
+Add `--port PORT` for a custom SSH port. Push uploads only `borgvr_next/**/*.py`, `client.py`,
 `model_config.py` and `requirements.txt`, never `.env`, credentials, certificates, datasets or
 Git metadata. It waits for the new worker's startup acknowledgement. Uploads have byte,
 entry and time limits. Links, path traversal, special files and dependencies differing from

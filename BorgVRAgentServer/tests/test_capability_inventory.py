@@ -106,7 +106,7 @@ def test_app_start_import_and_fusion_are_native_jobs_not_external_mcp_commands()
 
 
 def test_experimental_catalog_does_not_grant_runtime_tools_or_bypass_the_bridge():
-    sources = list((audit.ROOT / "BorgVRAgentServer/borgvr_agent").glob("*.py"))
+    sources = list((audit.ROOT / "BorgVRAgentServer/borgvr_next").glob("*.py"))
     sources += list((audit.ROOT / "AppSupport/Voice").glob("*.swift"))
     for file in sources:
         text = file.read_text()

@@ -44,7 +44,8 @@ class Call:
 
 
 class VLLM:
-    def __init__(self, http, base_url, token, name, context=65536, *, max_output_tokens=None, generation_timeout=180):
+    def __init__(self, http, base_url, token, name, context=65536, *, max_output_tokens=None, generation_timeout=180,
+                 thinking_mode="off"):
         self.http = http
         self.url = base_url.rstrip("/")
         if not self.url.endswith("/v1"):
@@ -56,6 +57,9 @@ class VLLM:
             raise ValueError("Invalid model budget")
         self.max_output_tokens = max_output_tokens
         self.generation_timeout = generation_timeout
+        if thinking_mode not in {"off", "on", "default"}:
+            raise ValueError("Invalid thinking mode")
+        self.thinking_mode = thinking_mode
 
     async def exchange(self, method, url, *, phase, seconds, body=None):
         timeout = httpx.Timeout(seconds, connect=min(5, seconds), pool=min(5, seconds))
@@ -86,8 +90,9 @@ class VLLM:
         return isinstance(models, list) and any(isinstance(item, dict) and item.get("id") == self.name for item in models)
 
     async def complete(self, messages, tools):
-        body = {"model": self.name, "messages": messages,
-                "chat_template_kwargs": {"enable_thinking": False}}
+        body = {"model": self.name, "messages": messages}
+        if self.thinking_mode != "default":
+            body["chat_template_kwargs"] = {"enable_thinking": self.thinking_mode == "on"}
         if tools:
             body["tools"] = tools
         size = len(encode(body))

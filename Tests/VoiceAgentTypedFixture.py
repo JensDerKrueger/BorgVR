@@ -42,6 +42,8 @@ class Model:
             reads = sum(message["role"] == "tool" for message in messages)
             if reads < 270:
                 return Call(f"state-{reads}", "get_application_state", "{}")
+            if reads == 270:
+                return Call("rotation", "rotate_view", '{"axis":[0,1,0],"degrees":15}')
         return "Catalog and rules received."
 
 

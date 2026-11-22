@@ -37,8 +37,8 @@ MAX_ARCHIVE = 4 * 1024 * 1024
 MAX_SOURCE = 2 * 1024 * 1024
 MAX_FILES = 128
 TOP_FILES = {"client.py", "model_config.py", "requirements.txt"}
-REQUIRED = TOP_FILES | {"borgvr_agent/__init__.py", "borgvr_agent/app.py", "borgvr_agent/protocol.py"}
-UVICORN = ["-m", "uvicorn", "borgvr_agent.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8766",
+REQUIRED = TOP_FILES | {"borgvr_next/__init__.py", "borgvr_next/app.py", "borgvr_next/wire.py"}
+UVICORN = ["-m", "uvicorn", "borgvr_next.app:from_env", "--factory", "--host", "0.0.0.0", "--port", "8766",
            "--ssl-certfile", "/run/tls/server.crt", "--ssl-keyfile", "/run/tls/server.key", "--ws", "websockets-sansio",
            "--ws-max-size", "4194304", "--ws-ping-interval", "20", "--ws-ping-timeout", "20",
            "--timeout-keep-alive", "5", "--no-access-log", "--no-proxy-headers"]
@@ -82,7 +82,7 @@ def read_json(path):
 
 def source_name(name):
     return name in TOP_FILES or (len(name) <= 240 and len(name.split("/")) <= 8 and
-        re.fullmatch(r"borgvr_agent/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.py", name) is not None)
+        re.fullmatch(r"borgvr_next/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.py", name) is not None)
 
 
 def unpack_source(data, requirements_sha):
@@ -109,8 +109,8 @@ def unpack_source(data, requirements_sha):
 
 
 def bundle_source(root):
-    paths = [root / name for name in sorted(TOP_FILES)] + sorted((root / "borgvr_agent").rglob("*.py"))
-    if len(paths) > MAX_FILES or (root / "borgvr_agent").is_symlink():
+    paths = [root / name for name in sorted(TOP_FILES)] + sorted((root / "borgvr_next").rglob("*.py"))
+    if len(paths) > MAX_FILES or (root / "borgvr_next").is_symlink():
         raise ValueError("Unexpected source tree")
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w", format=tarfile.USTAR_FORMAT) as archive:

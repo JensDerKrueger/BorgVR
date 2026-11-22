@@ -17,7 +17,7 @@ LOCAL_IMAGE = "borgvr-agent:ci"
 DEPLOYMENT_FILES = (
     "compose.yaml", "compose.cuda.yaml", "compose.cuda-all.yaml", "compose.rocm.yaml", "configure.py", "model_config.py",
     "setup.sh", "setup-host.sh", "gpu-host.sh", "uninstall.py", "firewall.py", "vllm_start.py",
-    "diagnose_tools.py", "diagnostic_catalog.json", "development.py",
+    "development.py", "NEXT_RUNTIME.md", "ARCHITECTURE.md", "WORKFLOW_LEARNER.md",
     "README.md", "README.de.md", "WINDOWS.md", "WINDOWS.de.md", "DEVELOPMENT.md", "DEVELOPMENT.de.md", "PROTOCOL.md", "LICENSE",
 )
 VERSION = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?"

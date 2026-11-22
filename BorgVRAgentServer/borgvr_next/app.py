@@ -118,9 +118,10 @@ def from_env():
     def secret(name):
         return Path(os.environ[name]).read_text().strip()
 
-    model = VLLM(http, os.environ["BORGVR_NEXT_MODEL_URL"], secret("BORGVR_NEXT_MODEL_TOKEN_FILE"),
-                 os.environ["BORGVR_NEXT_MODEL"], int(os.environ.get("BORGVR_NEXT_CONTEXT", "65536")))
+    model = VLLM(http, os.environ["BORGVR_VLLM_URL"], secret("BORGVR_VLLM_TOKEN_FILE"),
+                 os.environ["BORGVR_MODEL"], int(os.environ.get("BORGVR_CONTEXT_LENGTH", "65536")),
+                 thinking_mode=os.environ.get("BORGVR_THINKING_MODE", "off"))
     database = os.environ.get("BORGVR_NEXT_EVIDENCE_DB")
-    return create_app(token=secret("BORGVR_NEXT_TOKEN_FILE"), model=model,
+    return create_app(token=secret("BORGVR_TOKEN_FILE"), model=model,
                       evidence=Evidence(database) if database else None, lifespan=lifespan,
                       sequences=int(os.environ.get("BORGVR_NEXT_MODEL_SLOTS", "2")))

@@ -9,7 +9,7 @@ import pytest
 from starlette.websockets import WebSocketDisconnect
 
 from borgvr_next import session as session_runtime
-from borgvr_next.app import create_app
+from borgvr_next.app import create_app, from_env
 from borgvr_next.evidence import Evidence
 from borgvr_next.learner import process_one
 from borgvr_next.model import Call, ContextLimit, ModelFailure, OutputLimit, VLLM
@@ -30,6 +30,32 @@ def tool(name, properties=None):
 
 
 TOOLS = [tool("get_application_state"), tool("rotate_view", {"degrees": {"type": "number"}})]
+
+
+def test_installed_agent_factory_uses_compose_settings(monkeypatch, tmp_path):
+    agent_token = tmp_path / "agent_token"
+    model_token = tmp_path / "vllm_token"
+    agent_token.write_text(TOKEN + "\n")
+    model_token.write_text("other-synthetic-token" * 2 + "\n")
+    for name, value in {
+        "BORGVR_TOKEN_FILE": str(agent_token), "BORGVR_VLLM_TOKEN_FILE": str(model_token),
+        "BORGVR_VLLM_URL": "http://vllm:8000/v1", "BORGVR_MODEL": "fixture/model",
+        "BORGVR_CONTEXT_LENGTH": "65536", "BORGVR_NEXT_MODEL_SLOTS": "1", "BORGVR_THINKING_MODE": "default",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    def backend(request):
+        assert str(request.url) == "http://vllm:8000/v1/models"
+        assert request.headers["Authorization"] == "Bearer " + "other-synthetic-token" * 2
+        return httpx.Response(200, json={"data": [{"id": "fixture/model"}]})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(backend))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_: client)
+    with TestClient(from_env()) as app:
+        assert app.get("/readyz").status_code == 401
+        ready = app.get("/readyz", headers=AUTH)
+        assert ready.status_code == 200 and ready.json()["model"] == "fixture/model"
+        assert app.head("/healthz").headers["BorgVR-Tool-Types"] == "1"
 
 
 class Steps:

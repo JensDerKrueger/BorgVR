@@ -286,7 +286,7 @@ def executable(path, text):
 @pytest.mark.parametrize("prebuilt", [None, True, False])
 def test_install_docker_sequence_without_changing_host(tmp_path, prebuilt):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "firewall.py"):
+    for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "firewall.py", "Dockerfile"):
         shutil.copyfile(source / name, tmp_path / name)
     binary = tmp_path / "bin"
     binary.mkdir()
@@ -298,6 +298,9 @@ with open(os.environ["TRACE"], "a") as handle:
     handle.write(json.dumps(args)+"\\n")
 if "run" in args:
     print(300*1024*1024 if any("disk_usage" in a for a in args) else "CUDA OK")
+if "inspect" in args and "--format" in args:
+    print("typed-v1")
+    sys.exit(0)
 sys.exit(1 if "inspect" in args else 0)
 ''')
     executable(binary / "uname", '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n')
@@ -310,20 +313,20 @@ sys.exit(1 if "inspect" in args else 0)
     args = ["bash", str(tmp_path / "setup.sh"), "install", "--host", "ai.example.org"]
     if prebuilt is not None:
         args.append("--prebuilt-agent" if prebuilt else "--build-agent")
+    if prebuilt is True:
+        args.extend(("--agent-image", "example.org/borgvr-agent:test"))
     result = subprocess.run(args, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert not forbidden.exists()
     calls = [json.loads(line) for line in trace.read_text().splitlines()]
     assert all(call[:2] == ["--host", "unix:///var/run/docker.sock"] for call in calls)
-    assert any("build" in call for call in calls) is (prebuilt is False)
-    assert any(call[-2:] == ["pull", "agent"] for call in calls) is (prebuilt is not False)
+    assert any("build" in call for call in calls) is (prebuilt is not True)
+    assert any(call[-2:] == ["pull", "example.org/borgvr-agent:test"] for call in calls) is (prebuilt is True)
     assert any("up" in call and "--no-build" in call and "never" in call for call in calls)
     assert not any("down" in call for call in calls)
     probes = [i for i, call in enumerate(calls) if "run" in call and "--no-deps" in call]
     assert len(probes) == 2 and max(probes) < next(i for i, call in enumerate(calls) if "up" in call)
-    if prebuilt is False:
-        assert any(str(tmp_path / "compose.build.yaml") in call for call in calls)
-    else:
+    if prebuilt is not True:
         assert DEFAULT_AGENT_IMAGE in (tmp_path / ".env").read_text()
 
 
@@ -370,6 +373,8 @@ with open(os.environ["TRACE"], "a") as handle:
     handle.write(json.dumps({"args":args,"image":os.environ.get("BORGVR_AGENT_IMAGE")})+"\\n")
 if "run" in args and any("disk_usage" in a for a in args):
     print(300*1024*1024)
+if "inspect" in args and "--format" in args:
+    print("old-runtime" if os.environ.get("FAIL_COMMAND") == "old-runtime" else "typed-v1")
 sys.exit(42 if os.environ.get("FAIL_COMMAND") in args else 0)
 ''')
     executable(binary / "uname", '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n')
@@ -535,6 +540,15 @@ def test_failed_update_preparation_preserves_running_configuration(operations, f
     assert (root / ".env").read_bytes() == original
     assert not list((root / "runtime").glob("env-before-update-*"))
     assert not any("up" in call["args"] or "stop" in call["args"] for call in calls)
+
+
+def test_install_rejects_old_prebuilt_image_before_tearing_down_existing_services(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    result, calls = run("install", "--agent-image", "example.org/borgvr-agent:old", failure="old-runtime")
+    assert result.returncode != 0 and "not the current typed-v1 agent" in result.stderr
+    assert all(not {"down", "up", "stop"}.intersection(call["args"]) for call in calls)
+    assert (root / ".env").read_bytes() == original
 
 
 def test_failed_update_start_keeps_backup_and_reports_failure(operations):

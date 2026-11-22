@@ -1,29 +1,18 @@
 # Agent runtime
 
-The native client uses the existing [version 1 WebSocket protocol](PROTOCOL.md).
-The runtime owns no BorgVR dataset, rendering state, or filesystem tools.
-The native app is responsible for applying commands and for human approvals.
+BorgVR owns its datasets, renderer state and local approvals. It sends the
+active tool schemas, execution types and expert rules over the
+[version 1 WebSocket protocol](PROTOCOL.md). The agent is not an MCP client
+and does not own a second BorgVR tool catalog.
 
-| Component | Owns |
+| Component | Responsibility |
 |---|---|
-| `app.py`, `settings.py` | HTTPS/WSS endpoints, authentication, bounded admission, provider and service lifetime |
-| `connection.py`, `protocol.py` | One connection, negotiated tools and dataset scope, wire validation and receipt correlation |
-| `orchestrator.py`, `continuation.py` | Active request, resumption boundaries, confirmed mutations, terminal response and conversation history |
-| `native_dispatch.py` | One tool in flight, native preconditions, timeout and result handling |
-| `agent_factory.py`, `context.py` | Model adapter, per-request inference slots and model-context projection |
-| `policies.py`, `strategies.py` | v1 compatibility guidance and advisory rules from the connected app |
+| `borgvr_next/app.py`, `wire.py` | TLS listener, authentication, bounded admission and wire validation |
+| `session.py`, `agent.py` | Scope, active turn, tool execution gates and confirmed receipts |
+| `model.py` | Timed vLLM requests, token budgets and response validation |
+| `expert_knowledge.py` | Per-connection advisory rules filtered by the active catalog |
+| `evidence.py`, `learner.py` | Optional, separate observer store and inference worker |
 
-Execution receipts and feedback are not conversation messages. A checkpoint
-may drop model context, but does not drop confirmed mutations or the retained
-conversation. Duplicate protection for reconstructed actions is conservative:
-matching data from before a boundary can be blocked, but equal arguments for
-new relative operations within the same segment are not execution identities.
-The wire call ID still identifies exactly one dispatch. An unacknowledged
-mutation is uncertain; an expired read only loses an observation.
-
-The [optional workflow service](WORKFLOW_LEARNER.md) uses per-device credentials
-unrelated to the chat key. Its worker runs separately and uses only the shared
-private SQLite store. It has no network or GPU access. Portable profile state
-holds explicit demonstrations and hypotheses, not credentials or session
-traffic. Neither the worker nor an imported snapshot may change an interactive
-prompt or grant a tool permission.
+Compose installs this runtime as its sole agent. vLLM remains a separate
+inference container. The agent has no GPU device or filesystem tools; only
+the app executes commands, handles file selection and grants permission.

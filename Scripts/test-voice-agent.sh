@@ -2,9 +2,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TEMP=$(mktemp -d)
-SERVER_PID=
 cleanup() {
-  if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi
   rm -rf "$TEMP"
 }
 trap cleanup EXIT HUP INT TERM
@@ -19,15 +17,14 @@ if [ "$#" -eq 0 ]; then
 fi
 PRODUCTS=${1:?Usage: test-voice-agent.sh <macOS Debug products directory> <agent-venv-python>}
 PYTHON=${2:?Pass the Python interpreter with BorgVRAgentServer test dependencies installed}
-"$PYTHON" "$ROOT/Tests/VoiceAgentFixture.py" "$TEMP" > "$TEMP/server.log" 2>&1 &
-SERVER_PID=$!
-attempt=0
-while [ ! -f "$TEMP/ready.json" ]; do
-  attempt=$((attempt+1))
-  if [ "$attempt" -gt 100 ] || ! kill -0 "$SERVER_PID" 2>/dev/null; then cat "$TEMP/server.log"; exit 1; fi
-  sleep 0.1
-done
+PYTHONPATH="$ROOT/BorgVRAgentServer" "$PYTHON" -c '
+import sys
+from pathlib import Path
+from configure import create_configuration
+create_configuration(Path(sys.argv[1]), "localhost", "127.0.0.1", 8766, "0")
+' "$TEMP"
 xcrun swiftc -parse-as-library -module-cache-path "$TEMP/modules" -I "$PRODUCTS" \
   "$ROOT/Tests/VoiceAgentTests.swift" "$PRODUCTS/BorgVR.app/Contents/MacOS/BorgVR.debug.dylib" \
   -Xlinker -rpath -Xlinker "$PRODUCTS/BorgVR.app/Contents/MacOS" -o "$TEMP/voice-agent-tests"
-if ! "$TEMP/voice-agent-tests" "$ROOT/c60_32.data" "$TEMP" "$PRODUCTS/BorgVR.app"; then cat "$TEMP/server.log"; exit 1; fi
+"$TEMP/voice-agent-tests" "$ROOT/c60_32.data" "$TEMP"
+sh "$ROOT/Scripts/test-voice-agent-catalog.sh" "$PRODUCTS" "$PYTHON"

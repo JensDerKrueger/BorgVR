@@ -11,7 +11,7 @@ Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hi
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
 daraus folgt weder eine Agentenfreigabe noch eine benannte DSL-Funktion. Tool-Definitionen sind nicht automatisch UI-/Zustands-/Test-Vollständigkeit.
 
-Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvorschläge sind keine nativen Benutzerfunktionen und werden separat gezählt.
+Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 
 ## Übersicht
 
@@ -97,15 +97,6 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 
 * Kontextabhängig: App-Zustand, begrenzte Metadatensuche und autorisiertes Öffnen sind ohne Renderer nutzbar; ein erlaubter Teilaufruf bedeutet nicht, dass der gesamte Workflow abgedeckt ist.
 
-## Interne Agentenwerkzeuge
-
-| Werkzeug | Zweck |
-|---|---|
-| `report_progress` | Kurze Zwischenmeldung zur laufenden Tätigkeit, ohne Befund oder Rückfrage. |
-| `find_expert_strategies` | Passende Strategie für ein Teilziel im Wissenspaket der Sitzung nachschlagen; keine Aktion oder Freigabe. |
-| `record_visual_observation` | Begrenzte Bildbefunde im laufenden Auftrag; kein dauerhaftes Erfahrungswissen oder Ground Truth. |
-| `ask_collaboration_feedback` | Bei fehlender Bildevidenz um eine bessere Ansicht bitten; eine manuelle Änderung beantwortet die Frage. Keine Freigabe für Dateien oder Bearbeitungen. |
-
 ## Details
 
 <a id="app-assistant"></a>
@@ -120,7 +111,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Import-/Fusionsjobs und weitere fachliche App-Aufträge folgen noch. Fremde Kontextwechsel stoppen laufende Arbeit.
 - Nächster Schritt: Weitere App-Werkzeuge über die Bridge ergänzen; keine automatische Mikrofonaufnahme.
 - Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [macOSApp/ModeSelectionView.swift](../macOSApp/ModeSelectionView.swift), [iOSApp/ModeSelectionView.swift](../iOSApp/ModeSelectionView.swift), [VisionApp/ModeSelectionView.swift](../VisionApp/ModeSelectionView.swift), [BorgVRAgentServer/PROTOCOL.md](../BorgVRAgentServer/PROTOCOL.md)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_application_session.py](../BorgVRAgentServer/tests/test_application_session.py), [BorgVRAgentServer/tests/test_dataset_navigation.py](../BorgVRAgentServer/tests/test_dataset_navigation.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_next_runtime.py](../BorgVRAgentServer/tests/test_next_runtime.py)
 
 <a id="app-command_history"></a>
 ### Ausgeführte Agentenbefehle und Gesprächskontext nachschlagen
@@ -133,22 +124,22 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Zustandsabfrage: Bestätigte Parameter und freigegebene Ergebnisse sowie frühere Nutzernachrichten und finale Antworten getrennt abfragen; optional ein laufendes Gespräch verschlüsselt auf dem Gerät speichern und laden.
 - Lücke: Kein geräteübergreifendes Archiv. Keine Bilder, ungeklärten Ausführungen oder Freigaben zur Wiederholung.
 - Nächster Schritt: Archiv und serverseitiges Erfahrungswissen getrennt behandeln.
-- Quellen: [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentConversationStore.swift](../AppSupport/Voice/VoiceAgentConversationStore.swift), [BorgVRAgentServer/borgvr_agent/app.py](../BorgVRAgentServer/borgvr_agent/app.py)
-- Vorhandene Testquellen: [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
+- Quellen: [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentConversationStore.swift](../AppSupport/Voice/VoiceAgentConversationStore.swift), [BorgVRAgentServer/borgvr_next/session.py](../BorgVRAgentServer/borgvr_next/session.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="app-demonstration"></a>
 ### Manuelle Demonstration für Forschung (Debug)
 
-- Kennung: `app.demonstration`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: expliziter profilgebundener Upload ohne Bild; separat freigegebene Renderbilder nur im lokalen Export; kein Audio.
+- Kennung: `app.demonstration`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: lokaler Export; Renderbilder nur nach separater Freigabe; kein Audio.
 - Register: kein spezifischer Command/UI-Registereintrag
 - MCP: fehlt
 - Native Agentenwerkzeuge: fehlen
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: Nur im Debug-Build: Command-Kategorien und optionale Ansichtswerte exportieren oder an den Workflow-Dienst senden; auf Wunsch zwei Renderbilder lokal exportieren.
+- Zustandsabfrage: Nur im Debug-Build: Command-Kategorien und optionale Ansichtswerte exportieren; auf Wunsch zwei Renderbilder lokal exportieren.
 - Lücke: Kein Aufnahmemodus im normalen UI. Der Forschungsdienst und die Modellvergleiche übernehmen keine Regeln in den Assistenten.
 - Nächster Schritt: Werkzeugabdeckung und getrenntes Fachwissen haben Vorrang; spätere Beobachtung in die normale Bedienung integrieren.
 - Quellen: [AppSupport/Voice/WorkflowDemonstration.swift](../AppSupport/Voice/WorkflowDemonstration.swift), [AppSupport/Voice/WorkflowUpload.swift](../AppSupport/Voice/WorkflowUpload.swift), [BorgVRAgentServer/WORKFLOW_LEARNER.md](../BorgVRAgentServer/WORKFLOW_LEARNER.md)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_workflow_learner.py](../BorgVRAgentServer/tests/test_workflow_learner.py), [BorgVRAgentServer/tests/test_workflow_service.py](../BorgVRAgentServer/tests/test_workflow_service.py), [BorgVRAgentServer/tests/test_workflow_experiment.py](../BorgVRAgentServer/tests/test_workflow_experiment.py), [BorgVRAgentServer/tests/test_workflow_visibility.py](../BorgVRAgentServer/tests/test_workflow_visibility.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="app-script_input"></a>
 ### Textparameter für einen Skriptauftrag eingeben
@@ -246,7 +237,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Keine semantische Vektorsuche und keine gesicherte Vollständigkeit nicht erreichbarer Quellen. Treffer sind Metadatenbelege, keine Diagnose oder Segmentierung.
 - Nächster Schritt: Bei Bedarf gezielte Filter und Quellenstatus ergänzen; gemeinsame Suchimplementierung für UI/MCP/Agent beibehalten.
 - Quellen: [BORGVR-Services/BorgVRDatasetSearch.swift](../BORGVR-Services/BorgVRDatasetSearch.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_dataset_navigation.py](../BorgVRAgentServer/tests/test_dataset_navigation.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_next_runtime.py](../BorgVRAgentServer/tests/test_next_runtime.py)
 
 <a id="datasets-open"></a>
 ### Datensatz öffnen und Laden abbrechen
@@ -259,8 +250,8 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Zustandsabfrage: Autorisiertes Öffnen eines kürzlich zurückgelieferten Suchtreffers über denselben Command-Service. Korrelierte Öffnungs-ID, Warten auf Rendererbereitschaft, neue Werkzeuge und erneute Zustandsabfrage vor Fortsetzung.
 - Lücke: Noch kein allgemeiner Jobvertrag. Pro Auftrag höchstens ein Öffnen; bereits begonnener Ladevorgang wird beim Abbruch nicht automatisch rückgängig gemacht.
 - Nächster Schritt: Bei Bedarf Öffnungsfortschritt als allgemeinen Job exponieren; unbekannte IDs, fremde Übergänge und automatische Befehlswiederholung weiter abweisen.
-- Quellen: [AppSupport/Datasets/DatasetOpenWorkflow.swift](../AppSupport/Datasets/DatasetOpenWorkflow.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_agent/datasets.py](../BorgVRAgentServer/borgvr_agent/datasets.py)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_dataset_navigation.py](../BorgVRAgentServer/tests/test_dataset_navigation.py)
+- Quellen: [AppSupport/Datasets/DatasetOpenWorkflow.swift](../AppSupport/Datasets/DatasetOpenWorkflow.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_next/session.py](../BorgVRAgentServer/borgvr_next/session.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_next_runtime.py](../BorgVRAgentServer/tests/test_next_runtime.py)
 
 <a id="datasets-close"></a>
 ### Datensatz schließen und Zustand sichern
@@ -596,7 +587,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Agent verlangt einen expliziten Bereich und einen aktuellen Zustand; RGB/RGBA bietet nur Transformation und Clipping an.
 - Nächster Schritt: Sichere exakte Snapshots für spätere Wiederherstellung bereitstellen.
 - Quellen: [AppSupport/Application/BorgVRSession.swift](../AppSupport/Application/BorgVRSession.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift)
-- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
+- Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="render-wait_capture"></a>
 ### Renderabschluss abwarten und Screenshot aufnehmen
@@ -680,7 +671,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Agentenwerkzeug ändert ausschließlich Kanäle, nicht den lokalen Pinselmodus, Radius oder Projektionsmodus.
 - Nächster Schritt: Nur bei Bedarf weitere unabhängige Pinselparameter freigeben.
 - Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="edit-apply"></a>
 ### Volumenbereiche löschen oder wiederherstellen
@@ -694,7 +685,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Agent kann bis zu 256 Kugelproben pro Aufruf anwenden. Bestätigung ist standardmäßig an, lokal abschaltbar. Bekanntes XYZ in Metern und aktive Kanäle nötig; kein räumliches Raten aus Screenshots, keine Agenten-Edits in SharePlay.
 - Nächster Schritt: Geprüfte Projektions- und Auswahlwerkzeuge für interaktive Regionseingabe sowie bedarfsgerechte Freigaben für geteilte Edits ergänzen.
 - Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 
 <a id="edit-finish"></a>
 ### Edit-Bricks vorbereiten und deren Abschluss abwarten
@@ -708,7 +699,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Agent kann begrenzt warten, die lokale UI beobachtet den Abschluss unabhängig davon; keine Aussage über GPU-Atlas oder Bildqualität. Vorbereiten mit erhöhter Priorität bleibt separat.
 - Nächster Schritt: Längere Vorbereitung als abbrechbaren Auftrag mit Fortschritt anbieten.
 - Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="edit-discard"></a>
 ### Alle Edits im aktiven Zustand verwerfen
@@ -777,8 +768,8 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Zustandsabfrage: Agent: paginiertes list_objects mit stabilen IDs, Namen, Farben und Geometrie; höchstens 64 Einträge pro Seite.
 - Lücke: Agent-Upserts sind auf 256 Punkte, gültige vorhandene Edit-IDs und normierte Koordinaten begrenzt. Keine präzise anatomische Zuordnung aus einem einzelnen Screenshot.
 - Nächster Schritt: Optional einen expliziten Bildpunkt-zu-Volumen-Projektionsvertrag ergänzen; Lösch- und Mesh-Capabilities bleiben getrennt.
-- Quellen: [AppSupport/Voice/VoiceAgentAnnotationPolicy.swift](../AppSupport/Voice/VoiceAgentAnnotationPolicy.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_agent/annotations.py](../BorgVRAgentServer/borgvr_agent/annotations.py), [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [VisionApp/MarkerView.swift](../VisionApp/MarkerView.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
+- Quellen: [AppSupport/Voice/VoiceAgentAnnotationPolicy.swift](../AppSupport/Voice/VoiceAgentAnnotationPolicy.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [VisionApp/MarkerView.swift](../VisionApp/MarkerView.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 
 <a id="annotations-mesh"></a>
 ### Mesh-Assets auswählen und Instanzen platzieren oder transformieren
@@ -806,7 +797,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Agent darf Marker, aber keine Meshes löschen. clear_annotations und das Löschen des letzten Markers erfordern lokale Zustimmung; clear_objects bleibt im Agenten gesperrt.
 - Nächster Schritt: Freigaben für weitere destruktive Fähigkeiten getrennt ergänzen; kein Wiederverwenden oder Umgehen einer abgelehnten Freigabe.
 - Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [VisionApp/MarkerView.swift](../VisionApp/MarkerView.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift)
 
 <a id="annotations-measure"></a>
 ### Längen-, Flächen- und Volumenmessungen anlegen und korrigieren
@@ -819,8 +810,8 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Zustandsabfrage: Agent: list_measurements liefert Punkt-IDs, normierte Koordinaten, BorgVR-Messwerte in m/m^2/m^3 und physicalExtentAvailable.
 - Lücke: Höchstens 256 Punkte. Degenerierte Geometrie wird ohne Änderung abgelehnt; Volumen bezeichnet die konvexe Hülle, nicht segmentiertes Organvolumen. Physische Genauigkeit hängt von der Datensatzkalibrierung ab.
 - Nächster Schritt: Bildpunktprojektion und explizite Genauigkeits-/Kalibrierungsangaben weiter ausbauen; keine erfundenen anatomischen Messpunkte.
-- Quellen: [AppSupport/Voice/VoiceAgentAnnotationPolicy.swift](../AppSupport/Voice/VoiceAgentAnnotationPolicy.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_agent/annotations.py](../BorgVRAgentServer/borgvr_agent/annotations.py), [VisionApp/MeasurementView.swift](../VisionApp/MeasurementView.swift), [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
+- Quellen: [AppSupport/Voice/VoiceAgentAnnotationPolicy.swift](../AppSupport/Voice/VoiceAgentAnnotationPolicy.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [VisionApp/MeasurementView.swift](../VisionApp/MeasurementView.swift), [AppSupport/Annotations/BorgVRAnnotationCommands.swift](../AppSupport/Annotations/BorgVRAnnotationCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 
 <a id="annotations-measure_delete"></a>
 ### Einzelne oder alle Messungen entfernen
@@ -834,7 +825,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Lücke: Agent darf gezielt löschen; Sammellöschen oder die letzte Messung benötigen lokale Zustimmung. clear_measurements bleibt im Agenten gesperrt.
 - Nächster Schritt: Weitere destruktive Fähigkeiten nur mit eigenen Freigaben; Kontextwechsel, Abbruch und Snapshot-Änderungen entwerten die Zustimmung.
 - Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [VisionApp/MeasurementView.swift](../VisionApp/MeasurementView.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_agent.py](../BorgVRAgentServer/tests/test_agent.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="annotations-visibility"></a>
 ### Objekte und Messungen sichtbar oder unsichtbar schalten

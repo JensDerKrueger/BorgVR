@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import math
 import re
-from typing import Optional
 
 CUDA_IMAGE = "vllm/vllm-openai:v0.34.0@sha256:20fdb089454afbb324efa4110a2c025ff7b27cc1a086e07aa580b18df8ad1ce1"
 ROCM_IMAGE = "vllm/vllm-openai-rocm:v0.34.0@sha256:3cb773d23f063afa86291ef75773cdd486154ddea94c213300f4ed7cc42b7af1"
@@ -35,7 +34,7 @@ PROFILES = {
     },
 }
 BASE = {"DTYPE": "auto", "QUANTIZATION": "auto", "GPU_MEMORY_FRACTION": "0.85",
-        "MAX_OUTPUT_TOKENS": "2048", "ENFORCE_EAGER": "false", "CPU_OFFLOAD_GB": "0"}
+        "ENFORCE_EAGER": "false", "CPU_OFFLOAD_GB": "0"}
 MODEL_KEYS = set(BASE) | set(PROFILES["qwen36-35b"])
 
 
@@ -71,33 +70,6 @@ def profile_values(name):
 
 
 @dataclass(frozen=True)
-class OpenAIConfig:
-    model: str
-    context: int
-    output_tokens: int
-    sequences: int
-    vision: bool = True
-    reasoning_effort: Optional[str] = None
-
-    @classmethod
-    def from_env(cls, env):
-        model = identifier(env.get("BORGVR_OPENAI_MODEL", "gpt-5.4-mini"))
-        context = number(env.get("BORGVR_CONTEXT_LENGTH", "65536"), 2048, 1048576, True)
-        effort = env.get("BORGVR_OPENAI_REASONING_EFFORT") or None
-        if effort is not None:
-            effort = choice(effort, ("none", "minimal", "low", "medium", "high", "xhigh", "max"))
-        return cls(model, context,
-                   number(env.get("BORGVR_MAX_OUTPUT_TOKENS", "4096"), 128, context - 1024, True),
-                   number(env.get("BORGVR_MAX_SEQS", "1"), 1, 16, True), reasoning_effort=effort)
-
-    def request_settings(self):
-        settings = {"max_tokens": self.output_tokens, "parallel_tool_calls": False, "openai_store": False}
-        if self.reasoning_effort is not None:
-            settings["openai_reasoning_effort"] = self.reasoning_effort
-        return settings
-
-
-@dataclass(frozen=True)
 class ModelConfig:
     model: str
     revision: str
@@ -109,7 +81,6 @@ class ModelConfig:
     quantization: str
     context: int
     sequences: int
-    output_tokens: int
     memory_fraction: float
     min_free_gib: int
     eager: bool
@@ -137,7 +108,7 @@ class ModelConfig:
                    choice(get("THINKING_MODE"), ("default", "off", "on")), boolean(get("VISION_ENABLED")),
                    choice(get("DTYPE"), ("auto", "float16", "bfloat16", "float32")),
                    identifier(get("QUANTIZATION")), context,
-                   number(get("MAX_SEQS"), 1, 16, True), number(get("MAX_OUTPUT_TOKENS"), 128, context - 1024, True),
+                   number(get("MAX_SEQS"), 1, 16, True),
                    number(get("GPU_MEMORY_FRACTION"), 0.05, 0.98), number(get("MIN_FREE_GIB"), 1, 1048576, True),
                    boolean(get("ENFORCE_EAGER")), number(get("CPU_OFFLOAD_GB"), 0, 4096),
                    number(values.get("BORGVR_TENSOR_PARALLEL_SIZE", "1"), 1, 8, True),
@@ -165,9 +136,3 @@ class ModelConfig:
         if self.cpu_offload_gb:
             result += ["--cpu-offload-gb", str(self.cpu_offload_gb)]
         return result
-
-    def request_settings(self):
-        settings = {"max_tokens": self.output_tokens, "temperature": 0.5, "parallel_tool_calls": False}
-        if self.thinking != "default":
-            settings["extra_body"] = {"chat_template_kwargs": {"enable_thinking": self.thinking == "on"}}
-        return settings

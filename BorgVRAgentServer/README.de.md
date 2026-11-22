@@ -34,7 +34,7 @@ Die Aufgaben sind auf die App und zwei Container verteilt:
 | vLLM | Lädt das gewählte bildfähige Sprachmodell und berechnet dessen Antworten und Werkzeugvorschläge auf der GPU. |
 
 **Warum zwei Container?** vLLM benötigt die GPU-Laufzeit und die Modellgewichte; der Agent
-enthält die BorgVR-spezifische Gesprächs- und Werkzeugsteuerung auf Basis von Pydantic AI.
+verwaltet Gespräche und vermittelt Werkzeugaufrufe anhand des von BorgVR gelieferten Katalogs.
 Die Trennung hält diese Abhängigkeiten auseinander und erlaubt getrennte Updates oder
 einen Modellwechsel ohne Änderung des BorgVR-Verbindungsprotokolls. Nur der Agent ist vom
 Client-Netz erreichbar; vLLM bleibt im privaten Container-Netz.
@@ -218,11 +218,10 @@ sudo ./setup.sh install --backend rocm
 Erstellung des Deployments ausdrücklich angegeben werden. Weitere Befehle übernehmen
 das in `.env` gespeicherte Backend.
 
-Dieser eine Befehl erzeugt `.env`, Zugangsschlüssel und Testzertifikat, prüft die profilabhängige
-Platzreserve und die GPU, lädt fehlende Images und startet beide Dienste. Das fertige
-[Agenten-Image 3.9.4](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
-unterstützt Modellprofile und ist ohne Anmeldung herunterladbar.
-Es wird nichts lokal gebaut. vLLM lädt das Modell in seinen persistenten Cache;
+Das Setup erzeugt `.env`, Zugangsschlüssel und ein Testzertifikat, prüft Platzreserve und GPU
+und startet beide Dienste. Aus einem Git-Checkout baut es standardmäßig den aktuellen
+Agenten. Für ein fertiges Release-Image `--agent-image REF` angeben; es muss die Laufzeit
+`typed-v1` enthalten. vLLM lädt das Modell in seinen persistenten Cache;
 der Agent startet erst, wenn vLLM bereit ist. Der erste Download und die
 Kernel-Kompilierung können dauern; maximal eine Stunde wird abgewartet.
 Danach werden Textantwort, Werkzeugaufrufe und Bildverarbeitung tatsächlich getestet.
@@ -372,7 +371,7 @@ wird niemals stillschweigend die Commit-ID des vorherigen Modells übernommen.
 schalten Thinking gezielt ab. Reine Textmodelle werden nicht unterstützt.
 
 Weitere Stellschrauben: `--dtype auto|float16|bfloat16|float32`, `--quantization NAME`,
-`--context-length N`, `--max-seqs N`, `--max-output-tokens N`, `--gpu-memory-fraction F`,
+`--context-length N`, `--max-seqs N`, `--gpu-memory-fraction F`,
 `--enforce-eager true|false` und `--cpu-offload-gb N`. Bei älteren Karten kann `float16`
 statt `bfloat16` nötig sein. Eine Quantisierungsoption macht nicht jeden beliebigen
 Checkpoint automatisch kleiner; Format, Kernel und Backend müssen zusammenpassen.
@@ -393,8 +392,7 @@ müssen nichts auf dem Linux-Server installieren und brauchen dort keine Docker-
 Die Skripte verwenden den lokalen rootful
 Docker-Socket `/var/run/docker.sock`, keinen entfernten Docker-Kontext.
 `setup.sh` installiert keine Systempakete, startet Docker nicht neu und ruft nicht selbst
-sudo auf. Für einen Entwickler-Build ausdrücklich `--build-agent` mit einem lokalen
-Image-Tag verwenden. Besondere Volume-Quotas separat prüfen.
+sudo auf. Der Quellcode-Build ist im Git-Checkout der Standard. Besondere Volume-Quotas separat prüfen.
 
 Bei erneutem `install` werden vorhandene BorgVR-Container und das Projekt-Netzwerk zunächst
 mit `down` entfernt, aber **keine Volumes oder Images gelöscht**. Das gibt auch den vom
@@ -473,55 +471,10 @@ Die englischen Strategien stehen gruppiert in `AppSupport/Voice/expert-knowledge
 Jede Regel beschreibt eine Situation oder ein Ziel sowie die Schritte und gegebenenfalls
 die benötigten Werkzeuge oder Parameter. BorgVR liefert die Datei beim Verbindungsaufbau;
 für Textänderungen braucht es danach nur einen neuen App-Build, kein neues Agenten-Image.
-Ältere Clients und Server können sich weiterhin ohne das Wissenspaket verbinden.
+Das Wissenspaket ist optional. Der typisierte Werkzeugkatalog erfordert einen aktuellen App-Build.
 
-Das Agenten-Image enthält einen lokalen CPU-Encoder
-([Multilingual E5 Small](https://huggingface.co/intfloat/multilingual-e5-small),
-[quantisierte ONNX-Fassung](https://huggingface.co/Xenova/multilingual-e5-small/tree/761b726dd34fb83930e26aab4e9ac3899aa1fa78)).
-Anfragen werden dabei nicht an einen Übersetzungsdienst geschickt. Lokal lässt sich
-die Suche mit `BORGVR_STRATEGY_ENCODER` aktivieren. Die Variable verweist auf ein
-Verzeichnis mit dem in der Dockerfile festgelegten `model.onnx` und `tokenizer.json`.
-Für die Deutsch-/Englischtests in `tests/test_strategies.py` dasselbe Verzeichnis
-als `BORGVR_STRATEGY_TEST_ENCODER` angeben.
-
-### Separate OpenAI-Testinstanz
-
-Die Testinstanz läuft neben der lokalen vLLM-Installation als eigenes Docker-Compose-Projekt.
-Sie benötigt keine GPU und ändert weder den laufenden Qwen-Agenten noch dessen Zugangsdaten.
-Voraussetzung ist ein separat abgerechneter OpenAI-API-Schlüssel. Für Tests ein eigenes
-API-Projekt mit einem auf diesen Zweck beschränkten Schlüssel verwenden.
-
-Auf dem Linux-Server als normaler Benutzer im Verzeichnis `BorgVRAgentServer` ausführen:
-
-```
-./setup-openai.sh init
-./setup-openai.sh key
-./setup-openai.sh start
-./setup-openai.sh test
-```
-
-`key` fragt verdeckt nach dem API-Schlüssel und speichert ihn in `.openai-test/openai_api_key`
-(Dateirechte `0600`). Nicht in BorgVR, `.env` oder die Shell-Kommandozeile eintragen.
-Nur die Docker-Befehle im Skript verwenden `sudo`. Der Test prüft Werkzeugaufrufe und
-Bildverarbeitung mit einem synthetischen Bild. Das Modell lässt sich in `.openai-test/compose.env`
-ändern und muss Bild- und Werkzeugunterstützung haben. Dort lässt sich auch der Denkaufwand
-setzen, etwa `BORGVR_OPENAI_REASONING_EFFORT=low` oder `medium` für GPT-6.2 Sol. Ist die
-Einstellung leer oder fehlt sie, verwendet die API ihren Standard. Nach einer Änderung
-`./setup-openai.sh start` ausführen; `./setup-openai.sh test` zeigt die Einstellung an.
-Mit `./setup-openai.sh stop` wird nur die Testinstanz gestoppt.
-
-Der Dienst lauscht ausschließlich auf `127.0.0.1:8767`. Auf dem Mac einen SSH-Tunnel öffnen
-(`ai2` durch den eigenen SSH-Host ersetzen):
-
-```
-ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:8767:127.0.0.1:8767 ai2
-```
-
-In BorgVR `https://127.0.0.1:8767` eintragen und `.openai-test/tls/server.crt` sowie
-`.openai-test/agent_token` vom Server importieren. Der App-Zugangsschlüssel ist **nicht**
-der OpenAI-API-Schlüssel. Der Tunnel muss während des Tests geöffnet bleiben.
-Prompts, Werkzeugergebnisse und vom Client freigegebene Screenshots werden an OpenAI
-übermittelt. Für den Vergleich zunächst nur synthetische oder anonymisierte Daten verwenden.
+Der Agent filtert die Regeln nach Kontext und verfügbaren Werkzeugen. Die ausgewählten
+Regeln erhält das Modell zusammen mit der Anfrage, unabhängig von deren Sprache.
 
 ## 5. Native App verbinden
 
@@ -580,8 +533,8 @@ Schlüssel bleiben gerätelokal, außerhalb von SharePlay und GSC.
 Bei Fragen wie „Wie viele Münzen sind in der Spardose?“ soll der Agent selbst aktiv
 untersuchen: Zustand und Renderbild abfragen, bei Verdeckung einige gezielte andere
 Ansichten oder Clipping-Bereiche prüfen und nach Änderungen jeweils auf das Rendern warten.
-Kurze Bildbefunde bleiben als begrenzte Gesprächsnotizen erhalten, wenn ältere Bilder zur
-Kontextentlastung entfernt werden. Es sind Modellbeobachtungen, keine geprüften Messwerte.
+Ältere Bilder können zur Kontextentlastung entfernt werden. Die daraus gewonnenen
+Modellbeobachtungen sind keine geprüften Messwerte.
 Objekte müssen über die Ansichten hinweg zugeordnet werden; Einzelbild-Zählungen dürfen
 nicht einfach addiert werden. Bei verbleibender Verdeckung ist eine belegbare Untergrenze
 oder ausdrücklich ungefähre Schätzung vorgesehen, keine erfundene exakte Gesamtzahl.
@@ -788,7 +741,7 @@ Der Agent speichert keine Gespräche, Bilder oder Werkzeugdaten auf Platte und p
 deren Inhalte nicht. vLLM-Request-Logging und Nutzungs-Telemetrie sind abgeschaltet.
 Gespräche liegen während der Verbindung im RAM; nach Trennung werden sie verworfen.
 Die Standardinstallation nutzt für die Inferenz nur das lokale Modell. Sie hat keinen
-Cloud-Fallback. Nur die separat eingerichtete OpenAI-Testinstanz sendet Anfragen an OpenAI.
+Cloud-Fallback.
 
 ## 7. Betrieb und Updates
 
@@ -850,8 +803,8 @@ sudo ./setup.sh update
 ```
 
 `update` lädt die **in `.env` konfigurierten** Images, prüft die privaten Mounts, übernimmt
-Änderungen durch erneutes `up` und führt anschließend den echten Modelltest aus. Es baut
-keine Images und führt kein Git-Update oder Systemupdate aus. Bei unveränderten Digests
+Änderungen durch erneutes `up` und führt anschließend den echten Modelltest aus. Beim Standard-Image aus dem Git-Checkout wird der Agent neu gebaut. Git und Systempakete
+bleiben unverändert. Bei unveränderten Digests
 bleiben die Image-Versionen unverändert; ein Pull bedeutet nicht automatisch eine neue Version.
 
 Für eine ausdrücklich gewählte neue Agenten-Version `sudo ./setup.sh update --agent-image REF`
@@ -864,8 +817,6 @@ Scheitert der anschließende Start oder Modelltest, meldet das Skript einen Fehl
 keinen automatischen Rollback aus. Die ausgegebene Sicherung kann nach Prüfung mit
 `sudo cp /PFAD/ZUR/SICHERUNG .env` zurückgespielt werden, danach `sudo ./setup.sh start`.
 
-Bei einem Quellcode-Build statt Pull den Build-Overlay verwenden:
-`sudo ./setup.sh install --build-agent` mit vorher bewusst gewähltem lokalen Agenten-Image-Tag.
 Eine bestehende `.env` behält bewusst ihre alte
 vLLM-/Modellrevision; diese bei einem Inferenz-Update ausdrücklich anpassen. Keine
 stillschweigende Umstellung auf `latest`. Details zur Rückkehr auf alte Versionen,
@@ -882,111 +833,31 @@ Die [Einrichtung, Hostschlüsselprüfung und vollständige Entfernung](DEVELOPME
 sind separat beschrieben. Der normale Betrieb verwendet weiterhin ein festes Image;
 geänderte Bibliotheksabhängigkeiten benötigen ein neues passendes Image.
 
-### Automatische Kontextpflege
+### Tests und Diagnose
 
-Vor jeder Modellanfrage zählt der Agent die tatsächlichen Eingabetokens über vLLMs
-authentifizierten Endpunkt `/tokenize`, einschließlich Werkzeugbeschreibungen und Bildern.
-Es gilt das kleinere Limit aus dem vom Modell gemeldeten Kontext und `--context-length`.
-Antwortlänge und Sicherheitsreserve werden vorher abgezogen. Ab 85 % dieses Eingabebudgets
-werden ältere abgeschlossene Gesprächsteile zu begrenzten Auszügen verdichtet, veraltete
-Bilder entfernt und große oder überholte Werkzeugergebnisse bei Bedarf durch gekennzeichnete
-Vorschauen oder Ausführungsbelege ersetzt. Dafür läuft kein zweites Modell. Der aktuelle
-Auftrag, Werkzeugargumente und zusammengehörige Aufrufe und Antworten bleiben erhalten;
-Anwendungszustand und tatsächliche TF-Auflösung ändern sich nicht. Ältere Details können
-verloren gehen; der Agent muss den aktuellen Zustand erneut abfragen.
+`sudo ./setup.sh test` prüft TLS, Bereitschaft, eine Textantwort und das Arbeiten mit
+einem synthetischen Bild. Es werden keine echten Datensätze verwendet.
+Die [Laufzeitbeschreibung](NEXT_RUNTIME.md) dokumentiert den aktuellen Agenten.
 
-Passt selbst der aktive Auftrag nicht mehr, wird sicher angehalten. Eine wegen Kontextüberlauf
-abgelehnte Modellanfrage darf nach weiterer Verdichtung einmal wiederholt werden, bereits
-ausgeführte Werkzeuge dagegen nicht. Die aktualisierte native App unterscheidet zwischen
-Kontextüberlauf ohne Änderung, bestätigten Änderungen mit fehlgeschlagener Abschlussprüfung
-und unklarem Befehlsabschluss. Das Container-Update aktiviert die Kontextpflege; für die neuen
-Fehlermeldungen muss auch die native App aktualisiert bzw. neu gebaut werden. Ein größerer
-Kontext hilft weiterhin bei umfangreichen Einzelaufträgen, ersetzt diese Pflege aber nicht.
-Die bestehende Grenze von 64 Anfragen pro Sitzung bleibt bestehen; ein neues Gespräch beginnt
-mit einer frischen Zustandsabfrage.
-
-Die Entwicklertests laufen ohne GPU mit einem deterministischen Testmodell durch die echte
-Pydantic-AI-Schleife. Getestet werden unter anderem Anmeldung, Eingabevalidierung,
-Werkzeugbeschränkungen, Bilder, Abbruch, Zeitlimits, veraltete Antworten, Kontextpflege ohne
-doppelte Werkzeugausführung und Fehler nach bestätigten Änderungen. Den Test auf
-dem jeweiligen GPU-Rechner und den Test mit dem Mikrofon auf dem jeweiligen Gerät ersetzen sie nicht.
-
-`Scripts/test-voice-agent.sh` prüft zusätzlich den nativen macOS-Client über echtes lokales
-TLS/WSS mit deterministischem Modell: Zustandsabfrage, Rotation, Transferfunktion, Renderbild,
-Fortschrittsantwort, GSC-Roundtrip, Abbruch bei Kontextwechsel und Fehler nach bereits
-ausgeführten Änderungen. Das Protokoll ist in
-[PROTOCOL.md](PROTOCOL.md) beschrieben.
-
-### Fehlersuche bei Werkzeugaufrufen
-
-Bei fehlgeschlagenen Werkzeugaufrufen lässt sich der Modellpfad im laufenden Container
-ohne echte Datensätze prüfen. Im Deployment-Verzeichnis ausführen:
-
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-test.txt
+.venv/bin/python -m pytest -q
 ```
-sudo docker compose exec -T agent python - --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
-```
-
-Der Test vergleicht einen minimalen Zustandsaufruf mit dem Werkzeugkatalog der nativen App.
-Nur `get_application_state` liefert einen synthetischen Zustand; andere Werkzeuge werden
-abgewiesen. Die Ausgabe enthält Testargumente (höchstens 4096 Zeichen pro Aufruf) und
-Fehlerkategorien, keine Zugangsschlüssel oder echten Datensatzinhalte. Ein Exitcode ungleich
-null bedeutet, dass mindestens ein Test fehlgeschlagen ist.
-
-Eigene vLLM-Images und Tool-Parser müssen strikte Aufrufe für parameterlose Werkzeuge
-und `set_transfer_function` unterstützen. Beim TF-Setter muss das Modell den Kanal
-ausdrücklich angeben und pro Eintrag genau vier ganzzahlige Bytes `[R,G,B,A]` liefern,
-keine vorangestellte Position. Die Positionen sind gleichmäßig verteilt; kurze Rampen
-werden auf die native Tabellenauflösung interpoliert. Ungültige TF-Argumente erhalten
-eine konkrete Korrekturanweisung, werden aber nicht automatisch umgedeutet. Die native
-und die MCP-Schnittstelle behalten ihren optionalen Kanal-Standardwert.
-Server und native App prüfen Argumente zusätzlich gegen das jeweilige Schema;
-ungültige Aufrufe werden nicht ausgeführt.
-
-Für Probleme speziell beim Erzeugen einer Transferfunktion gibt es einen weiteren,
-ebenfalls vollständig synthetischen Test:
-
-```
-sudo docker compose exec -T agent python - --scenario transfer-function --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
-```
-
-Er vergleicht die normale TF-Schnittstelle mit einer auf höchstens 16 gleichmäßig verteilte
-RGBA-Einträge begrenzten Rampe. Ausgegeben werden außerdem Laufzeiten, Anzahl übernommener
-TF-Einträge und die Fehlerkette. Nur der Test speichert diese TF im Arbeitsspeicher; kein
-App-Client wird verbunden und kein echter Datensatz verändert. Jeder Durchlauf hat eine
-Frist von 90 Sekunden. Das Skript wird vom Checkout eingelesen; dafür ist kein neues
-Agenten-Image nötig.
 
 ## 9. Agenten-Image für die Entwicklung bauen
 
-Der normale Veröffentlichungsweg ist der folgende GitHub-Workflow; er erzeugt bereits
-geprüfte Image- und Deployment-Archive. Nutzer brauchen keinen lokalen Build und keine
-manuellen Registry-Tags. Für lokale Entwicklung auf einer eingerichteten Maschine:
-
-```
-sudo ./setup.sh configure --agent-image borgvr-agent:dev
-sudo ./setup.sh install --build-agent
-```
-
-`compose.build.yaml` ist nur das Entwickler-Build-Overlay. Im normalen Betrieb wird das
-getestete GHCR-Image verwendet. Gewichte, Schlüssel, Zertifikate und Python-Caches gehören
-nicht ins Image. Das Setup veröffentlicht niemals selbst Images oder ändert Paketsichtbarkeit.
+Aus dem Quellcode baut und installiert `sudo ./setup.sh install` den aktuellen Agenten.
+Ein eigener lokaler Tag lässt sich mit `--build-agent --agent-image borgvr-agent:dev` wählen.
+Gewichte, Schlüssel, Zertifikate und Python-Caches gehören nicht ins Image.
 
 ## 10. Builds und Veröffentlichung über GitHub
 
-**Veröffentlicht: 3.9.4 für linux/amd64**, aus Commit
-`7c41e45f020e1662c540b53337b5df5e522ec1bc`.
-[Build, Tests und Veröffentlichung](https://github.com/JensDerKrueger/BorgVR/actions/runs/44325296665)
-sind erfolgreich; der anonyme Registry-Zugriff wurde geprüft. Unveränderliche Image-Adresse:
-
-```text
-ghcr.io/jensderkrueger/borgvr-agent@sha256:9f94e52954aae5f0d3d4bd9645790f2c40b9be0d2e75643e8a0736559e82682f
-```
-
-Bestehende Installationen mit `git pull` und anschließend
-`sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.4` aktualisieren.
-`git pull` allein ersetzt den laufenden Container nicht; `update` ohne `--agent-image`
-behält das bisher konfigurierte Image bei. Modell, Zugangsschlüssel und Zertifikate bleiben
-erhalten.
+Verwenden Sie ein Image, das aus dem aktuellen Quellcode gebaut wurde und die Laufzeit
+`typed-v1` kennzeichnet. Ältere Agenten-Images werden vom Setup abgelehnt.
+Für die Umstellung einer Git-Installation `git pull` und danach
+`sudo ./setup.sh install` ausführen. Das erstellt die Container neu und behält
+Modell-Cache, Zugangsschlüssel sowie ein passendes Zertifikat.
 
 Der Workflow [BorgVR Agent Container](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 baut und testet nach relevanten Änderungen auf `main` sowie bei Pull Requests automatisch
