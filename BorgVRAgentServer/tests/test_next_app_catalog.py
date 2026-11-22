@@ -164,15 +164,13 @@ def test_only_client_approval_is_authoritative_and_denied_group_cannot_be_retrie
             if response_schema is not None:
                 assert not tools
                 assert response_schema["properties"]["arguments"]["anyOf"][0] == write["inputSchema"]
-                assert messages[-2]["role"] == "tool"
+                assert not any(message["role"] == "tool" for message in messages)
                 return '{"arguments":{"amount":15}}'
             self.requests.append((messages, tools))
             match len(self.requests):
                 case 1:
-                    return Call("state", state["name"], "{}")
-                case 2:
                     return Call("ask", write["name"], '{"amount":"15"}')
-                case 3:
+                case 2:
                     return Call("bypass", alternate["name"], "{}")
                 case _:
                     assert json.loads(messages[-1]["content"])["code"] == "user_declined"

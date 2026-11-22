@@ -85,18 +85,75 @@ def turn(ws, name="turn", text="Rotate the view."):
     assert ws.receive_json()["type"] == "started"
 
 
-def test_protocol_v1_state_gate_and_receipt():
-    model = Steps(Call("before-state", "rotate_view", '{"degrees":15}'),
-                  Call("state", "get_application_state", "{}"),
-                  Call("with-state", "rotate_view", '{"degrees":15}'), "Rotated.")
+def test_state_preflight_uses_catalog_role_without_another_model_call():
+    class Model(Steps):
+        calls = 0
+
+        async def complete(self, messages, tools):
+            self.calls += 1
+            if self.calls > 1:
+                assert messages[-1]["role"] == "tool"
+                assert json.loads(messages[-1]["content"]) == {"ok": True}
+            return await super().complete(messages, tools)
+
+    model = Model(Call("first", "rotate_view", '{"degrees":15}'),
+                  Call("second", "rotate_view", '{"degrees":25}'), "Rotated.")
+    state_tool = {**TOOLS[0], "name": "read_snapshot"}
     with TestClient(create_app(token=TOKEN, model=model)) as client:
         assert client.get("/readyz", headers=AUTH).json()["protocol"] == 1
         with client.websocket_connect("/v1/session", headers=AUTH) as ws:
-            ws.send_json(hello())
-            assert ws.receive_json()["tools"] == ["get_application_state", "rotate_view"]
+            ws.send_json(hello(tools=[state_tool, TOOLS[1]]))
+            assert ws.receive_json()["tools"] == ["read_snapshot", "rotate_view"]
             turn(ws)
             state = ws.receive_json()
-            assert state["name"] == "get_application_state"
+            assert state["name"] == "read_snapshot" and state["arguments"] == {}
+            ws.send_json(receipt(state, {"rendererReady": True}))
+            for degrees in (15, 25):
+                rotate = ws.receive_json()
+                assert rotate["name"] == "rotate_view" and rotate["arguments"] == {"degrees": degrees}
+                assert model.calls == (1 if degrees == 15 else 2)
+                ws.send_json(receipt(rotate, {"ok": True}))
+            assert ws.receive_json()["text"] == "Rotated."
+            assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("result", [None, {"ok": False, "not_applied": True, "code": "read_timeout"}])
+def test_unsuccessful_preflight_never_dispatches_change(result):
+    model = Steps(Call("initial", "rotate_view", '{"degrees":15}'),
+                  Call("retry", "rotate_view", '{"degrees":15}'))
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello())
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws)
+            for _ in range(2):
+                state = ws.receive_json()
+                assert state["name"] == "get_application_state"
+                ws.send_json(receipt(state, result))
+            error = ws.receive_json()
+            assert error["type"] == "error" and error["code"] == "run_failed" and not error["changes_applied"]
+
+
+def test_state_tool_requiring_arguments_is_not_called_automatically():
+    state_tool = tool("get_application_state", {"detail": {"type": "boolean"}})
+    state_tool["inputSchema"]["required"] = ["detail"]
+
+    class Model(Steps):
+        async def complete(self, messages, tools):
+            if messages[-1].get("tool_call_id") == "initial":
+                assert json.loads(messages[-1]["content"])["code"] == "state_required"
+            return await super().complete(messages, tools)
+
+    model = Model(Call("initial", "rotate_view", '{"degrees":15}'),
+                  Call("read", "get_application_state", '{"detail":false}'),
+                  Call("retry", "rotate_view", '{"degrees":15}'), "Rotated.")
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello(tools=[state_tool, TOOLS[1]]))
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws)
+            state = ws.receive_json()
+            assert state["name"] == "get_application_state" and state["arguments"] == {"detail": False}
             ws.send_json(receipt(state, {"rendererReady": True}))
             rotate = ws.receive_json()
             assert rotate["name"] == "rotate_view" and rotate["arguments"] == {"degrees": 15}
@@ -105,20 +162,30 @@ def test_protocol_v1_state_gate_and_receipt():
             assert ws.receive_json()["type"] == "completed"
 
 
-def test_unsuccessful_state_read_does_not_reset_tool_correction():
-    model = Steps(Call("premature", "rotate_view", '{"degrees":15}'),
-                  Call("read", "get_application_state", "{}"),
-                  Call("still-premature", "rotate_view", '{"degrees":15}'))
+def test_manual_revision_during_preflight_discards_proposal_and_reads_fresh_state():
+    model = Steps(Call("stale", "rotate_view", '{"degrees":15}'),
+                  Call("fresh", "rotate_view", '{"degrees":25}'), "Rotated.")
     with TestClient(create_app(token=TOKEN, model=model)) as client:
         with client.websocket_connect("/v1/session", headers=AUTH) as ws:
-            ws.send_json(hello())
-            assert ws.receive_json()["type"] == "ready"
+            ws.send_json(hello(collaboration=True))
+            assert ws.receive_json()["collaboration"]
             turn(ws)
             state = ws.receive_json()
-            assert state["name"] == "get_application_state"
-            ws.send_json(receipt(state, {"ok": False, "not_applied": True, "code": "read_timeout"}))
-            error = ws.receive_json()
-            assert error["type"] == "error" and error["code"] == "run_failed" and not error["changes_applied"]
+            assert state["name"] == "get_application_state" and state["view_revision"] == 0
+            ws.send_json({"type": "user_change", "dataset_id": "sample", "context_id": "scope",
+                          "revision": 1, "domains": ["transform"], "state": {}, "active": False})
+            ws.send_json(receipt(state, {"rendererReady": True}))
+            assert ws.receive_json()["type"] == "collaboration_paused"
+            assert ws.receive_json()["type"] == "collaboration_resumed"
+            state = ws.receive_json()
+            assert state["name"] == "get_application_state" and state["view_revision"] == 1
+            ws.send_json(receipt(state, {"rendererReady": True}))
+            rotate = ws.receive_json()
+            assert rotate["name"] == "rotate_view" and rotate["arguments"] == {"degrees": 25}
+            assert rotate["view_revision"] == 1
+            ws.send_json(receipt(rotate, {"ok": True}))
+            assert ws.receive_json()["text"] == "Rotated."
+            assert ws.receive_json()["type"] == "completed"
 
 
 @pytest.mark.parametrize("cancel", [False, True])
@@ -226,6 +293,31 @@ def test_next_server_honors_legacy_clients_requested_tool_count():
                 assert call["type"] == "tool_call"
                 ws.send_json(receipt(call, {"rendererReady": True}))
             assert ws.receive_json()["text"] == "Finished within the requested budget."
+            assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("reads, apply", [(22, True), (23, False)])
+def test_state_preflight_and_mutation_both_count_toward_legacy_budget(reads, apply):
+    calls = [Call(str(index), "search_datasets", "{}") for index in range(reads)]
+    model = Steps(*calls, Call("rotate", "rotate_view", '{"degrees":15}'), "Finished.")
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello(tools=[*TOOLS, tool("search_datasets")],
+                               execution_limits={"max_calls": 24, "timeout_seconds": 120}))
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws)
+            for _ in range(reads):
+                search = ws.receive_json()
+                assert search["name"] == "search_datasets"
+                ws.send_json(receipt(search, {"matches": []}))
+            if apply:
+                state = ws.receive_json()
+                assert state["name"] == "get_application_state"
+                ws.send_json(receipt(state, {"rendererReady": True}))
+                rotate = ws.receive_json()
+                assert rotate["name"] == "rotate_view"
+                ws.send_json(receipt(rotate, {"ok": True}))
+            assert ws.receive_json()["text"] == "Finished."
             assert ws.receive_json()["type"] == "completed"
 
 
@@ -391,15 +483,11 @@ def test_scope_handoff_keeps_confirmed_receipt_and_only_unfinished_work(followup
     opened = {"dataset": {"id": "sample", "description": "Fixture Volume"}, "rendererReady": True}
     goal = "Open Fixture Volume and rotate it by 15 degrees." if followup else "Open Fixture Volume."
     calls = [
-        Call("premature-open", "open_dataset", '{"id":"sample"}'),
-        Call("state", "get_application_state", "{}"),
         Call("search", "search_datasets", "{}"),
         Call("open", "open_dataset", '{"id":"sample"}'),
     ]
     if followup:
-        calls += [Call("premature", "rotate_view", '{"degrees":15}'),
-                  Call("new-state", "get_application_state", "{}"),
-                  Call("rotate", "rotate_view", '{"degrees":15}')]
+        calls.append(Call("rotate", "rotate_view", '{"degrees":15}'))
 
     class Model(Steps):
         saw_handoff = False
@@ -408,7 +496,6 @@ def test_scope_handoff_keeps_confirmed_receipt_and_only_unfinished_work(followup
             if messages[-1]["role"] == "user" and messages[-1]["content"].startswith("The application changed scope."):
                 instruction, evidence = messages[-1]["content"].split("\n", 1)
                 assert "If they satisfy the request, answer now." in instruction
-                assert "Read current state before any further change." in instruction
                 assert json.loads(evidence) == [{
                     "tool": "open_dataset", "outcome": "confirmed", "context_id": "scope", "transition": "open",
                     "arguments": {"id": "sample"}, "result": opened,
@@ -418,9 +505,6 @@ def test_scope_handoff_keeps_confirmed_receipt_and_only_unfinished_work(followup
                 assert messages[-2] == {"role": "user", "content": goal}
                 assert not any(message["role"] == "tool" or "tool_calls" in message for message in messages)
                 self.saw_handoff = True
-            if messages[-1]["role"] == "tool" and messages[-1]["tool_call_id"] in {"premature-open", "premature"}:
-                correction = json.loads(messages[-1]["content"])
-                assert correction["code"] == "state_required" and "get_application_state" in correction["note"]
             return await super().complete(messages, tools)
 
     answer = "Opened and rotated." if followup else "Opened Fixture Volume."
@@ -430,12 +514,12 @@ def test_scope_handoff_keeps_confirmed_receipt_and_only_unfinished_work(followup
             ws.send_json(hello(dataset_id=None, application_session=True, dataset_opening=True, tools=start_tools))
             assert ws.receive_json()["type"] == "ready"
             turn(ws, text=goal)
-            state = ws.receive_json()
-            assert state["name"] == "get_application_state"
-            ws.send_json(receipt(state, {"rendererReady": False}))
             search = ws.receive_json()
             assert search["name"] == "search_datasets"
             ws.send_json(receipt(search, {"matches": [{"id": "sample"}]}))
+            state = ws.receive_json()
+            assert state["name"] == "get_application_state" and state["dataset_id"] is None
+            ws.send_json(receipt(state, {"rendererReady": False}))
             opening = ws.receive_json()
             assert opening["name"] == "open_dataset"
             ws.send_json({**receipt(opening, opened), "dataset_transition": {

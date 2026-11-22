@@ -74,8 +74,17 @@ advertised tool names and fixed categories. They do not print prompts,
 model text, argument values, dataset identifiers or client result contents.
 The turn summary distinguishes a completed answer from confirmed changes.
 
-A state read is required before a mutation. Opening a dataset requires a
-recent catalog search result. Successful scope-transition receipts include
+A state read is required before a mutation, including scope transitions.
+The harness reuses a confirmed read in the current turn, scope and view
+revision. Otherwise it calls a native tool with the `application_state`
+role and valid empty arguments (`{}`) before dispatching the proposed
+change, without another model request. If the catalog requires arguments
+for the state read, the model must read it explicitly. A failed or stale
+read does not authorize a change. Automatic reads count toward any
+negotiated `max_calls` limit.
+
+Opening a dataset requires a recent catalog search result.
+Successful scope-transition receipts include
 `dataset_transition` (new `dataset_id`, `context_id` and `tools`).
 The agent verifies the receipt and replies with `context_updated` before
 planning in the new scope. For unrelated scope changes, the idle client
