@@ -103,6 +103,14 @@ def test_swift_catalog_and_expert_knowledge_reach_model(swift_catalogs, variant)
             assert "max_width" in screenshot["parameters"]["properties"]
         assert ("transfer_function.component" in rules) == (variant not in {"start_menu", "rgba"})
         assert ("rendering.natural_lighting" in rules) == (variant not in {"start_menu", "rgba"})
+        assert ("spatial.rotation_geometry" in rules) == (variant != "start_menu")
+        assert ("spatial.target_orientation" in rules) == (variant != "start_menu")
+        if "spatial.rotation_geometry" in rules:
+            geometry = " ".join(rules["spatial.rotation_geometry"]["steps"])
+            assert "delta * current orientation" in geometry and "+90 degrees about Y turns +Z toward +X" in geometry
+            assert "not relative to the viewer's head" in geometry
+            orientation = " ".join(rules["spatial.target_orientation"]["steps"])
+            assert "subject's left or right side" in orientation and "at most one targeted correction" in orientation
         if "rendering.natural_lighting" in rules:
             mode = next(tool["function"] for tool in received if tool["function"]["name"] == "set_render_mode")
             assert {"transfer_function", "transfer_function_lighting"} <= set(mode["parameters"]["properties"]["mode"]["enum"])

@@ -81,6 +81,33 @@ steps = [
   "Apply the supported opacity changes together, then inspect one rendered view. Make at most one targeted follow-up adjustment, and only if you can identify a specific interval and evidence for changing it. If noise overlaps the wanted structures or the evidence is inconclusive, explain that limit instead of repeatedly changing the curve.",
 ]
 
+[spatial.rotation_geometry]
+situation = "The user asks to rotate or tilt the displayed volume, or gives an axis and angle."
+goal = "Choose a signed rotation in the correct reference frame and preserve the other view settings."
+contexts = ["dataset_ready"]
+keywords = ["rotate", "turn", "tilt", "yaw", "pitch", "roll", "axis", "degrees"]
+requires_parameters = { rotate_view = ["axis", "degrees"] }
+steps = [
+  "rotate_view turns the object, not the camera. It applies a relative axis-angle rotation in fixed parent coordinates: next orientation = delta * current orientation. An angle is a delta from the current pose, not a target pose. Multiple rotations about different axes do not commute.",
+  "Use the right-hand rule for positive angles: +90 degrees about Y turns +Z toward +X; +90 about X turns +Z toward -Y; +90 about Z turns +X toward +Y. A negative angle reverses the direction. Use [1,0,0], [0,1,0], or [0,0,1] for the fixed axes.",
+  "On macOS and iOS, fixed +X is screen right, +Y is up, and +Z points toward the viewer. Y is horizontal turning, X is tilting up or down, and positive Z is counterclockwise in the image. On visionOS the rotation axes are in the scene or anchor frame, not relative to the viewer's head; do not assume the same screen directions.",
+  "If the user specifies a fixed axis and angle, execute one rotate_view with that delta; no visual search is needed. For a dataset-local axis, first read transform.rotation and map that local direction through the current quaternion [x,y,z,w] into the parent frame. Keep translation, scale, clipping and appearance unchanged unless requested.",
+]
+
+[spatial.target_orientation]
+situation = "The user asks for a view direction or recognizable pose rather than a numeric rotation, for example a front view, side profile, or a face pointing toward one side of the image."
+goal = "Reach a recognizable target view with a planned rotation, then verify it visually."
+contexts = ["dataset_ready"]
+keywords = ["front view", "side profile", "face left", "face right", "look from above", "anatomical view", "upright", "back view"]
+requires_tools = ["get_application_state"]
+requires_parameters = { rotate_view = ["axis", "degrees"] }
+steps = [
+  "Establish the current pose first: read application state and, if available, inspect one current screenshot. Use clear landmarks such as the nose and shoulders to estimate facing and up. Dataset axes do not identify patient sides. Distinguish a subject's left or right side from facing left or right in the image; ask one specific question if the requested reference frame or landmarks are unclear.",
+  "Choose the smallest signed turn from the observed pose toward the target. For an upright face looking at the camera on macOS or iOS, about +90 degrees around Y makes the nose point screen right, and -90 makes it point screen left; about 45 gives a three-quarter view. If it is already turned, apply only the remaining angle. Do not use roll to change a profile or assume that yaw alone is enough for a tilted or sideways subject.",
+  "For a view-relative target on visionOS, use the actual viewing direction only if you can establish it in the scene frame. If you cannot relate the view to the fixed rotation axes, ask for a known starting view or an explicit axis instead of trying signs at random.",
+  "After one planned turn, wait for the new frame when that tool is available and verify the same landmarks in a new screenshot. Make at most one targeted correction from the observed remaining error. If the target is already met, stop; if you cannot verify it or still cannot tell which rotation would help, say what remains uncertain and ask for clarification instead of trying more rotations.",
+]
+
 [spatial.picking]
 goal = "Locate a visible landmark in dataset-local 3D coordinates for a marker, measurement, or edit."
 contexts = ["dataset_ready"]
