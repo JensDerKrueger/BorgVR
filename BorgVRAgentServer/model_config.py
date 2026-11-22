@@ -24,7 +24,7 @@ PROFILES = {
     "qwen38-27b": {
         "MODEL": "Qwen/Qwen3.8-27B", "MODEL_REVISION": "37561816e66b5b9153b1b64c10968c18c1e6f4a0",
         "TOOL_PARSER": "qwen3_coder", "REASONING_PARSER": "qwen3", "THINKING_MODE": "off",
-        "VISION_ENABLED": "true", "CONTEXT_LENGTH": "16384", "MAX_SEQS": "2",
+        "VISION_ENABLED": "true", "CONTEXT_LENGTH": "131072", "MAX_SEQS": "2",
         "MIN_FREE_GIB": "160",
     },
     "custom": {

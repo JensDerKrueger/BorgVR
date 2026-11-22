@@ -319,7 +319,9 @@ sudo ./setup.sh install --backend cuda --profile qwen35-4b
 ```
 
 Profiles `qwen36-35b`, `qwen35-4b` and `qwen38-27b` use separate fixed checkpoint revisions
-and initial parser/resource settings. For a new AMD installation use, for example,
+and initial parser/resource settings. The `qwen38-27b` profile defaults to 131,072 context
+tokens. Existing deployments keep their configured limit until reconfigured; select a smaller
+window with `--context-length` if needed. For a new AMD installation use, for example,
 `sudo ./setup.sh install --backend rocm --profile qwen35-4b`. CUDA and ROCm images are pinned
 independently. These presets do not guarantee every model fits or has kernels for every GPU.
 

@@ -339,6 +339,9 @@ sudo ./setup.sh install --backend cuda --profile qwen35-4b
 
 Die Modellprofile `qwen36-35b`, `qwen35-4b` und `qwen38-27b` enthalten feste,
 jeweils eigene Modellrevisionen sowie passende Ausgangswerte für Parser und Ressourcen.
+Für `qwen38-27b` beträgt der Standard 131.072 Kontext-Tokens. Bestehende Installationen
+behalten ihr eingestelltes Limit bis zur Neukonfiguration; mit `--context-length` lässt sich
+bei Bedarf ein kleineres Fenster wählen.
 Für eine neue AMD-Installation etwa `sudo ./setup.sh install --backend rocm --profile qwen35-4b`.
 CUDA- und ROCm-Images sind unabhängig per Digest festgelegt. Keiner dieser Befehle garantiert,
 dass jedes Modell auf jeder Karte passt; Kernel-, Quantisierungs- und Speicheranforderungen gelten weiter.

@@ -24,6 +24,17 @@ def test_profiles_pin_independent_model_revisions_and_keep_vision(profile):
     assert args[args.index("--revision") + 1] == config.revision
 
 
+@pytest.mark.parametrize("override,expected", [(None, 131072), ("16384", 16384)])
+def test_qwen38_context_default_and_explicit_override_reach_vllm(override, expected):
+    values = profile_values("qwen38-27b")
+    if override is not None:
+        values["BORGVR_CONTEXT_LENGTH"] = override
+    config = ModelConfig.from_env(values)
+    assert config.context == expected
+    arguments = config.arguments()
+    assert arguments[arguments.index("--max-model-len") + 1] == str(expected)
+
+
 def test_custom_model_has_no_qwen_request_or_parser_assumptions():
     values = profile_values("custom")
     values.update(BORGVR_MODEL="Other/Vision-Instruct", BORGVR_MODEL_REVISION="main", BORGVR_TOOL_PARSER="hermes")
