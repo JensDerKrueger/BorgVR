@@ -149,7 +149,8 @@ def from_env():
 
     model = VLLM(http, os.environ["BORGVR_VLLM_URL"], secret("BORGVR_VLLM_TOKEN_FILE"),
                  os.environ["BORGVR_MODEL"], int(os.environ.get("BORGVR_CONTEXT_LENGTH", "65536")),
-                 thinking_mode=os.environ.get("BORGVR_THINKING_MODE", "off"))
+                 thinking_mode=os.environ.get("BORGVR_THINKING_MODE", "off"),
+                 reasoning_parser=os.environ.get("BORGVR_REASONING_PARSER"))
     database = os.environ.get("BORGVR_NEXT_EVIDENCE_DB")
     return create_app(token=secret("BORGVR_TOKEN_FILE"), model=model,
                       evidence=Evidence(database) if database else None, lifespan=lifespan,

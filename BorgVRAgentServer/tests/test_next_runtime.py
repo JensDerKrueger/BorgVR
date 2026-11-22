@@ -675,6 +675,32 @@ def test_vllm_uses_same_payload_and_bounds_generation_by_available_context(confi
     asyncio.run(check())
 
 
+@pytest.mark.parametrize("parser,mode,expected", [
+    ("mistral", "on", {"reasoning_effort": "high", "chat_template_kwargs": {"reasoning_effort": "high"}}),
+    ("mistral", "off", {"reasoning_effort": "none", "chat_template_kwargs": {"reasoning_effort": "none"}}),
+    ("mistral", "default", {}),
+    ("qwen3", "off", {"chat_template_kwargs": {"enable_thinking": False}}),
+    ("qwen3", "on", {"chat_template_kwargs": {"enable_thinking": True}}),
+])
+def test_model_specific_thinking_controls_match_tokenization_and_generation(parser, mode, expected):
+    observed = []
+    def handler(request):
+        body = json.loads(request.content)
+        observed.append(body)
+        assert {key: body[key] for key in ("reasoning_effort", "chat_template_kwargs") if key in body} == expected
+        if request.url.path == "/tokenize":
+            return httpx.Response(200, json={"count": 42, "max_model_len": 16384})
+        assert body["temperature"] == (0.7 if parser == "mistral" and mode == "on" else 0.0)
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": "Done."}}]})
+    async def check():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            model = VLLM(client, "http://fixture.invalid/v1", "synthetic", "fixture",
+                         thinking_mode=mode, reasoning_parser=parser)
+            assert await model.complete([{"role": "user", "content": "Synthetic question."}], []) == "Done."
+        assert len(observed) == 2
+    asyncio.run(check())
+
+
 def test_vllm_read_timeout_is_classified_before_generic_transport_errors():
     def handler(request):
         if request.url.path == "/tokenize":

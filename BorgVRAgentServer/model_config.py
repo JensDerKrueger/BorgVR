@@ -27,6 +27,15 @@ PROFILES = {
         "VISION_ENABLED": "true", "CONTEXT_LENGTH": "16384", "MAX_SEQS": "2",
         "MIN_FREE_GIB": "160",
     },
+    "mistral-small4-nvfp4": {
+        "MODEL": "mistralai/Mistral-Small-4-119B-2603-NVFP4",
+        "MODEL_REVISION": "45331841b631f4e281df8e959ea3cc9beb84298a",
+        "TOOL_PARSER": "mistral", "REASONING_PARSER": "mistral", "THINKING_MODE": "on",
+        "VISION_ENABLED": "true", "CONTEXT_LENGTH": "16384", "MAX_SEQS": "1",
+        "MIN_FREE_GIB": "200", "QUANTIZATION": "compressed-tensors",
+        "ATTENTION_BACKEND": "TRITON_MLA", "ENFORCE_EAGER": "true",
+        "GPU_MEMORY_FRACTION": "0.90",
+    },
     "custom": {
         "MODEL": "", "MODEL_REVISION": "", "TOOL_PARSER": "",
         "REASONING_PARSER": "none", "THINKING_MODE": "default", "VISION_ENABLED": "true",
@@ -34,7 +43,7 @@ PROFILES = {
     },
 }
 BASE = {"DTYPE": "auto", "QUANTIZATION": "auto", "GPU_MEMORY_FRACTION": "0.85",
-        "ENFORCE_EAGER": "false", "CPU_OFFLOAD_GB": "0"}
+        "ENFORCE_EAGER": "false", "CPU_OFFLOAD_GB": "0", "ATTENTION_BACKEND": "auto"}
 MODEL_KEYS = set(BASE) | set(PROFILES["qwen36-35b"])
 
 
@@ -88,6 +97,7 @@ class ModelConfig:
     tensor_parallel_size: int = 1
     nccl_p2p_disable: bool = False
     disable_custom_all_reduce: bool = False
+    attention_backend: str = "auto"
 
     @classmethod
     def from_env(cls, env):
@@ -113,7 +123,8 @@ class ModelConfig:
                    boolean(get("ENFORCE_EAGER")), number(get("CPU_OFFLOAD_GB"), 0, 4096),
                    number(values.get("BORGVR_TENSOR_PARALLEL_SIZE", "1"), 1, 8, True),
                    boolean(values.get("BORGVR_NCCL_P2P_DISABLE", "false")),
-                   boolean(values.get("BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "false")))
+                   boolean(values.get("BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "false")),
+                   identifier(get("ATTENTION_BACKEND")))
 
     def arguments(self):
         result = ["vllm", "serve", self.model, "--revision", self.revision,
@@ -123,6 +134,8 @@ class ModelConfig:
                   "--enable-auto-tool-choice", "--tool-call-parser", self.tool_parser, "--no-enable-log-requests"]
         if self.reasoning_parser != "none":
             result += ["--reasoning-parser", self.reasoning_parser]
+        if self.attention_backend != "auto":
+            result += ["--attention-backend", self.attention_backend]
         if self.tensor_parallel_size > 1:
             result += ["--distributed-executor-backend", "mp"]
         if self.disable_custom_all_reduce:

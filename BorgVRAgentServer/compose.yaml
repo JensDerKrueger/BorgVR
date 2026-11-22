@@ -14,6 +14,7 @@ x-model-environment: &model-environment
   BORGVR_MIN_FREE_GIB: ${BORGVR_MIN_FREE_GIB:-200}
   BORGVR_ENFORCE_EAGER: ${BORGVR_ENFORCE_EAGER:-false}
   BORGVR_CPU_OFFLOAD_GB: ${BORGVR_CPU_OFFLOAD_GB:-0}
+  BORGVR_ATTENTION_BACKEND: ${BORGVR_ATTENTION_BACKEND:-auto}
 services:
   vllm:
     image: ${BORGVR_VLLM_IMAGE:?Run setup.sh first}

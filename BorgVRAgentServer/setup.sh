@@ -47,6 +47,7 @@ usage() {
     '  --context-length N --max-seqs N --gpu-memory-fraction F' \
     '  --reasoning-parser NAME|none --thinking default|off|on --min-free-gib N' \
     '  --enforce-eager true|false --cpu-offload-gb N  Optional memory/performance controls.' \
+    '  --attention-backend NAME  Override vLLM attention selection (default auto).' \
     'Update pulls configured images, checks access, starts services and tests the model.' \
     'Install recreates existing BorgVR containers without deleting images or model volumes.' \
     'Explicit install options update existing settings; omitted options and tokens are kept.' \
@@ -63,7 +64,7 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
     install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up|_dev-agent-health) COMMAND="$1"; shift ;;
-    --gpu|--tensor-parallel-size|--nccl-p2p-disable|--disable-custom-all-reduce|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
+    --gpu|--tensor-parallel-size|--nccl-p2p-disable|--disable-custom-all-reduce|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--attention-backend|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
     --yes|--remove-images|--remove-checkout|--files-only) UNINSTALL_ARGS+=("$1"); shift ;;
@@ -94,7 +95,7 @@ done
 if [[ -e "$DIR/runtime/agent-development.json" || -L "$DIR/runtime/agent-development.json" ]]; then
   case "$COMMAND" in
     install|configure|model|update)
-      die 'Disable development mode before changing the deployment/model/image: sudo ./setup.sh dev disable' ;;
+      die 'Disable development mode before changing the deployment/model/image: sudo ./setup.sh dev disable --remove; re-enable it from the current checkout after the switch.' ;;
   esac
 fi
 if [[ -n "$FIREWALL_ZONE" ]] && ((!OPEN_FIREWALL)); then

@@ -14,7 +14,7 @@ import configure
 from model_config import CUDA_IMAGE, ROCM_IMAGE, PROFILES, ModelConfig, profile_values
 
 
-@pytest.mark.parametrize("profile", ["qwen36-35b", "qwen35-4b", "qwen38-27b"])
+@pytest.mark.parametrize("profile", [name for name in PROFILES if name != "custom"])
 def test_profiles_pin_independent_model_revisions_and_keep_vision(profile):
     config = ModelConfig.from_env(profile_values(profile))
     assert config.model == PROFILES[profile]["MODEL"]
@@ -33,10 +33,51 @@ def test_custom_model_has_no_qwen_request_or_parser_assumptions():
     assert "hermes" in config.arguments()
 
 
+def test_mistral_nvfp4_profile_has_vision_parsers_and_conservative_runtime():
+    config = ModelConfig.from_env(profile_values("mistral-small4-nvfp4"))
+    assert config.model == "mistralai/Mistral-Small-4-119B-2603-NVFP4"
+    assert config.tool_parser == config.reasoning_parser == "mistral"
+    assert config.thinking == "on" and config.vision
+    assert config.context == 16384 and config.sequences == 1 and config.eager
+    args = config.arguments()
+    assert args[args.index("--quantization") + 1] == "compressed-tensors"
+    assert args[args.index("--attention-backend") + 1] == "TRITON_MLA"
+    assert "--enforce-eager" in args and "qwen3" not in args
+
+
+def test_mistral_switch_and_return_reset_model_options_but_keep_hardware_and_endpoint(tmp_path):
+    parser = argparse.ArgumentParser()
+    configure.add_model_options(parser)
+    parser.add_argument("--agent-image")
+    configure.create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "all")
+    original = configure.read_configuration(tmp_path)
+    original.update(BORGVR_TENSOR_PARALLEL_SIZE="2", BORGVR_NCCL_P2P_DISABLE="true",
+                    BORGVR_DISABLE_CUSTOM_ALL_REDUCE="true")
+    args = parser.parse_args(["--profile", "mistral-small4-nvfp4"])
+    mistral = {**original, **configure.inference_values(args, original)}
+    assert ModelConfig.from_env(mistral).attention_backend == "TRITON_MLA"
+    for key in ("BORGVR_GPU", "BORGVR_TENSOR_PARALLEL_SIZE", "BORGVR_NCCL_P2P_DISABLE",
+                "BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "BORGVR_BIND_ADDRESS", "BORGVR_PORT", "BORGVR_AGENT_IMAGE"):
+        assert mistral[key] == original[key]
+    args = parser.parse_args(["--profile", "qwen38-27b"])
+    qwen = ModelConfig.from_env({**mistral, **configure.inference_values(args, mistral)})
+    assert qwen.quantization == qwen.attention_backend == "auto"
+    assert not qwen.eager and qwen.thinking == "off" and qwen.tensor_parallel_size == 2
+
+
+def test_mistral_nvfp4_rejects_rocm_before_writing_configuration():
+    parser = argparse.ArgumentParser()
+    configure.add_model_options(parser)
+    args = parser.parse_args(["--profile", "mistral-small4-nvfp4", "--backend", "rocm"])
+    with pytest.raises(ValueError, match="NVIDIA CUDA/Blackwell"):
+        configure.inference_values(args)
+
+
 @pytest.mark.parametrize("key,value", [("VISION_ENABLED", "false"), ("GPU_MEMORY_FRACTION", "nan"),
     ("GPU_MEMORY_FRACTION", "1.1"), ("MAX_SEQS", "0"), ("CONTEXT_LENGTH", "-1"),
     ("DTYPE", "unsupported"), ("THINKING_MODE", "maybe"), ("TOOL_PARSER", "../code.py"),
-    ("REASONING_PARSER", "$(id)"), ("CPU_OFFLOAD_GB", "-1"), ("MODEL_REVISION", "../main")])
+    ("REASONING_PARSER", "$(id)"), ("CPU_OFFLOAD_GB", "-1"), ("MODEL_REVISION", "../main"),
+    ("ATTENTION_BACKEND", "../code.py")])
 def test_model_options_reject_invalid_or_unsafe_values(key, value):
     with pytest.raises((ValueError, TypeError)):
         ModelConfig.from_env({**profile_values("qwen36-35b"), "BORGVR_" + key: value})

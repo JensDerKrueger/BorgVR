@@ -45,7 +45,7 @@ class Call:
 
 class VLLM:
     def __init__(self, http, base_url, token, name, context=65536, *, max_output_tokens=None, generation_timeout=180,
-                 thinking_mode="off"):
+                 thinking_mode="off", reasoning_parser=None):
         self.http = http
         self.url = base_url.rstrip("/")
         if not self.url.endswith("/v1"):
@@ -60,6 +60,7 @@ class VLLM:
         if thinking_mode not in {"off", "on", "default"}:
             raise ValueError("Invalid thinking mode")
         self.thinking_mode = thinking_mode
+        self.reasoning_parser = reasoning_parser
 
     async def exchange(self, method, url, *, phase, seconds, body=None):
         timeout = httpx.Timeout(seconds, connect=min(5, seconds), pool=min(5, seconds))
@@ -92,7 +93,12 @@ class VLLM:
     async def complete(self, messages, tools, *, response_schema=None):
         body = {"model": self.name, "messages": messages}
         if self.thinking_mode != "default":
-            body["chat_template_kwargs"] = {"enable_thinking": self.thinking_mode == "on"}
+            if self.reasoning_parser == "mistral":
+                body["reasoning_effort"] = "high" if self.thinking_mode == "on" else "none"
+                # /tokenize consumes template kwargs, not necessarily generation options.
+                body["chat_template_kwargs"] = {"reasoning_effort": body["reasoning_effort"]}
+            else:
+                body["chat_template_kwargs"] = {"enable_thinking": self.thinking_mode == "on"}
         if tools:
             body["tools"] = tools
         if response_schema is not None:
@@ -112,7 +118,8 @@ class VLLM:
         if available <= 0:
             raise ContextLimit("input_token_budget", input_tokens=count, window=window)
         limit = available if self.max_output_tokens is None else min(available, self.max_output_tokens)
-        body.update(temperature=0.0, parallel_tool_calls=False, max_tokens=limit)
+        temperature = 0.7 if self.reasoning_parser == "mistral" and self.thinking_mode == "on" else 0.0
+        body.update(temperature=temperature, parallel_tool_calls=False, max_tokens=limit)
         result = await self.exchange("POST", self.url + "/chat/completions", phase="generation",
                                      seconds=self.generation_timeout, body=body)
         return self.response(result, tools, limit, structured=response_schema is not None)

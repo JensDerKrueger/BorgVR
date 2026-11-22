@@ -318,10 +318,47 @@ stays unchanged. Vision and tool calling are mandatory, not optional text-only f
 sudo ./setup.sh install --backend cuda --profile qwen35-4b
 ```
 
-Profiles `qwen36-35b`, `qwen35-4b` and `qwen38-27b` use separate fixed checkpoint revisions
+Profiles `qwen36-35b`, `qwen35-4b`, `qwen38-27b` and `mistral-small4-nvfp4` use separate fixed checkpoint revisions
 and initial parser/resource settings. For a new AMD installation use, for example,
 `sudo ./setup.sh install --backend rocm --profile qwen35-4b`. CUDA and ROCm images are pinned
 independently. These presets do not guarantee every model fits or has kernels for every GPU.
+
+### Test Mistral Small 4 NVFP4 on two Blackwell GPUs
+
+`mistral-small4-nvfp4` selects the [official image-capable checkpoint](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603-NVFP4),
+pinned to `45331841b631f4e281df8e959ea3cc9beb84298a`, with `mistral` tool/reasoning parsers,
+`compressed-tensors` quantization and `TRITON_MLA` attention. Initial limits are 16,384
+context tokens, one concurrent request, a 90% GPU memory budget and eager execution.
+Reasoning is enabled (`reasoning_effort=high`, temperature 0.7); `--thinking off` selects
+`reasoning_effort=none`. No Qwen-specific thinking parameters are sent.
+This profile targets NVIDIA CUDA/Blackwell, not ROCm. Two 48 GB cards are a plausible test
+configuration, not a verified memory or kernel compatibility guarantee. The checkpoint is
+about 71 GB; installation checks require 200 GiB of free Docker storage for this profile.
+Check available space before switching models. Existing model caches are kept.
+
+With development mode active on ai2, use this order. First ensure the latest agent source
+has been committed and pushed. `git pull --ff-only` brings it into the checkout; stop on
+local conflicts and do not reset changes. Preserve any uncommitted source deployed only
+through `dev push` before removing development mode.
+
+```sh
+cd ~/BorgVR/BorgVRAgentServer
+git pull --ff-only
+sudo ./setup.sh dev disable --remove
+sudo ./setup.sh model mistral-small4-nvfp4 --gpu all --tensor-parallel-size 2
+sudo ./setup.sh dev enable --ssh-key-file ~/borgvr-ai1-dev.pub
+sudo ./setup.sh test
+```
+
+Stop and inspect the output if any command fails. During the switch the configured image
+may temporarily run the agent; `dev enable` then restores current source from the checkout
+and recreates the restricted SSH access. Host, port, certificates, tokens and GPU workarounds
+are preserved. Reconnect BorgVR afterwards without changing connection settings.
+`setup.sh test` exercises the actual model, including image input and tool calling, not
+just container health. To switch back, repeat the sequence with
+`model qwen38-27b --gpu all --tensor-parallel-size 2`.
+
+### Switch other existing model profiles
 
 Switch an existing deployment while keeping credentials and caches:
 
