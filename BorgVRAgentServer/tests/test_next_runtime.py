@@ -586,29 +586,29 @@ def test_input_compaction_keeps_active_goal_and_confirmed_command_without_replay
             assert ws.receive_json()["type"] == "completed"
 
 
-@pytest.mark.parametrize("representation", ["tool_args", "assistant_text"])
-def test_truncated_tf_shape_counts_complete_rows_without_logging_values(caplog, representation):
+@pytest.mark.parametrize("tool_name, advertised", [
+    ("client_defined_tool", True), ("unadvertised_tool", False), (None, False),
+])
+def test_truncated_output_logs_generic_metrics_without_logging_values(caplog, tool_name, advertised):
     hidden_text = "SYNTHETIC_PRIVATE_TEXT"
-    private_rgba = "[41, 82, 123, 164]"
-    ramp = "[" + ", ".join([private_rgba] * 23) + ", [41, 82"
-    if representation == "tool_args":
-        message = {"tool_calls": [{
-            "id": "truncated", "function": {
-                "name": "set_transfer_function", "arguments": '{"channel":0,"samples":' + ramp,
-            },
-        }], "content": hidden_text}
-    else:
-        message = {"content": hidden_text + "<tool_call><function=set_transfer_function><parameter=samples>" + ramp}
-    message["reasoning_content"] = hidden_text
+    hidden_reasoning = "SYNTHETIC_PRIVATE_REASONING"
+    hidden_arguments = '{"example": "SYNTHETIC_PRIVATE_ARGUMENT'
+    message = {"content": hidden_text, "reasoning_content": hidden_reasoning}
+    if tool_name is not None:
+        message["tool_calls"] = [{"id": "truncated", "function": {"name": tool_name, "arguments": hidden_arguments}}]
     result = {
         "choices": [{"finish_reason": "length", "message": message}],
         "usage": {"completion_tokens": 1024, "completion_tokens_details": {"reasoning_tokens": 100}},
     }
-    tools = [{"function": {"name": "set_transfer_function"}}]
+    tools = [{"function": {"name": "client_defined_tool"}}]
     with caplog.at_level("INFO", logger="uvicorn.error.borgvr"):
         with pytest.raises(OutputLimit):
             VLLM.response(result, tools, 1024)
     assert "output_tokens=1024 reasoning_tokens=100" in caplog.text
-    assert f"rgba_rows=23 rgba_source={representation}" in caplog.text
+    assert f"reasoning_chars={len(hidden_reasoning)} text_chars={len(hidden_text)}" in caplog.text
+    assert f"tool_calls={int(tool_name is not None)} tools={tool_name if advertised else '-'} " in caplog.text
+    assert f"argument_chars={len(hidden_arguments) if tool_name is not None else 0}" in caplog.text
+    assert "unadvertised_tool" not in caplog.text
     assert hidden_text not in caplog.text
-    assert private_rgba not in caplog.text
+    assert hidden_reasoning not in caplog.text
+    assert "SYNTHETIC_PRIVATE_ARGUMENT" not in caplog.text

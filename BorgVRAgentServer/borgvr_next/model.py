@@ -123,10 +123,9 @@ class VLLM:
                 used = used if type(used) is int and 0 <= used <= output_limit else None
                 shape = summarize_output(choice, tools, usage)
                 logger.info("Truncated model output: limit=%d output_tokens=%s reasoning_tokens=%s reasoning_chars=%d "
-                            "text_chars=%d tool_calls=%d tools=%s argument_chars=%d rgba_rows=%s rgba_source=%s",
+                            "text_chars=%d tool_calls=%d tools=%s argument_chars=%d",
                             output_limit, used, shape["reasoning_tokens"], shape["reasoning_chars"], shape["text_chars"],
-                            shape["tool_calls"], shape["tools"], shape["argument_chars"], shape["rgba_rows"],
-                            shape["rgba_source"])
+                            shape["tool_calls"], shape["tools"], shape["argument_chars"])
                 raise OutputLimit(output_limit, used)
             message = choice["message"]
             calls = message.get("tool_calls") or []
