@@ -11,7 +11,7 @@ private func expect(_ condition: Bool, _ message: String) throws {
   if !condition { throw Failure.failed(message) }
 }
 
-private func testPairedScreenshotReadback() throws -> BorgVRScreenshotPositions {
+private func testPairedScreenshotReadback() throws -> (positions: BorgVRScreenshotPositions, preview: Data) {
   guard let device = MTLCreateSystemDefaultDevice(),
         let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer() else {
     throw Failure.failed("Metal is unavailable for the screenshot test")
@@ -48,6 +48,15 @@ private func testPairedScreenshotReadback() throws -> BorgVRScreenshotPositions 
   try expect(positions.position(x: 0.125, y: 0.125) == SIMD3(0.125, 0.875, 0.25)
              && positions.position(x: 1, y: 1) == nil, "Snapshot pixels were not paired or immutable")
   let png = try MetalScreenshotEncoder.pngData(from: readback.color)
+  let preview = try MetalScreenshotEncoder.pngImage(from: readback.color, maxWidth: 2)
+  let uncapped = try MetalScreenshotEncoder.pngImage(from: readback.color, maxWidth: 100)
+  try expect(preview.width == 2 && preview.height == 2 && positions.width == 4 && positions.height == 4,
+    "Preview dimensions must not change the position buffer")
+  try expect(uncapped.width == 4 && uncapped.height == 4 && uncapped.data == png, "Width cap upscaled the image")
+  let rectangleBuffer = rgba.device.makeBuffer(length: 1024 * 120, options: .storageModeShared)!
+  let rectangle = MetalScreenshotReadback(buffer: rectangleBuffer, width: 200, height: 120, bytesPerRow: 1024)
+  let scaled = try MetalScreenshotEncoder.pngImage(from: rectangle, maxWidth: 100)
+  try expect(scaled.width == 100 && scaled.height == 60, "Screenshot did not preserve the aspect ratio")
   let archive = try positions.archive(png: png)
   try expect(archive.prefix(8) == Data("BVRPOS1\n".utf8) && archive.subdata(in: 20..<(20 + png.count)) == png,
     "Invalid extended screenshot header or PNG payload")
@@ -60,7 +69,7 @@ private func testPairedScreenshotReadback() throws -> BorgVRScreenshotPositions 
     _ = try positions.archive(png: png, maximumBytes: archive.count - 1)
     throw Failure.failed("Inline size limit was not enforced")
   } catch MetalScreenshotError.inlineCaptureTooLarge {}
-  return positions
+  return (positions, preview.data)
 }
 
 // Drive AppKit notifications explicitly without changing the user's desktop Space.
@@ -217,7 +226,8 @@ struct MCPVisualizationTests {
     }
     let tools = try await request("tools/list")
     let names = Set(((tools["result"] as! [String: Any])["tools"] as! [[String: Any]]).compactMap { $0["name"] as? String })
-    try expect(Set(["get_transfer_function", "set_transfer_function", "save_transfer_function", "load_transfer_function",
+    try expect(Set(["get_transfer_function", "set_transfer_function", "set_transfer_function_component",
+      "save_transfer_function", "load_transfer_function",
       "get_background", "set_background", "save_visualization_state", "load_visualization_state",
       "save_settings", "load_settings", "reset_settings", "get_window_state", "resize_window",
       "set_fullscreen", "start_command_recording", "stop_command_recording", "replay_command_recording"]).isSubset(of: names), "MCP tools are missing")
@@ -252,20 +262,68 @@ struct MCPVisualizationTests {
     let rejected = try await tool("set_transfer_function", ["samples": [[true, 1, 2, 3]]])
     try expect(rejected["isError"] as? Bool == true, "Boolean RGBA entry accepted")
     _ = try await tool("set_transfer_function", ["channel": 1, "samples": [[255, 0, 32, 100]]])
-    try expect(try service.transferFunction(channel: 1).samples.first == [255, 0, 32, 100], "MCP TF setter failed")
+    let otherTF = try service.transferFunction(channel: 1)
+    try expect(otherTF.samples.first == [255, 0, 32, 100], "MCP TF setter failed")
+    let componentTool = "set_transfer_function_component"
+    let points = [[0.25, 0.0], [0.75, 1.0]]
+    let componentResult = try await tool(componentTool, ["channel": 0, "component": 2, "points": points])
+    let componentReceipt = componentResult["structuredContent"] as? [String: Int]
+    let rampTF = try service.transferFunction(channel: 0)
+    try expect(componentReceipt == ["channel": 0, "component": 2, "pointCount": 2, "sampleCount": rampTF.samples.count],
+      "The component setter should return a compact receipt")
+    try expect(rampTF.samples.count == afterResetTF.samples.count, "The component setter must keep full TF resolution")
+    for (index, row) in rampTF.samples.enumerated() {
+      let original = afterResetTF.samples[index]
+      let x = Double(index) / Double(rampTF.samples.count - 1)
+      let blue = UInt8((min(1, max(0, (x - 0.25) * 2)) * 255).rounded())
+      try expect(row == [original[0], original[1], blue, original[3]], "Unexpected component ramp at sample \(index)")
+    }
+    try expect(try service.transferFunction(channel: 1) == otherTF, "Another TF channel changed")
+    let badPoints: [[[Any]]] = [[], [[0.25]], [[true, 0]], [[0.25, 1.1]], [[-0.1, 0]],
+      [[0.25, 0], [0.25, 1]], [[0.75, 0], [0.25, 1]]]
+    for rejectedPoints in badPoints {
+      let result = try await tool(componentTool, ["channel": 0, "component": 2, "points": rejectedPoints])
+      try expect(result["isError"] as? Bool == true, "Invalid component points accepted")
+    }
+    for arguments: [String: Any] in [["component": 2, "points": points], ["channel": 0, "component": 4, "points": points],
+      ["channel": 0, "component": true, "points": points], ["channel": 0, "component": 2.5, "points": points]] {
+      let result = try await tool(componentTool, arguments)
+      try expect(result["isError"] as? Bool == true, "Invalid component command accepted")
+    }
+    try expect(try service.transferFunction(channel: 0) == rampTF, "Invalid component arguments changed the TF")
+
+    let lastSample = rampTF.samples.count - 1
+    let step = lastSample / 8
+    let zigzag = [[Double(step) / Double(lastSample), 0], [Double(3 * step) / Double(lastSample), 1],
+      [Double(5 * step) / Double(lastSample), 0], [Double(7 * step) / Double(lastSample), 1]]
+    let zigzagResult = try await tool(componentTool, ["channel": 0, "component": 3, "points": zigzag])
+    try expect(zigzagResult["isError"] as? Bool != true, "Multiple TF segments were rejected")
+    let zigzagSamples = try service.transferFunction(channel: 0).samples
+    for (index, expected) in [(0, 0), (step, 0), (2 * step, 128), (3 * step, 255), (4 * step, 128),
+      (5 * step, 0), (6 * step, 128), (7 * step, 255), (lastSample, 255)] {
+      try expect(abs(Int(zigzagSamples[index][3]) - expected) <= 1, "Wrong multi-segment alpha at sample \(index)")
+      try expect(zigzagSamples[index].prefix(3) == rampTF.samples[index].prefix(3), "Alpha change altered a color")
+    }
+    try service.setTransferFunction(rampTF)
+
     let recording = try await tool("start_command_recording")
     try expect(recording["isError"] as? Bool != true && session.isCommandRecording,
       "MCP could not start recording: \(recording)")
     let recordingURL = root.appendingPathComponent("mcp-recording.gsc")
     _ = try await tool("resize_window", ["width": 870, "height": 660])
     _ = try await tool("set_background", ["mode": "solid", "primary": [0.2, 0.3, 0.4, 1]])
+    _ = try await tool(componentTool, ["channel": 0, "component": 3, "points": [[0.5, 0.2]]])
+    let recordedTF = try service.transferFunction(channel: 0)
+    try expect(recordedTF.samples.allSatisfy { $0[3] == 51 }, "A single control point should set a constant")
     let stopped = try await tool("stop_command_recording", ["output_path": recordingURL.path])
     try expect(stopped["isError"] as? Bool != true && !session.isCommandRecording &&
       FileManager.default.fileExists(atPath: recordingURL.path), "MCP could not save recording: \(stopped)")
     try expect(try await tool("replay_command_recording", ["input_path": recordingURL.path])["isError"] as? Bool == true,
       "Replay accepted a recording without confirmation")
+    try service.setTransferFunction(rampTF)
     try expect(try await tool("replay_command_recording", ["input_path": recordingURL.path, "confirm": true])["isError"] as? Bool != true,
       "MCP native recording replay failed")
+    try expect(try service.transferFunction(channel: 0) == recordedTF, "The recorded component change did not replay exactly")
     _ = try await tool("set_background", ["mode": "solid", "primary": [0, 0, 0, 1]])
     try expect(service.background().primary == [0, 0, 0, 1], "MCP background setter failed")
     isolated.set(3.5, forKey: "oversampling")
@@ -294,12 +352,13 @@ struct MCPVisualizationTests {
     let lastRow = gradientImage.bytesPerRow * 3
     try expect(stride >= 3 && gradientBytes[0] > gradientBytes[2] &&
       gradientBytes[lastRow] < gradientBytes[lastRow+2], "Screenshot gradient is upside down")
-    let screenshotPositions = try testPairedScreenshotReadback()
-    model.renderScreenshotHandler = { id, url, _, completion in
+    let paired = try testPairedScreenshotReadback()
+    model.renderScreenshotHandler = { id, url, _, maxWidth, completion in
       do {
-        try (imageData as Data).write(to: url!)
+        let png = maxWidth == 2 ? paired.preview : imageData as Data
+        try png.write(to: url!)
         model.screenshotCache.begin(id)
-        model.screenshotCache.store(screenshotPositions, id: id, renderedFrame: 17)
+        model.screenshotCache.store(paired.positions, id: id, renderedFrame: 17)
         completion(.success(url!))
       } catch { completion(.failure(error)) }
     }
@@ -312,6 +371,20 @@ struct MCPVisualizationTests {
       let source = CGImageSourceCreateWithData(file as CFData, nil)!
       let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as! [CFString: Any]
       try expect((properties[kCGImagePropertyHasAlpha] as? Bool ?? false) == alpha, "Screenshot alpha option ignored")
+    }
+    let previewURL = root.appendingPathComponent("capture-preview.png")
+    let preview = try await tool("capture_screenshot", ["max_width": 2, "output_path": previewURL.path])
+    let previewInfo = preview["structuredContent"] as? [String: Any]
+    try expect(previewInfo?["width"] as? Int == 2 && previewInfo?["height"] as? Int == 2,
+      "MCP preview did not return the reduced dimensions")
+    let previewPick = try await tool("pick_screenshot_positions", [
+      "screenshot_id": previewInfo!["screenshotId"]!, "points": [["x": 0.125, "y": 0.125]]
+    ])
+    try expect((previewPick["structuredContent"] as? [String: Any])?["positions"] as? [[Double]] == [[0.125, 0.875, 0.25]],
+      "Normalized picking changed after resizing the PNG")
+    for width in [0, -1, true, 1.5, 16_385, "100", NSNull()] as [Any] {
+      let invalid = try await tool("capture_screenshot", ["max_width": width])
+      try expect(invalid["isError"] as? Bool == true, "MCP accepted an invalid screenshot width: \(width)")
     }
     let extendedURL = root.appendingPathComponent("extended.borgvrcapture")
     let saved = try await tool("capture_extended_screenshot", ["output_path": extendedURL.path])
@@ -333,6 +406,7 @@ struct MCPVisualizationTests {
     let screenshotRecording = try await tool("stop_command_recording", ["output_path": screenshotRecordingURL.path])
     try expect(screenshotRecording["isError"] as? Bool != true, "Screenshot recording failed: \(screenshotRecording)")
     for alpha in [true, false] { try FileManager.default.removeItem(at: root.appendingPathComponent("capture-\(alpha).png")) }
+    try FileManager.default.removeItem(at: previewURL)
     try FileManager.default.removeItem(at: extendedURL)
     session.startCommandRecording()
     try service.setBackground(background)
@@ -369,6 +443,7 @@ struct MCPVisualizationTests {
       FileManager.default.fileExists(atPath: root.appendingPathComponent("capture-false.png").path) &&
       FileManager.default.fileExists(atPath: extendedURL.path),
       "Screenshot destinations did not round-trip: \(runner.scriptLogText)")
+    try expect(try Data(contentsOf: previewURL) == paired.preview, "Screenshot preview width did not survive GSC replay")
     let scriptURL = root.appendingPathComponent("roundtrip.gsc")
     let script = """
     fullscreen false
@@ -377,6 +452,7 @@ struct MCPVisualizationTests {
     set window getwindowstate
     log $window
     settransferfunctionjson 0 '[[0,0,0,0],[12,34,56,255]]'
+    settransferfunctioncomponent 0 2 '[[0.25,0],[0.35,1],[0.5,0],[0.75,1]]'
     set savedTF gettransferfunction 0
     settransferfunction 0 $savedTF
     background solid 0 0 0
@@ -392,6 +468,7 @@ struct MCPVisualizationTests {
     resetsettings
     loadsettings "\(root.path)/script.borgvrsettings"
     screenshot "\(root.path)/script.png" false
+    screenshot "\(root.path)/script-preview.png" 2
     extendedscreenshot "\(root.path)/script-extended" false
     """
     try script.write(to: scriptURL, atomically: true, encoding: .utf8)
@@ -406,8 +483,14 @@ struct MCPVisualizationTests {
     try expect(scriptedCapture.prefix(8) == Data("BVRPOS1\n".utf8), "GSC did not save the extended screenshot")
     try expect(try service.windowState().frameSizePixels == [frameWidth, frameHeight] &&
       runner.scriptLogText.contains("backingScaleFactor"), "GSC window commands/getter failed")
-    try expect(try service.transferFunction(channel: 0).samples.last == [12, 34, 56, 255], "GSC TF restore failed")
+    let scriptedTF = try service.transferFunction(channel: 0).samples
+    let peak = Int((Double(scriptedTF.count - 1) * 0.35).rounded())
+    let dip = (scriptedTF.count - 1) / 2
+    try expect(scriptedTF.last == [12, 34, 255, 255] && scriptedTF[peak][2] >= 250 && scriptedTF[dip][2] <= 5,
+      "GSC multi-segment TF setter or TF restore failed")
     try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("script.png").path), "GSC screenshot was not saved")
+    try expect(try Data(contentsOf: root.appendingPathComponent("script-preview.png")) == paired.preview,
+      "GSC screenshot width was ignored")
     if let device = MTLCreateSystemDefaultDevice() { try testDeferredTFUpload(device: device) }
     try await testCommandRecordingRoundtrip(fixture: URL(fileURLWithPath: CommandLine.arguments[1]), directory: root)
     print("MCP/GSC visualization tests passed: live HTTP tools, main-window point/pixel resize, fullscreen notification/cancellation lifecycle, TF channels/files, picture roundtrip, validation/no-clobber, settings backup/reset/restore, screenshots, recording and real interpreter execution")

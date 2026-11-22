@@ -1,4 +1,5 @@
 import Combine
+import CoreFoundation
 import Foundation
 import Network
 import Security
@@ -564,6 +565,22 @@ final class BorgVRMCPToolRouter {
         }
         try service.setTransferFunction(.init(channel: channel, samples: rows.map { $0.map(\.uint8Value) }))
         return structuredToolResult(try service.transferFunction(channel: channel))
+      case "set_transfer_function_component":
+        guard arguments["channel"] != nil else {
+          throw BorgVRMCPCommandError.invalidArgument("Provide a zero-based channel.")
+        }
+        let channel = try channel(in: arguments)
+        let component = try BorgVRVolumeEditingArguments.number(arguments["component"])
+        guard (0...3).contains(component), component.rounded() == component,
+              let rows = arguments["points"] as? [[NSNumber]], !rows.isEmpty,
+              rows.count <= TransferFunction1D.maximumEntryCount,
+              rows.allSatisfy({ $0.count == 2 && $0.allSatisfy { CFGetTypeID($0) != CFBooleanGetTypeID() } }) else {
+          throw BorgVRMCPCommandError.invalidArgument("Provide a component in 0...3 and [position, value] point pairs.")
+        }
+        let count = try service.setTransferFunctionComponent(channel: channel, component: Int(component),
+          points: rows.map { $0.map(\.doubleValue) })
+        return structuredToolResult(["channel": channel, "component": Int(component),
+          "pointCount": rows.count, "sampleCount": count])
       case "load_transfer_function":
         let channel = try channel(in: arguments)
         try service.loadTransferFunction(channel: channel, from: fileURL("input_path", in: arguments))
@@ -656,7 +673,7 @@ final class BorgVRMCPToolRouter {
       case "create_edit_state":
         let name = try optionalString("name", in: arguments) ?? ""
         let duplicate = try BorgVRVolumeEditingArguments.boolean(arguments["duplicate"]) ?? false
-        try await service.volumeEditing.duplicateState(name: name, empty: !duplicate)
+        try await service.volumeEditing.duplicateState(name: name, empty: !duplicate, validateContext: validateContext)
         return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "rename_edit_state":
         try service.volumeEditing.renameState(uuid("id", in: arguments), name: string("name", in: arguments))
@@ -906,9 +923,10 @@ final class BorgVRMCPToolRouter {
         )
       case "capture_screenshot":
         let includeAlpha = try optionalBool("include_alpha", in: arguments) ?? true
+        let maxWidth = try optionalInteger("max_width", in: arguments)
         let outputURL = try arguments["output_path"].map { _ in try fileURL("output_path", in: arguments) }
         let image = try await service.captureScreenshot(to: outputURL, includeAlpha: includeAlpha,
-          overwrite: optionalBool("overwrite", in: arguments) ?? false)
+          overwrite: optionalBool("overwrite", in: arguments) ?? false, maxWidth: maxWidth)
         var metadata: [String: Any] = [
           "width": image.width,
           "height": image.height,
@@ -1205,6 +1223,13 @@ final class BorgVRMCPToolRouter {
           "items": ["type": "array", "minItems": 4, "maxItems": 4,
             "items": ["type": "integer", "minimum": 0, "maximum": 255]]]
       ], required: ["samples"]),
+      tool("set_transfer_function_component", "Replace just one component of a zero-based channel's TF. Components 0/1/2/3 are red/green/blue/alpha. Pass normalized [position,value] pairs in [0,1] with strictly increasing positions. BorgVR interpolates linearly, holding the first and last values outside the points. All other components and channels are preserved. For example, blue from 0 at 25% to 1 at 75% uses component 2 and points [[0.25,0],[0.75,1]].", properties: [
+        "channel": ["type": "integer", "minimum": 0, "maximum": 3],
+        "component": ["type": "integer", "minimum": 0, "maximum": 3],
+        "points": ["type": "array", "minItems": 1, "maxItems": TransferFunction1D.maximumEntryCount,
+          "items": ["type": "array", "minItems": 2, "maxItems": 2,
+            "items": ["type": "number", "minimum": 0, "maximum": 1]]]
+      ], required: ["channel", "component", "points"]),
       tool("load_transfer_function", "Load one channel from a native .tf1d file; paths are absolute on the app device and must be sandbox-accessible.",
         properties: ["channel": channelSchema, "input_path": ["type": "string"]], required: ["input_path"]),
       tool("save_transfer_function", "Save one channel to a native .tf1d file. Existing files are refused unless overwrite is true.",
@@ -1231,8 +1256,10 @@ final class BorgVRMCPToolRouter {
         properties: ["input_path": ["type": "string"]], required: ["input_path"]),
       tool("reset_settings", "Reset all registered settings to defaults EXCEPT the running MCP connection's settings. Save settings with include_credentials:true before resetting if you want to restore everything afterward. Does not reset the current visualization; use reset_state for that. Requires confirm:true.",
         properties: ["confirm": ["type": "boolean", "enum": [true]]], required: ["confirm"]),
-      tool("capture_screenshot", "Capture a PNG, with screenshotId when pixel positions are available. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.", properties: [
-        "include_alpha": ["type": "boolean"], "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
+      tool("capture_screenshot", "Capture a PNG, with screenshotId when pixel positions are available. Optional max_width limits the PNG width in pixels without cropping or upscaling; omit it for full resolution. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.", properties: [
+        "include_alpha": ["type": "boolean"],
+        "max_width": ["type": "integer", "minimum": 1, "maximum": MetalScreenshotEncoder.maximumPreviewWidth],
+        "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
       ]),
       tool("capture_extended_screenshot", "Capture the PNG and matching XYZ position map as one .borgvrcapture file. Supply an absolute output_path for large captures; inline responses are limited to 12 MiB before base64. include_alpha defaults to true. Existing files require overwrite:true.", properties: [
         "include_alpha": ["type": "boolean"], "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
@@ -1301,7 +1328,7 @@ final class BorgVRMCPToolRouter {
     guard let raw = arguments["channel"] else { return 0 }
     guard let value = raw as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(),
           value.doubleValue.isFinite, value.doubleValue.rounded() == value.doubleValue,
-          (0...3).contains(value.intValue) else {
+          (0...3).contains(value.doubleValue) else {
       throw BorgVRMCPCommandError.invalidArgument("channel must be a zero-based integer in 0...3.")
     }
     return value.intValue
@@ -1352,6 +1379,15 @@ final class BorgVRMCPToolRouter {
   private func optionalFloat(_ key: String, in arguments: [String: Any]) throws -> Float? {
     guard arguments[key] != nil else { return nil }
     return try float(key, in: arguments)
+  }
+
+  private func optionalInteger(_ key: String, in arguments: [String: Any]) throws -> Int? {
+    guard let rawValue = arguments[key] else { return nil }
+    guard let value = rawValue as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(),
+          let integer = Int(exactly: value.doubleValue) else {
+      throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be an integer.")
+    }
+    return integer
   }
 
   private func optionalBool(_ key: String, in arguments: [String: Any]) throws -> Bool? {

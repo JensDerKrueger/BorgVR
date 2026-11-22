@@ -1,0 +1,37 @@
+name: borgvr-openai-test
+services:
+  agent:
+    image: borgvr-openai-test:local
+    build: .
+    restart: unless-stopped
+    user: "${BORGVR_TEST_UID:?Run setup-openai.sh init}:${BORGVR_TEST_GID:?Run setup-openai.sh init}"
+    ports:
+      - "127.0.0.1:8767:8766"
+    environment:
+      BORGVR_LLM_BACKEND: openai
+      BORGVR_OPENAI_MODEL: ${BORGVR_OPENAI_MODEL:-gpt-5.4-mini}
+      BORGVR_OPENAI_REASONING_EFFORT: ${BORGVR_OPENAI_REASONING_EFFORT:-}
+      BORGVR_CONTEXT_LENGTH: ${BORGVR_CONTEXT_LENGTH:-65536}
+      BORGVR_MAX_OUTPUT_TOKENS: ${BORGVR_MAX_OUTPUT_TOKENS:-4096}
+    secrets: [agent_token, openai_api_key]
+    volumes:
+      - ./.openai-test/tls:/run/tls:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://127.0.0.1:8766/healthz', context=ssl.create_default_context(cafile='/run/tls/server.crt'), timeout=5).close()"]
+      interval: 10s
+      timeout: 6s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+secrets:
+  agent_token: {file: ./.openai-test/agent_token}
+  openai_api_key: {file: ./.openai-test/openai_api_key}

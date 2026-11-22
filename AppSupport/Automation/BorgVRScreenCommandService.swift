@@ -366,10 +366,10 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     }
   }
 
-  func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage {
+  func captureScreenshot(includeAlpha: Bool, maxWidth: Int?) async throws -> BorgVRMCPImage {
     if !BorgVRCommandExecutionContext.executingAction {
-      return try await session.performAction(.captureScreenshot(path: nil, includeAlpha: includeAlpha), source: .mcp) {
-        try await self.captureScreenshot(includeAlpha: includeAlpha)
+      return try await session.performAction(.captureScreenshot(path: nil, includeAlpha: includeAlpha, maxWidth: maxWidth), source: .mcp) {
+        try await self.captureScreenshot(includeAlpha: includeAlpha, maxWidth: maxWidth)
       }
     }
     let appModel = session.runtimeState
@@ -387,7 +387,8 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
       appModel.requestRenderScreenshot(
         id: requestID,
         to: temporaryURL,
-        accessURL: nil
+        accessURL: nil,
+        maxWidth: maxWidth
       ) { result in
         gate.resume(with: result)
       }

@@ -7,6 +7,7 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
 
   struct Request {
     let id: UUID
+    let maxWidth: Int?
     let completion: Completion
   }
 
@@ -15,7 +16,7 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
   private var frameCount: UInt64 = 0
   let screenshotCache = BorgVRScreenshotCache()
 
-  func requestScreenshot(id: UUID, completion: @escaping Completion) {
+  func requestScreenshot(id: UUID, maxWidth: Int?, completion: @escaping Completion) {
     lock.lock()
     defer { lock.unlock() }
     guard pendingRequest == nil else {
@@ -23,7 +24,7 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
       return
     }
     screenshotCache.begin(id)
-    pendingRequest = Request(id: id, completion: completion)
+    pendingRequest = Request(id: id, maxWidth: maxWidth, completion: completion)
   }
 
   func invalidateScreenshot() {
@@ -372,10 +373,10 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     throw BorgVRMCPCommandError.isoSurfaceUnavailable
   }
 
-  func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage {
+  func captureScreenshot(includeAlpha: Bool, maxWidth: Int?) async throws -> BorgVRMCPImage {
     if !BorgVRCommandExecutionContext.executingAction {
-      return try await session.performAction(.captureScreenshot(path: nil, includeAlpha: includeAlpha), source: .mcp) {
-        try await self.captureScreenshot(includeAlpha: includeAlpha)
+      return try await session.performAction(.captureScreenshot(path: nil, includeAlpha: includeAlpha, maxWidth: maxWidth), source: .mcp) {
+        try await self.captureScreenshot(includeAlpha: includeAlpha, maxWidth: maxWidth)
       }
     }
     let runtime = session.runtimeState
@@ -384,7 +385,7 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     let image = try await withCheckedThrowingContinuation {
       (continuation: CheckedContinuation<BorgVRMCPImage, Error>) in
       let gate = BorgVRMCPContinuationGate(continuation)
-      runtime.mcpRenderBridge.requestScreenshot(id: requestID) { result in
+      runtime.mcpRenderBridge.requestScreenshot(id: requestID, maxWidth: maxWidth) { result in
         gate.resume(with: result)
       }
       Task {

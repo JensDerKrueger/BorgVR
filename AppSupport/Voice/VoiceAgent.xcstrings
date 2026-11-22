@@ -1,6 +1,46 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Choose saved visualization": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Gespeicherte Darstellung auswählen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Choisir une visualisation enregistrée" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Elegir visualización guardada" } }
+      }
+    },
+    "Delete saved edit state?": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Gespeicherten Editierstand löschen?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer l’état d’édition enregistré ?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar el estado de edición guardado?" } }
+      }
+    },
+    "Delete edit state": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Editierstand löschen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer l’état d’édition" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Eliminar estado de edición" } }
+      }
+    },
+    "Unnamed edit state": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Unbenannter Editierstand" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "État d’édition sans nom" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Estado de edición sin nombre" } }
+      }
+    },
+    "Delete “%@” (%@)? The original dataset and active edit state are kept.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "„%@“ (%@) löschen? Der Originaldatensatz und der aktive Editierstand bleiben erhalten." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Supprimer « %@ » (%@) ? Le jeu de données original et l’état d’édition actif sont conservés." } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Eliminar «%@» (%@)? Se conservan el conjunto original y el estado de edición activo." } }
+      }
+    },
     "Continue": {
       "extractionState": "manual",
       "localizations": {
@@ -375,6 +415,22 @@
         "de": { "stringUnit": { "state": "translated", "value": "Demonstration mit Ansichtseinstellungen exportieren" } },
         "fr": { "stringUnit": { "state": "translated", "value": "Exporter la démonstration avec les réglages de vue" } },
         "es": { "stringUnit": { "state": "translated", "value": "Exportar demostración con ajustes de vista" } }
+      }
+    },
+    "Export workflow state": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Stand exportieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Exporter l’état de l’analyse" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Exportar el estado del análisis" } }
+      }
+    },
+    "Import workflow state": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Workflow-Stand importieren" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Importer l’état de l’analyse" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Importar el estado del análisis" } }
       }
     },
     "Fetch workflow report": {
@@ -836,8 +892,8 @@
     "Maximum BorgVR calls": {
       "extractionState": "manual",
       "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Maximum BorgVR calls" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Maximale BorgVR-Aufrufe" } }
+        "en": { "stringUnit": { "state": "translated", "value": "Maximum BorgVR calls (older servers)" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Maximale BorgVR-Aufrufe (ältere Server)" } }
       }
     },
     "Interrupting…": {

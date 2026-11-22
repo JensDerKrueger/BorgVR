@@ -85,8 +85,10 @@ enum VoiceAgentPolicy {
   static let maximumResultBytes = 256 * 1024
   static let maximumTools = 48
   static let conversionTools: Set<String> = ["import_volume", "fuse_volumes"]
-  static let fileTools: Set<String> = conversionTools.union(["save_visualization_state", "export_edited_dataset"])
-  static let datasetTransitions: Set<String> = ["open_dataset", "close_dataset", "select_edit_state"]
+  static let fileTools: Set<String> = conversionTools.union(["save_visualization_state", "load_visualization_state", "export_edited_dataset"])
+  private static let transitions = ["open_dataset": "open", "close_dataset": "close",
+                                    "select_edit_state": "select_edit", "create_edit_state": "create_edit"]
+  static let datasetTransitions = Set(transitions.keys)
 
   static func outputName(_ value: Any?, extension suffix: String) -> String? {
     guard let raw = value as? String else { return nil }
@@ -103,17 +105,55 @@ enum VoiceAgentPolicy {
     "get_application_state", "get_transfer_function", "get_background", "set_render_mode",
     "set_transform", "rotate_view", "set_iso_value", "set_clipping", "set_lighting",
     "set_background", "set_transfer_function", "set_bounding_box", "set_screen_projection", "reset_state",
-    "get_volume_edit_state", "select_edit_state", "configure_volume_brush", "edit_volume", "wait_volume_edits",
-    "save_visualization_state", "export_edited_dataset", "cancel_volume_export",
+    "get_volume_edit_state", "select_edit_state", "create_edit_state", "rename_edit_state", "delete_edit_state",
+    "configure_volume_brush", "edit_volume", "wait_volume_edits",
+    "save_visualization_state", "load_visualization_state", "export_edited_dataset", "cancel_volume_export",
     "import_volume", "fuse_volumes", "get_import_status", "cancel_import",
     "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
     "list_measurements", "upsert_measurement", "set_annotation_visibility",
     "remove_object", "remove_measurement", "clear_annotations",
     "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions"
   ]
+  static let typedOnlyTools: Set<String> = [
+    "set_transfer_function_component",
+  ]
   static let reads: Set<String> = ["search_datasets", "get_application_state", "get_transfer_function", "get_background",
                                     "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions", "list_objects", "list_measurements",
                                     "get_volume_edit_state", "wait_volume_edits", "get_command_history", "get_import_status"]
+
+  private static let readRoles = ["get_application_state": "application_state", "search_datasets": "catalog_search",
+                                  "capture_screenshot": "render_image", "get_volume_edit_state": "edit_state"]
+  private static let annotationDeletions: Set<String> = ["remove_object", "remove_measurement", "clear_annotations"]
+
+  static func wireCatalog(_ tools: [[String: Any]], typed: Bool) -> [[String: Any]] {
+    guard typed else {
+      return tools.filter { entry in
+        (entry["name"] as? String).map { !typedOnlyTools.contains($0) } ?? true
+      }
+    }
+    return tools.map { original in
+      guard let name = original["name"] as? String else { return original }
+      var entry = original
+      let transition = transitions[name]
+      var execution: [String: Any] = ["kind": transition != nil ? "transition" : reads.contains(name) ? "read" : "mutation"]
+      execution["role"] = readRoles[name]
+      execution["transition"] = transition
+      if fileTools.contains(name) {
+        execution["approval_group"] = "file_selection"
+      } else if annotationDeletions.contains(name) {
+        execution["approval_group"] = "annotation_delete"
+      } else if name == "edit_volume" {
+        execution["approval_group"] = "volume_edit"
+      } else if name == "delete_edit_state" {
+        execution["approval_group"] = "edit_state_delete"
+      }
+      execution["timeout_seconds"] = name == "open_dataset" ? 330
+        : fileTools.contains(name) || annotationDeletions.contains(name) || name == "delete_edit_state" ? 310
+        : name == "create_edit_state" ? 145 : name == "edit_volume" ? 135 : name == "search_datasets" ? 75 : 45
+      entry["execution"] = execution
+      return entry
+    }
+  }
   static let maximumVolumeEditSamples = 256
   static let applicationTools: Set<String> = conversionTools.union([
     "get_application_state", "search_datasets", "open_dataset", "get_command_history", "get_import_status", "cancel_import",
@@ -161,11 +201,11 @@ enum VoiceAgentPolicy {
         "offset": ["type": "integer", "minimum": 0, "maximum": maximumResultBytes],
       ]] as [String: Any]]
     return (definitions.filter { $0["name"] as? String != commandHistoryTool } + [history]).compactMap { original in
-      guard let name = original["name"] as? String, allowed.contains(name) else { return nil }
+      guard let name = original["name"] as? String, allowed.contains(name) || typedOnlyTools.contains(name) else { return nil }
       if !datasetReady && !applicationTools.contains(name) { return nil }
       if datasetReady && conversionTools.contains(name) { return nil }
       if vision && ["set_background", "set_screen_projection", "get_background"].contains(name) { return nil }
-      if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_render_mode",
+      if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_transfer_function_component", "set_render_mode",
                                 "set_iso_value", "set_lighting"].contains(name) { return nil }
       if !images && ["capture_screenshot", "pick_screenshot_positions"].contains(name) { return nil }
       var value = original
@@ -186,8 +226,13 @@ enum VoiceAgentPolicy {
           "This does not reduce the actual TF resolution."
       }
       if name == "capture_screenshot" {
-        value["inputSchema"] = ["type": "object", "properties": ["include_alpha": ["type": "boolean"]],
-                                 "additionalProperties": false] as [String: Any]
+        var properties: [String: Any] = ["include_alpha": ["type": "boolean"]]
+        if let schema = original["inputSchema"] as? [String: Any],
+           let advertised = schema["properties"] as? [String: Any],
+           let maxWidth = advertised["max_width"] {
+          properties["max_width"] = maxWidth
+        }
+        value["inputSchema"] = ["type": "object", "properties": properties, "additionalProperties": false]
       }
       if name == "reset_state" {
         var scopes = ["transform", "clipping"]
@@ -205,12 +250,32 @@ enum VoiceAgentPolicy {
           "properties": ["channels": ["type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true,
             "items": ["type": "integer", "minimum": 1, "maximum": 4]]]] as [String: Any]
       }
-      if fileTools.contains(name) && !conversionTools.contains(name) {
+      if name == "load_visualization_state" {
+        value["description"] = "Load a saved BorgVR visualization JSON for the open dataset. The user chooses the file locally. No arguments or file paths. Changes the presentation, not voxels or annotations."
+        value["inputSchema"] = ["type": "object", "additionalProperties": false, "properties": [:]] as [String: Any]
+      } else if fileTools.contains(name) && !conversionTools.contains(name) {
         value["description"] = name == "save_visualization_state"
           ? "Save the current view configuration (not voxel edits or annotations) as JSON. The user chooses the folder locally. Supply a filename only. Existing files are never overwritten."
           : "Export the current volume and active edits as a new .data dataset. The user chooses the folder locally. Supply a filename only. Poll get_volume_edit_state for completion before closing. This does not alter the source."
         value["inputSchema"] = ["type": "object", "additionalProperties": false, "required": ["filename"],
           "properties": ["filename": ["type": "string", "minLength": 1, "maxLength": 120]]] as [String: Any]
+      }
+      let editStateName: [String: Any] = ["type": "string", "minLength": 1, "maxLength": 120]
+      let editStateID: [String: Any] = ["type": "string", "minLength": 36, "maxLength": 36]
+      switch name {
+        case "create_edit_state":
+          value["description"] = "Create and select an empty personal edit state. Set duplicate:true to copy the current state instead. Name is optional. Read get_volume_edit_state first and reread state after the switch."
+          value["inputSchema"] = ["type": "object", "additionalProperties": false,
+            "properties": ["name": editStateName, "duplicate": ["type": "boolean"]]] as [String: Any]
+        case "rename_edit_state":
+          value["description"] = "Rename a personal saved edit state. Read get_volume_edit_state first and use an exact UUID from savedStates. Does not select the state or alter its voxels."
+          value["inputSchema"] = ["type": "object", "additionalProperties": false, "required": ["id", "name"],
+            "properties": ["id": editStateID, "name": editStateName]] as [String: Any]
+        case "delete_edit_state":
+          value["description"] = "Delete one inactive personal edit state on explicit user request. Read get_volume_edit_state first and use an exact UUID from savedStates. The app requires local confirmation; no model argument can approve this. Do not retry a declined deletion."
+          value["inputSchema"] = ["type": "object", "additionalProperties": false, "required": ["id"],
+            "properties": ["id": editStateID]] as [String: Any]
+        default: break
       }
       if name == "cancel_volume_export" {
         value["description"] = "Cancel only an export this assistant started. Use its exact job ID from the export receipt or status. Does not change voxel edits."

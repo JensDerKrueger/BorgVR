@@ -5,7 +5,7 @@ Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nach
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
 Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets`, `open_dataset` und die kontextgebundene Befehlshistorie verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
 
-Erfasst: **77 Funktionsgruppen**, **63 MCP-Werkzeuge**, **42 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **104 unterschiedliche GSC-Namen**.
+Erfasst: **77 Funktionsgruppen**, **64 MCP-Werkzeuge**, **47 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **105 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
@@ -54,14 +54,14 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Darstellung | [Darstellungsgruppen gezielt zurücksetzen](#render-reset) | dataset | vorhanden | ja | ja* |
 | Darstellung | [Renderabschluss abwarten und Screenshot aufnehmen](#render-wait_capture) | dataset | vorhanden | ja | teilweise* |
 | Darstellung | [Interaktionsmodus und TF-Malwerkzeug auswählen](#render-interaction) | dataset | vorhanden | nein | nein |
-| Transferfunktionen | [Mehrkanal-TF lesen und durch RGBA-Einträge ändern](#tf-samples) | dataset | vorhanden | ja | ja* |
+| Transferfunktionen | [Mehrkanal-TF lesen und durch RGBA-Einträge oder Stützstellen ändern](#tf-samples) | dataset | vorhanden | ja | ja* |
 | Transferfunktionen | [Aktiven TF-Kanal und bearbeitete RGBA-Komponenten auswählen](#tf-channel) | dataset | vorhanden | nein | nein |
 | Transferfunktionen | [TF-Katalog durchsuchen, TF laden und speichern](#tf-files) | dataset | teilweise | ja | nein |
 | Volumenbearbeitung | [Pinselmodus, Radius, Projektion und Kanäle einstellen](#edit-brush) | dataset | vorhanden | ja | ja* |
 | Volumenbearbeitung | [Volumenbereiche löschen oder wiederherstellen](#edit-apply) | dataset | vorhanden | ja | ja* |
 | Volumenbearbeitung | [Edit-Bricks vorbereiten und deren Abschluss abwarten](#edit-finish) | job | Service/Abfrage | ja | teilweise* |
 | Volumenbearbeitung | [Alle Edits im aktiven Zustand verwerfen](#edit-discard) | dataset | vorhanden | ja | nein |
-| Volumenbearbeitung | [Editierstände auswählen, erzeugen, duplizieren, umbenennen und löschen](#edit-states) | dataset | vorhanden | ja | teilweise* |
+| Volumenbearbeitung | [Editierstände auswählen, erzeugen, duplizieren, umbenennen und löschen](#edit-states) | dataset | vorhanden | ja | ja* |
 | Volumenbearbeitung | [Bearbeiteten Datensatz exportieren und Export abbrechen](#edit-export) | job | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Objekte, Messungen und Punkte auswählen sowie Projektionswerkzeuge konfigurieren](#annotations-selection) | dataset | nur UI | nein | nein |
 | Marker, Objekte und Messungen | [Kugel-, Richtungs- und Strichmarker erstellen und bearbeiten](#annotations-markers) | dataset | vorhanden | ja | ja* |
@@ -71,7 +71,7 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 | Marker, Objekte und Messungen | [Einzelne oder alle Messungen entfernen](#annotations-measure_delete) | dataset | vorhanden | ja | teilweise* |
 | Marker, Objekte und Messungen | [Objekte und Messungen sichtbar oder unsichtbar schalten](#annotations-visibility) | dataset | vorhanden | ja | ja* |
 | Marker, Objekte und Messungen | [Marker, Objekte und Messungen laden, zusammenführen und speichern](#annotations-files) | dataset | teilweise | nein | nein |
-| Speichern und Automatisierung | [Darstellungszustand speichern und laden](#state-picture) | dataset | vorhanden | ja | teilweise* |
+| Speichern und Automatisierung | [Darstellungszustand speichern und laden](#state-picture) | dataset | vorhanden | ja | ja* |
 | Speichern und Automatisierung | [Command-Aufzeichnung starten, beenden und als GSC speichern](#state-record) | application | vorhanden | ja | nein |
 | Speichern und Automatisierung | [Aufzeichnungen und allgemeine GSC-Skripte abspielen oder stoppen](#state-replay) | application | teilweise | ja | nein |
 | Speichern und Automatisierung | [Interne Command-Payloads, Dateischreibbelege und Mutationsgrenzen](#state-internal) | application | intern | nein | nein |
@@ -101,7 +101,8 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 
 | Werkzeug | Zweck |
 |---|---|
-| `report_progress` | Kurze Zwischenmeldung; keine Benutzeraktion und kein Beleg für erfolgreiche Ausführung. |
+| `report_progress` | Kurze Zwischenmeldung zur laufenden Tätigkeit, ohne Befund oder Rückfrage. |
+| `find_expert_strategies` | Passende Strategie für ein Teilziel im Wissenspaket der Sitzung nachschlagen; keine Aktion oder Freigabe. |
 | `record_visual_observation` | Begrenzte Bildbefunde im laufenden Auftrag; kein dauerhaftes Erfahrungswissen oder Ground Truth. |
 | `ask_collaboration_feedback` | Bei fehlender Bildevidenz um eine bessere Ansicht bitten; eine manuelle Änderung beantwortet die Frage. Keine Freigabe für Dateien oder Bearbeitungen. |
 
@@ -626,13 +627,13 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
 <a id="tf-samples"></a>
-### Mehrkanal-TF lesen und durch RGBA-Einträge ändern
+### Mehrkanal-TF lesen und durch RGBA-Einträge oder Stützstellen ändern
 
 - Kennung: `tf.samples`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: reversible Darstellung.
 - Register: `BorgVRCommand.setTransferFunction`
-- MCP: `get_transfer_function`, `set_transfer_function`
-- Native Agentenwerkzeuge: `get_transfer_function`, `set_transfer_function`
-- Benannte GSC-Befehle (macOS): `settransferfunction`, `gettransferfunction`, `settransferfunctionjson`
+- MCP: `get_transfer_function`, `set_transfer_function`, `set_transfer_function_component`
+- Native Agentenwerkzeuge: `get_transfer_function`, `set_transfer_function`, `set_transfer_function_component`
+- Benannte GSC-Befehle (macOS): `settransferfunction`, `gettransferfunction`, `settransferfunctionjson`, `settransferfunctioncomponent`
 - Zustandsabfrage: get_transfer_function; Agent erhält ggf. eine markierte Vorschau statt der vollständigen Tabelle.
 - Lücke: Kein exakter zustandsbewahrender Snapshot-Handle für TF-Restaurierung über den Agenten.
 - Nächster Schritt: Exakte lokale Snapshots mit begrenzten Handles ergänzen; RGB/RGBA weiterhin ohne TF-Werkzeuge.
@@ -729,11 +730,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `edit.states`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Zustandswechsel und Löschung; eingeschränkt bei SharePlay.
 - Register: `BorgVRRecordedAction.selectEditState`, `BorgVRRecordedAction.duplicateEditState`, `BorgVRRecordedAction.renameEditState`, `BorgVRRecordedAction.deleteEditState`, `BorgVRRecordedAction.restoreEditState`, `BorgVRRecordedAction.installSavedEditState`
 - MCP: `select_edit_state`, `create_edit_state`, `rename_edit_state`, `delete_edit_state`
-- Native Agentenwerkzeuge: `select_edit_state`
+- Native Agentenwerkzeuge: `create_edit_state`, `delete_edit_state`, `rename_edit_state`, `select_edit_state`
 - Benannte GSC-Befehle (macOS): `logeditstates`, `selecteditstate`, `neweditstate`, `duplicateeditstate`, `renameeditstate`, `deleteeditstate`
-- Zustandsabfrage: get_volume_edit_state nennt verfügbare IDs und Namen; select_edit_state übernimmt einen persönlichen Stand oder das Original.
-- Lücke: Erzeugen, Duplizieren, Umbenennen und Löschen bleiben dem Agenten vorerst vorenthalten.
-- Nächster Schritt: Weitere Standverwaltung separat autorisieren; SharePlay-Sperren beibehalten.
+- Zustandsabfrage: Der Agent listet und wählt persönliche Stände, legt einen leeren Stand an, dupliziert den aktiven Stand oder benennt einen gespeicherten Stand um. Löschen verlangt lokale Freigabe und betrifft nur einen inaktiven Stand.
+- Lücke: Keine Standverwaltung während SharePlay. Der Assistent verwirft keine vollständigen Bearbeitungen.
+- Nächster Schritt: Bei Bedarf explizite, separat bestätigte Aufräumvorgänge anbieten.
 - Quellen: [AppSupport/Automation/VolumeEditingCommands.swift](../AppSupport/Automation/VolumeEditingCommands.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift)
 - Vorhandene Testquellen: [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 
@@ -869,11 +870,11 @@ Interne Agentenwerkzeuge für Fortschritt, Bildbefunde, Rückfragen und Regelvor
 - Kennung: `state.picture`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Dateizugriff und bestehende Darstellung ersetzen.
 - Register: `BorgVRCommand.restoreDatasetViewState`, `BorgVRRecordedAction.saveVisualizationState`, `MacCommand.saveDatasetState`, `MacCommand.restoreDatasetState`
 - MCP: `save_visualization_state`, `load_visualization_state`
-- Native Agentenwerkzeuge: `save_visualization_state`
+- Native Agentenwerkzeuge: `load_visualization_state`, `save_visualization_state`
 - Benannte GSC-Befehle (macOS): `savestate`, `loadstate`, `savevisualizationstate`, `loadvisualizationstate`, `setviewstate`
-- Zustandsabfrage: Agent speichert mit save_visualization_state einen benannten JSON-Darstellungszustand per lokaler Ordnerauswahl, ohne Voxeländerungen, Marker und Messungen.
-- Lücke: load_visualization_state bleibt dem Agenten vorerst vorenthalten; automatischer Speicherstand ist ein anderes Dokument.
-- Nächster Schritt: Lokale Dateiauswahl und Vorschau für explizites Laden ergänzen.
+- Zustandsabfrage: Agent speichert einen benannten JSON-Darstellungszustand per lokaler Ordnerauswahl und lädt eine lokal gewählte JSON für den offenen Datensatz. Keine Voxeländerungen, Marker oder Messungen.
+- Lücke: Lokale Dateiauswahl erforderlich; der Assistent kann weder Pfad noch automatischen Speicherstand wählen.
+- Nächster Schritt: Bei Bedarf Vorschau vor dem Laden oder Verwaltung mehrerer gespeicherter Darstellungen anbieten.
 - Quellen: [AppSupport/Datasets/DatasetViewState.swift](../AppSupport/Datasets/DatasetViewState.swift), [BORGVR-Services/BorgVRMCP.swift](../BORGVR-Services/BorgVRMCP.swift), [macOSApp/RenderView.swift](../macOSApp/RenderView.swift)
 - Vorhandene Testquellen: [Tests/MCPVisualizationTests.swift](../Tests/MCPVisualizationTests.swift), [Tests/CommandRecordingTests.swift](../Tests/CommandRecordingTests.swift)
 

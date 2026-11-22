@@ -17,8 +17,9 @@ def test_all_declared_commands_tools_gsc_ui_registries_and_settings_are_classifi
     assert inventory["agent"] - inventory["mcp"] == {
         "get_command_history", "import_volume", "fuse_volumes", "get_import_status", "cancel_import",
     }
-    assert {"edit_volume", "wait_volume_edits"} <= inventory["agent"]
-    assert {"list_datasets", "discard_volume_edits", "delete_edit_state", "clear_objects",
+    assert {"edit_volume", "wait_volume_edits", "create_edit_state", "rename_edit_state", "delete_edit_state",
+            "load_visualization_state"} <= inventory["agent"]
+    assert {"list_datasets", "discard_volume_edits", "clear_objects",
             "clear_measurements", "upsert_mesh_instance"} <= inventory["mcp"] - inventory["agent"]
     assert {"search_datasets", "open_dataset", "upsert_measurement", "upsert_sphere_marker", "upsert_stroke_marker",
             "remove_object", "remove_measurement", "clear_annotations"} <= inventory["agent"]

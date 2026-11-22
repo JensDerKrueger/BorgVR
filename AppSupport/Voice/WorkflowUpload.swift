@@ -90,13 +90,14 @@ struct WorkflowOutbox {
 }
 
 enum WorkflowUploadError: LocalizedError {
-  case notLinked, full, corpusChanged
+  case notLinked, full, corpusChanged, analysisQueued
 
   var errorDescription: String? {
     switch self {
       case .notLinked: return voiceAgentText("Link a workflow profile for this server first.")
       case .full: return voiceAgentText("The demonstration queue is full.")
       case .corpusChanged: return voiceAgentText("The server collection changed. Queued demonstrations were not moved.")
+      case .analysisQueued: return voiceAgentText("Analysis queued")
     }
   }
 }
@@ -252,6 +253,57 @@ final class WorkflowUpload: ObservableObject {
     } catch { show(error) }
   }
 
+  func exportState(settings: VoiceAgentSettings) async -> Data? {
+    guard !busy else { return nil }
+    busy = true
+    errorText = nil
+    defer { busy = false }
+    do {
+      guard let saved = enrollment, destination(for: settings) == saved.destination else {
+        throw WorkflowUploadError.notLinked
+      }
+      let endpoint = try VoiceAgentEndpoint(settings.address)
+      let data = try await request("state", endpoint: endpoint, certificate: settings.certificate, token: saved.token)
+      guard enrollment == saved, destination(for: settings) == saved.destination else { throw VoiceAgentError.contextChanged }
+      let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+      guard (value?["corpus_id"] as? String).flatMap(UUID.init(uuidString:)) == saved.destination.corpusID else {
+        throw WorkflowUploadError.corpusChanged
+      }
+      if value?["status"] as? String == "queued" { throw WorkflowUploadError.analysisQueued }
+      guard let state = value?["state"] as? [String: Any] else { throw VoiceAgentError.protocolViolation }
+      return try JSONSerialization.data(withJSONObject: state, options: [.sortedKeys])
+    } catch {
+      show(error)
+      return nil
+    }
+  }
+
+  func importState(_ url: URL, capturedFor owner: WorkflowDestination, settings: VoiceAgentSettings) async {
+    guard !busy else { return }
+    busy = true
+    errorText = nil
+    defer { busy = false }
+    do {
+      guard let saved = enrollment, saved.destination == owner, destination(for: settings) == owner else {
+        throw VoiceAgentError.contextChanged
+      }
+      let access = url.startAccessingSecurityScopedResource()
+      defer { if access { url.stopAccessingSecurityScopedResource() } }
+      guard try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
+        throw VoiceAgentError.protocolViolation
+      }
+      let file = try FileHandle(forReadingFrom: url)
+      defer { try? file.close() }
+      let data = try file.read(upToCount: Self.stateLimit + 1) ?? Data()
+      guard !data.isEmpty, data.count <= Self.stateLimit else { throw VoiceAgentError.protocolViolation }
+      let endpoint = try VoiceAgentEndpoint(settings.address)
+      _ = try await request("state", endpoint: endpoint, certificate: settings.certificate, token: saved.token,
+                            state: data, corpusID: saved.destination.corpusID)
+      guard enrollment == saved, destination(for: settings) == owner else { throw VoiceAgentError.contextChanged }
+      analysis = nil
+    } catch { show(error) }
+  }
+
   private func updateCount() {
     pendingCount = 0
     staleCount = 0
@@ -268,23 +320,25 @@ final class WorkflowUpload: ObservableObject {
       (error as? VoiceAgentError)?.localizedDescription ?? VoiceAgentError.connection.localizedDescription
   }
 
+  private static let stateLimit = 2 * 1024 * 1024
+
   private func request(_ component: String, endpoint: VoiceAgentEndpoint, certificate: Data, token: String,
-                       episode: WorkflowDemonstration? = nil, corpusID: UUID? = nil) async throws -> Data {
+                       episode: WorkflowDemonstration? = nil, state: Data? = nil, corpusID: UUID? = nil) async throws -> Data {
     let url = endpoint.origin.appending(path: "v1/workflow").appending(path: component)
     var request = URLRequest(url: url)
     request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-    if let episode, let corpusID {
-      request.httpMethod = "POST"
+    if let body = try episode.map({ try JSONEncoder().encode($0) }) ?? state, let corpusID {
+      request.httpMethod = state == nil ? "POST" : "PUT"
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       request.setValue(corpusID.uuidString.lowercased(), forHTTPHeaderField: "X-BorgVR-Corpus")
-      request.httpBody = try JSONEncoder().encode(episode)
+      request.httpBody = body
     }
     let session = VoiceAgentTLS(endpoint: endpoint, anchor: certificate).session(resourceTimeout: 15)
     defer { session.invalidateAndCancel() }
     let (stream, response) = try await session.bytes(for: request)
     guard let http = response as? HTTPURLResponse else { throw VoiceAgentError.connection }
     var data = Data()
-    let limit = component == "report" ? 64 * 1024 : 4096
+    let limit = component == "state" ? Self.stateLimit + 4096 : component == "report" ? 64 * 1024 : 4096
     for try await byte in stream {
       guard data.count < limit else { throw VoiceAgentError.protocolViolation }
       data.append(byte)

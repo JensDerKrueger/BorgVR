@@ -23,6 +23,9 @@ struct VoiceAgentRule: Codable, Identifiable, Equatable {
 
 @MainActor
 final class VoiceAgentSettings: ObservableObject {
+  static let workMinutesRange = 5...180
+  static let defaultWorkMinutes = 60
+
   private let defaults: UserDefaults
   private let tokenAccount: String
   @Published var enabled: Bool { didSet { defaults.set(enabled, forKey: "voiceAgent.enabled") } }
@@ -46,7 +49,7 @@ final class VoiceAgentSettings: ObservableObject {
   @Published var onDeviceOnly: Bool { didSet { defaults.set(onDeviceOnly, forKey: "voiceAgent.onDeviceOnly") } }
   @Published var workMinutes: Int {
     didSet {
-      let value = min(max(workMinutes, 1), 120)
+      let value = Self.normalizedWorkMinutes(workMinutes)
       if workMinutes != value { workMinutes = value }
       defaults.set(value, forKey: "voiceAgent.workMinutes")
     }
@@ -83,7 +86,7 @@ final class VoiceAgentSettings: ObservableObject {
     archiveOwnerID = defaults.string(forKey: "voiceAgent.archiveOwner").flatMap(UUID.init(uuidString:)) ?? UUID()
     defaults.set(archiveOwnerID.uuidString, forKey: "voiceAgent.archiveOwner")
     onDeviceOnly = defaults.object(forKey: "voiceAgent.onDeviceOnly") as? Bool ?? true
-    workMinutes = min(max(defaults.object(forKey: "voiceAgent.workMinutes") as? Int ?? 30, 1), 120)
+    workMinutes = Self.normalizedWorkMinutes(defaults.object(forKey: "voiceAgent.workMinutes") as? Int ?? Self.defaultWorkMinutes)
     maximumCalls = min(max(defaults.object(forKey: "voiceAgent.maximumCalls") as? Int ?? 256, 24), 1024)
     if let data = defaults.data(forKey: "voiceAgent.knowledge"), data.count <= 64 * 1024,
        let rules = try? JSONDecoder().decode([VoiceAgentRule].self, from: data) {
@@ -91,6 +94,10 @@ final class VoiceAgentSettings: ObservableObject {
     } else { knowledgeRules = [] }
     certificate = defaults.data(forKey: "voiceAgent.certificate") ?? Data()
     hasToken = ((try? KeychainSecretStore.string(account: tokenAccount)) ?? "").isEmpty == false
+  }
+
+  private static func normalizedWorkMinutes(_ value: Int) -> Int {
+    min(max(value, workMinutesRange.lowerBound), workMinutesRange.upperBound)
   }
 
   func token() throws -> String {

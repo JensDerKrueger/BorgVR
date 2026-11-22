@@ -28,7 +28,8 @@ ALLOWED_TOOLS = frozenset({
     "set_clipping", "set_lighting", "set_background", "set_transfer_function",
     "set_bounding_box", "set_screen_projection", "reset_state", "get_volume_edit_state", "edit_volume",
     "wait_volume_edits", "wait_until_rendered",
-    "select_edit_state", "configure_volume_brush", "save_visualization_state", "export_edited_dataset", "cancel_volume_export",
+    "select_edit_state", "create_edit_state", "rename_edit_state", "delete_edit_state",
+    "configure_volume_brush", "save_visualization_state", "load_visualization_state", "export_edited_dataset", "cancel_volume_export",
     "import_volume", "fuse_volumes", "get_import_status", "cancel_import",
     "capture_screenshot", "pick_screenshot_positions",
     "list_objects", "upsert_sphere_marker", "upsert_stroke_marker",
@@ -38,12 +39,13 @@ ALLOWED_TOOLS = frozenset({
 CONVERSION_TOOLS = frozenset({"import_volume", "fuse_volumes"})
 LOCAL_CLIENT_TOOLS = frozenset({"get_command_history", "import_volume", "fuse_volumes", "get_import_status", "cancel_import"})
 APPLICATION_TOOLS = LOCAL_CLIENT_TOOLS | {"get_application_state", "search_datasets", "open_dataset"}
-DATASET_TRANSITIONS = frozenset({"open_dataset", "close_dataset", "select_edit_state"})
-FILE_TOOLS = CONVERSION_TOOLS | {"save_visualization_state", "export_edited_dataset"}
+DATASET_TRANSITIONS = frozenset({"open_dataset", "close_dataset", "select_edit_state", "create_edit_state"})
+FILE_TOOLS = CONVERSION_TOOLS | {"save_visualization_state", "load_visualization_state", "export_edited_dataset"}
+EDIT_STATE_WRITES = frozenset({"create_edit_state", "rename_edit_state", "delete_edit_state"})
 
 
 def changes_view(name):
-    return name.startswith("set_") or name in DATASET_TRANSITIONS or name in FILE_TOOLS or name in {
+    return name.startswith("set_") or name in DATASET_TRANSITIONS or name in FILE_TOOLS or name in EDIT_STATE_WRITES or name in {
         "rotate_view", "reset_state", "edit_volume", "configure_volume_brush", "cancel_volume_export", "cancel_import",
     }
 
@@ -84,6 +86,7 @@ class Hello(Message):
     execution_limits: ExecutionLimits | None = None
     collaboration: bool = False
     knowledge: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(default_factory=list, max_length=16)
+    expert_knowledge_toml: str | None = Field(default=None, min_length=1, max_length=65536)
 
     @model_validator(mode="after")
     def require_dataset_for_legacy_session(self):
@@ -220,7 +223,11 @@ def select_tools(definitions: list[ToolDefinition]) -> list[ToolDefinition]:
         except SchemaError as error:
             raise ProtocolError("Invalid tool schema") from error
         if definition.name == "capture_screenshot":
-            schema["properties"] = {"include_alpha": {"type": "boolean"}}
+            properties = {"include_alpha": {"type": "boolean"}}
+            # Older BorgVR clients cannot honor size requests.
+            if "max_width" in schema.get("properties", {}):
+                properties["max_width"] = {"type": "integer", "minimum": 1, "maximum": 16384}
+            schema["properties"] = properties
             schema.pop("required", None)
         selected.append(definition)
     if any(changes_view(d.name) or d.name in ANNOTATION_WRITES for d in selected):
@@ -290,8 +297,19 @@ def validate_arguments(definition: ToolDefinition, arguments: dict) -> None:
         raise ToolArgumentError("Arguments do not match the advertised tool schema. "
                                 "Use only its declared properties, include required fields, and respect their types and bounds.",
                                 reason, field)
-    if definition.name == "capture_screenshot" and set(arguments) - {"include_alpha"}:
+    if definition.name == "capture_screenshot" and set(arguments) - {"include_alpha", "max_width"}:
         raise ToolArgumentError("Saving screenshot files is not allowed", "unexpected_fields")
+    if definition.name == "load_visualization_state" and arguments:
+        raise ToolArgumentError("The app selects the file locally. Call with exactly {}.", "unexpected_fields")
+    if definition.name == "delete_edit_state" and set(arguments) != {"id"}:
+        raise ToolArgumentError("Pass only the saved state ID. Approval must come from the app.", "unexpected_fields")
+    if definition.name in {"rename_edit_state", "delete_edit_state"}:
+        value = arguments.get("id")
+        try:
+            if not isinstance(value, str) or str(UUID(value)) != value.lower():
+                raise ValueError("Non-canonical state ID")
+        except ValueError as error:
+            raise ToolArgumentError("Use an exact UUID from savedStates.", "invalid_state_id") from error
     if definition.name == "pick_screenshot_positions":
         try:
             value = arguments["screenshot_id"]

@@ -1,0 +1,79 @@
+version = 1
+
+[dataset.first_inspection]
+situation = "A volume has just been opened, or the user asks for an initial overview."
+goal = "Identify and describe the newly opened dataset without changing its presentation."
+contexts = ["dataset_ready"]
+keywords = ["What dataset have I just opened?", "What dataset am I viewing?", "initial inspection", "metadata", "channel type"]
+requires_tools = ["get_application_state"]
+steps = [
+  "Read the dataset description, channel type, physical extent, and current view. State what is known and what is unknown.",
+  "If visual evidence is useful and image sharing is available, inspect an overview of the whole volume.",
+  "Keep the current transfer function and clipping until the user asks for a different view or there is a specific visual goal.",
+]
+
+[dataset.catalog_search]
+goal = "What datasets are available? Do we have any datasets about the topic or body part that the user named?"
+contexts = ["start_menu", "dataset_ready"]
+keywords = ["Search the available volumes in the catalog."]
+requires_tools = ["search_datasets"]
+steps = [
+  "Search descriptions and metadata using the topic and useful synonyms.",
+  "Distinguish matching metadata from verified volume contents. Do not open a result unless the user asks to open it.",
+]
+
+[inspection.interior]
+situation = "The object has an exterior hiding the contents."
+goal = "Show the inside of a volume, reveal its contents, or make a cross-section without deleting voxels."
+contexts = ["dataset_ready"]
+keywords = ["inside", "interior", "cutaway", "cross-section", "seeds inside a fruit", "hidden contents"]
+requires_tools = ["set_clipping", "capture_screenshot"]
+steps = [
+  "Take an overview to locate the object. Choose a clipping plane that reveals the hidden interior from the current view.",
+  "Change one clipping boundary at a time. Inspect the result and rotate the view if the section is edge-on.",
+  "Use a reversible view change for inspection. Do not erase voxels just to make something visible.",
+]
+
+[inspection.preview]
+goal = "Get a fast, small overview screenshot before asking for a detailed image."
+contexts = ["dataset_ready"]
+keywords = ["preview screenshot", "thumbnail", "image resolution", "100 pixels", "faster image"]
+requires_parameters = { capture_screenshot = ["max_width"] }
+steps = [
+  "Use a small width for framing or gross structure, not for identifying tiny features.",
+  "Request a larger image or a closer view before precise picking if the feature boundary is unclear.",
+]
+
+[transfer_function.explore_range]
+situation = "An interesting structure is hard to separate in a scalar volume with unknown intensity ranges."
+goal = "Explore unknown scalar values using a narrow Gaussian transfer function and adjust opacity to highlight a structure."
+contexts = ["dataset_ready"]
+keywords = ["transfer function", "CT windowing", "intensity range", "Gaussian opacity", "tissue contrast"]
+requires_tools = ["get_transfer_function", "set_transfer_function", "capture_screenshot"]
+steps = [
+  "Read the current transfer function and its channel. Use a narrow opacity bump and keep other values transparent.",
+  "Sweep the bump through a few well-spaced ranges, checking a screenshot at each useful step. Narrow the sweep around a promising response.",
+  "Do not infer physical units from normalized sample positions. Restore or retain the original presentation as the task requires.",
+]
+
+[transfer_function.component]
+situation = "Only one color component or the opacity curve needs to change in a scalar volume."
+goal = "Adjust a transfer-function component without copying or overwriting the other components."
+contexts = ["dataset_ready"]
+keywords = ["transfer function", "opacity window", "color ramp", "control points"]
+requires_tools = ["set_transfer_function_component"]
+steps = [
+  "Use the component setter for targeted RGB or opacity changes. Use component 3 for opacity. Leave other components unchanged unless the goal calls for changing them.",
+  "Describe the curve with normalized [position, value] pairs, adding points only where the slope changes. Both coordinates are in [0,1]. Positions must strictly increase.",
+  "BorgVR interpolates linearly and extends the endpoint values. For an opacity window, add explicit zero-valued points outside the visible range.",
+]
+
+[spatial.picking]
+goal = "Locate a visible landmark in dataset-local 3D coordinates for a marker, measurement, or edit."
+contexts = ["dataset_ready"]
+keywords = ["pick a 3D point", "landmark position", "pixel", "depth", "3D coordinates"]
+requires_tools = ["capture_screenshot", "pick_screenshot_positions"]
+steps = [
+  "Use a current screenshot with enough detail to recognize the landmark. Select points inside the visible feature, not along a blurred outline.",
+  "Use the screenshot's own ID for picking. A hit identifies the visible point on that ray, not the hidden extent of the feature.",
+]

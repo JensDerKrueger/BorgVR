@@ -304,7 +304,7 @@ def test_small_context_resumes_same_request_without_reapplying_confirmed_command
     steps = [
         ("get_application_state", {}), ("rotate_view", rotate), ("get_volume_edit_state", {}),
         ("edit_volume", large_edit), ("get_application_state", {}), ("rotate_view", replay),
-        ("edit_volume", large_edit),
+        ("get_volume_edit_state", {}), ("edit_volume", large_edit),
         ("rotate_view", new_rotation), ("rotate_view", new_rotation), "Verified from fresh state.",
         ("get_application_state", {}), ("rotate_view", rotate), "New request applied.",
     ]
@@ -317,13 +317,13 @@ def test_small_context_resumes_same_request_without_reapplying_confirmed_command
             assert any("BorgVR task checkpoint." in text for text in prompts)
             assert any("Turn the test volume." in text for text in prompts)
             assert "BorgVR calls remaining=20" in parts(messages, SystemPromptPart)[0].content
-        if calls in (6, 7, 9):
+        if calls in (6, 8):
             result = parts(messages, ToolReturnPart)[-1].content
             assert result["code"] == "already_applied_in_request"
-        if calls == 7:
+        if calls == 8:
             assert parts(messages, ToolCallPart)[-1].args == {}
             assert any("BorgVR task checkpoint." in text for text in prompts)
-        if calls == 10:
+        if calls == 11:
             assert not any("BorgVR task checkpoint." in text for text in prompts)
         step = steps[calls]
         calls += 1
@@ -345,7 +345,7 @@ def test_small_context_resumes_same_request_without_reapplying_confirmed_command
         assert ws.receive_json()["type"] == "started"
         dispatched = []
         for expected in ["get_application_state", "rotate_view", "get_volume_edit_state", "edit_volume",
-                         "get_application_state", "rotate_view"]:
+                         "get_application_state", "get_volume_edit_state", "rotate_view", "rotate_view"]:
             call = ws.receive_json()
             assert call["type"] == "tool_call" and call["name"] == expected and call["request_id"] == "turn-1"
             dispatched.append((call["name"], call["arguments"]))
@@ -368,8 +368,8 @@ def test_small_context_resumes_same_request_without_reapplying_confirmed_command
     assert caplog.text.count("Context continuation:") == 1
     assert "'window': 4096" in caplog.text and "'input_tokens':" in caplog.text
     assert "confirmed_mutation_tools=['edit_volume', 'rotate_view']" in caplog.text
-    assert ("outcome=completed checkpoints=1 confirmed={'rotate_view': 2, 'edit_volume': 1} "
-            "repeated_confirmed={} blocked_replays={'rotate_view': 2, 'edit_volume': 1} uncertain=False") in caplog.text
+    assert ("outcome=completed checkpoints=1 confirmed={'rotate_view': 3, 'edit_volume': 1} "
+            "repeated_confirmed={'rotate_view': 1} blocked_replays={'rotate_view': 1, 'edit_volume': 1} uncertain=False") in caplog.text
     assert "SECRET_SYNTHETIC_RESULT" not in caplog.text and "Turn the test volume." not in caplog.text
     assert "center_meters" not in caplog.text
 

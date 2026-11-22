@@ -22,6 +22,42 @@ health; application inactivity still expires a session after five minutes.
 `GET /healthz` is unauthenticated liveness only. `GET /readyz` requires the bearer token and
 checks that the configured model is actually listed by vLLM. It returns 503 if unavailable.
 
+### Typed catalog extension
+
+A server that sends `BorgVR-Tool-Types: 1` on `HEAD /healthz` expects each offered
+tool to carry an `execution` object in `hello`, `context_changed` and new-scope
+transition catalogs. Only the Swift app decides which commands are offered in a
+given scope. The typed runtime validates the complete catalog and rejects an
+invalid one instead of silently filtering tools by name. A client must omit the
+field when connecting to a server that did not announce it.
+
+- `kind`: `read`, `mutation` or `transition`.
+- `role` (optional, reads only): `application_state`, `catalog_search`,
+  `render_image` or `edit_state`. Roles identify receipts with protocol meaning.
+- `transition` (required for scope transitions): `open`, `close`, `select_edit`
+  or `create_edit`. The normal v1 transition receipt is still required.
+- `approval_group` (optional, writes only): groups local refusals so the runtime
+  does not route around them during the same request. The app alone decides
+  whether to prompt and what to approve.
+- `timeout_seconds` (5 through 330, default 45): bounded wait for the app reply.
+
+The typed model adapter includes these declarations as text alongside each
+tool's unchanged parameter contract. The app supplies expert knowledge separately,
+via the negotiated `expert_knowledge_toml` field. Both are connection-scoped;
+scope changes can replace the active catalog and consequently the applicable
+rule subset, without retransmitting the bundle.
+
+### Time-only turn budget
+
+`BorgVR-Time-Only-Turns: 1` on `HEAD /healthz` lets the client omit `max_calls`
+from `hello.execution_limits`. The server then returns only `timeout_seconds`
+in `ready.execution_limits` and imposes no per-turn tool count. The turn timeout,
+per-tool deadlines, input and replay validation, and explicit cancellation still apply.
+Time-only clients may request 300 through 10800 seconds; the server defaults to
+3600 seconds when no execution limits are supplied.
+Servers that do not announce this extension receive the client's existing call limit;
+the new server also honors a call limit sent by an older client.
+
 ## Annotation capability
 
 With a ready dataset, updated peers can negotiate `list_objects`, `upsert_sphere_marker`,
@@ -139,8 +175,8 @@ mode, ISO, bounding box, screen projection, render completion and screenshot cap
 Catalog search and opening an authorized search result are available without a dataset;
 annotation operations are described above. Closing datasets, arbitrary file paths, voxel
 edits, exports, settings and arbitrary GSC are excluded. `capture_screenshot` is narrowed
-to `include_alpha` only, even if the app's MCP
-definition also permits saving a file. There is no shell, code execution or web-browsing tool.
+to `include_alpha` and, on clients that support it, the optional `max_width` in pixels
+(1–16384). Saving files is not allowed. There is no shell, code execution or web-browsing tool.
 With image sharing enabled, a screenshot can include a `screenshotId`. The
 `pick_screenshot_positions` read uses that ID and normalized top-left image coordinates
 to return a bounded set of normalized volume positions (or `null` for no hit).
@@ -148,6 +184,22 @@ The full position map is never sent to the voice agent. An unavailable ID requir
 new screenshot; it is not permission to reuse an older observation.
 If any visualization-changing tool is advertised, `get_application_state` must also be
 available; the server enforces a successful state read before each turn's first change.
+
+### Optional expert knowledge
+
+If `HEAD /healthz` returns `BorgVR-Expert-Knowledge: 1`, the client can send
+`expert_knowledge_toml` as a UTF-8 string in `hello`. This field is optional and must not
+be sent to older servers that do not advertise support. Version 1 is a grouped TOML
+document bounded to 64 KiB and 64 strategies. Each `[group.name]` specifies a
+`situation` or `goal`, and `steps`. Optional fields are `contexts`
+(`start_menu`, `dataset_ready`, `dataset_opened`), `keywords`, `requires_tools`
+and `requires_parameters` (a map from tool name to required schema properties).
+
+The server keeps the strategies only for that connection. It filters against the
+current context and negotiated schemas before ranking with the local multilingual
+encoder. At most three matching references are given to the model as untrusted
+advice, never as system policy or permission. The optional internal
+`find_expert_strategies` tool can look up a new subgoal within the same session.
 
 ### Optional execution limits
 
@@ -165,8 +217,9 @@ and the configured legacy timeout (180 seconds by default). Native settings defa
 
 The server emits `started`, zero or more `assistant_message` events with `final:false`,
 tool calls/results as needed, then `assistant_message` with `final:true` and `completed`.
-Only `assistant_message.text` should be spoken. Progress updates are explicit, complete
-messages from the `report_progress` tool, not the model's hidden reasoning or partial JSON.
+Only `assistant_message.text` should be spoken. For `report_progress` the model selects an
+activity and a language (`de` or `en`); the server renders a fixed localized message. Findings
+and optional follow-up questions belong to the final answer, not to progress updates.
 The native client displays and speaks consecutive identical assistant messages only once
 within a request (ignoring surrounding whitespace), including a repeated progress/final
 answer. Different messages, intervening user replies and answers to later requests remain separate.
@@ -225,7 +278,8 @@ Once complete, send:
 Results are JSON values, not pre-encoded JSON strings. For screenshots, additionally send
 `image_png_base64` containing raw PNG bytes encoded as base64, **not a data URL**. Only
 `capture_screenshot` may supply it. Resize the render image on the client if required to
-fit the stated image limits. Do not capture passthrough, other app windows or physical
+fit the stated image limits. Resizing without cropping does not change normalized
+picking coordinates or resize the original position buffer. Do not capture passthrough, other app windows or physical
 surroundings. The server validates the PNG and passes actual image content to the model,
 not an uninterpreted base64 string or a server-fetchable URL.
 
@@ -322,6 +376,20 @@ verified operation receipts, never old images or executable calls. The rebuilt a
 read fresh application state before visualization changes. Unknown IDs, unexpected transition
 receipts, stale results and unnegotiated transitions are rejected. Ordinary user-driven context
 changes retain the stop/reconnect rules above.
+
+A saved visualization is loaded with `load_visualization_state({})`. The app opens a
+local JSON picker; neither the path nor the document is sent to the agent. Only compatible
+files for the open dataset are accepted. Loading changes the presentation, not voxel edits
+or annotations.
+
+For saved personal edit states, read `get_volume_edit_state` first. `create_edit_state`
+creates an empty state or duplicates the active one with `duplicate:true`, and selects it.
+The transition receipt includes matching `createdStateID` and `activeStateID` values for
+the new state in the same dataset opening. The server replans from fresh state and blocks
+an accidental repeat of the creation. `rename_edit_state` preserves selection.
+`delete_edit_state` accepts only the UUID of one inactive saved personal state. The app
+confirms the exact target locally and revalidates it before deletion; a model-supplied
+confirmation is not accepted. A decline is not retried in the same task.
 
 ## Collaborative editing extension
 

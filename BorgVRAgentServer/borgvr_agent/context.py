@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import replace
 
 import httpx
@@ -53,9 +54,18 @@ class ContextCheckpointRequired(Exception):
 
 
 class VLLMChatModel(OpenAIChatModel):
-    def __init__(self, *args, token_url, token, **kwargs):
+    def __init__(self, *args, token_url, token, token_client=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.token_url, self.token = token_url, token
+        self.token_client = token_client
+
+    @asynccontextmanager
+    async def tokenizer_transport(self):
+        if self.token_client is not None:
+            yield self.token_client
+        else:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
+                yield client
 
     async def count_tokens(self, messages, model_settings, model_request_parameters):
         settings, parameters = self.prepare_request(model_settings, model_request_parameters)
@@ -67,7 +77,7 @@ class VLLMChatModel(OpenAIChatModel):
                 "add_generation_prompt": True,
                 **(settings or {}).get("extra_body", {})}
         async with asyncio.timeout(15):
-            async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
+            async with self.tokenizer_transport() as client:
                 async with client.stream("POST", self.token_url, json=body,
                                          headers={"Authorization": "Bearer " + self.token}) as response:
                     if not response.is_success:

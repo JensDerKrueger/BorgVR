@@ -11,9 +11,9 @@ Verfügbar sind der [Funktionskatalog](CAPABILITIES.md), seine
 [maschinenlesbare Grundlage](capabilities.json), der statische Registerabgleich und die
 appweite Sitzung auf allen drei Plattformen. Das Startmenü erlaubt Gespräche, die Abfrage
 des App-Zustands, begrenzte Metadatensuche und gezieltes Öffnen eines Treffers ohne Renderer.
-Weitere Werkzeuge sowie Import-/Fusionsjobs in
-diesem Plan sind Entwürfe, keine schon verfügbaren Funktionen. Die Erweiterung erfordert
-einen aktualisierten Agentenserver, startet diesen aber nicht automatisch neu.
+Der Assistent kann lokale Import-/Fusionsjobs starten sowie Darstellungen und persönliche
+Editierstände verwalten. Weitergehende Pläne und Quell-Handles sind Entwürfe.
+Die Erweiterung erfordert einen aktualisierten Agentenserver, startet diesen aber nicht automatisch neu.
 
 ## Experimentelle Agentenlogik bleibt austauschbar
 
@@ -48,9 +48,9 @@ eingeführt. [Bisherige Grenzen](../AppSupport/Voice/ARCHITECTURE.md) gelten wei
 
 ## Befund des Funktionsabgleichs
 
-- 61 native MCP-Werkzeuge sind definiert; maximal 30 davon sind im nativen Agenten
-  auf beiden Seiten erlaubt. Dazu kommt die separate lokale Abfrage
-  `get_command_history`. Plattform, RGB/RGBA und Bildfreigabe reduzieren sie weiter.
+- 63 native MCP-Werkzeuge sind definiert. Der Assistent lässt 46 App-Werkzeuge zu,
+  davon 41 aus MCP und fünf aus dem lokalen Client-Vertrag. Plattform, RGB/RGBA,
+  Datensatzkontext und Bildfreigabe reduzieren sie weiter.
   Die weiteren vier Modellwerkzeuge dienen nur dem Agentenablauf, nicht der App-Steuerung.
 - Gezielter Darstellungsreset und lesender Status der Volumenbearbeitung nutzen vorhandene
   Befehle. Der Reset braucht einen expliziten Bereich; der Bearbeitungsstatus enthält keine
@@ -58,22 +58,23 @@ eingeführt. [Bisherige Grenzen](../AppSupport/Voice/ARCHITECTURE.md) gelten wei
 - Der Agent kann nach lokaler Bestätigung einen räumlich begrenzten Erase-/Restore-Aufruf
   im persönlichen Editierstand ausführen. BorgVR zeigt ausstehende Bricks und den Abschluss
   der Edit-Verarbeitung unabhängig von der Modellantwort an. Das ist keine Bestätigung
-  eines vollständig aktualisierten GPU-Atlas. SharePlay, Pinselkonfiguration und das
-  Verwalten oder Verwerfen ganzer Editierstände bleiben getrennte Fähigkeiten.
+  eines vollständig aktualisierten GPU-Atlas. Der Agent kann persönliche Editierstände
+  auswählen, anlegen, duplizieren, umbenennen und nach lokaler Freigabe löschen.
+  Der aktive Stand ist nicht löschbar; Sammelverwerfen bleibt gesperrt.
 - Marker und Messungen sind über Commands, MCP und den begrenzten Annotation-Vertrag
   des Agenten erreichbar, einschließlich Anlegen, Bearbeiten, Sichtbarkeit und getesteter
   physischer Skalierung und Löschen. Sammellöschen benötigt lokale Bestätigung und schützt
   platzierte Meshes. Mesh-Platzierung bleibt ein weiterer Schritt.
 - Katalogabfrage und Öffnen/Schließen existieren über MCP. Der Agent erhält eine begrenzte
-  Metadatensuche und das autorisierte Öffnen eines kürzlich gelieferten Treffers. Schließen
-  ist noch nicht freigeschaltet. Die KI-Verbindung funktioniert ohne Datensatz; im Leerlauf
+  Metadatensuche, Öffnen eines kürzlich gelieferten Treffers und Schließen des Datensatzes.
+  Die KI-Verbindung funktioniert ohne Datensatz; im Leerlauf
   werden beim Wechsel Kontext und Werkzeuge neu abgeglichen. Laufende Arbeit wird
   beendet, das Assistentenfenster bleibt bestehen.
 - Die Katalogeinträge enthalten bereits verfügbare Metadaten und Provenance. Eine
   begrenzte Themenabfrage mit Belegen und Snapshot-Paginierung ist als `search_datasets` verfügbar.
-- Import, Bildsequenzen und Fusion besitzen gemeinsame Konvertierungsalgorithmen, aber
-  noch keinen fachlichen, appweiten Command-/MCP-/Agenten-Jobvertrag. macOS-GSC unterstützt
-  Datei-/Verzeichnisimport, jedoch nicht den vollständigen mehrstufigen Fusionsablauf.
+- Import, Bildsequenzen und Fusion sind über lokale Dateifreigaben und den gemeinsamen
+  Konvertierungsdienst erreichbar. Validierte Importpläne und Registrierungsmetriken fehlen.
+- Darstellungs-JSON lässt sich über einen lokalen Dialog speichern oder laden.
 - Annotationsdateien, Auswahl-/Editorzustände, viele Settings, Panel-/SharePlay-/Diagnose-
   und Gerätefunktionen haben ebenfalls Lücken. Generische Command-Payloads oder
   writeFiles zählen nicht als fachlich vollständiger Workflow.
@@ -106,7 +107,7 @@ Auf visionOS ist zusätzlich der Immersive-Space-Lebenszyklus unabhängig davon 
 Das Protokoll wird über ausgehandelte Fähigkeiten erweitert. Alte Clients behalten ihre
 heutigen sicheren Grenzen; App-Funktionen werden nicht mit einem scheinbar kompatiblen
 Hello ohne tatsächliche Unterstützung aktiviert. Bestehende Größen-/Zeit-/Eintragsgrenzen
-bleiben wirksam. 61 MCP-Werkzeuge einfach in den heutigen 48-Tool-Hello zu kopieren ist
+bleiben wirksam. Alle MCP-Werkzeuge einfach in den heutigen 48-Tool-Hello zu kopieren ist
 keine Lösung: begrenzte Fähigkeitsentdeckung und aufgabenbezogene Werkzeuggruppen planen.
 
 ## Drei exemplarische Abläufe

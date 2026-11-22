@@ -211,7 +211,7 @@ def test_real_agent_loop_with_external_tools_and_image():
         return ModelResponse(parts=[TextPart("The test view is ready.")])
 
     with connection(FunctionModel(function)) as client, open_session(client) as ws:
-        ws.send_json(hello([STATE, ROTATE, SCREENSHOT, definition("delete_edit_state")]))
+        ws.send_json(hello([STATE, ROTATE, SCREENSHOT, definition("discard_volume_edits")]))
         ready = ws.receive_json()
         assert ready["tools"] == ["get_application_state", "rotate_view", "capture_screenshot"]
         ws.send_json(user())
@@ -589,12 +589,15 @@ def test_agent_volume_tool_bounds(tool, arguments):
 
 
 def test_cancel_propagates_and_blocks_unsafe_followup():
-    with connection(model_steps(("get_application_state", {}))) as client, open_session(client) as ws:
-        ws.send_json(hello([STATE]))
+    with connection(model_steps(("get_application_state", {}),
+                                ("rotate_view", {"axis": [0, 1, 0], "degrees": 20}))) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, ROTATE]))
         ws.receive_json()
         ws.send_json(user())
         ws.receive_json()
+        ws.send_json(reply(ws.receive_json()))
         call = ws.receive_json()
+        assert call["name"] == "rotate_view"
         ws.send_json({"type": "cancel", "request_id": "turn-1"})
         assert ws.receive_json()["call_id"] == call["call_id"]
         cancelled = ws.receive_json()
@@ -604,15 +607,22 @@ def test_cancel_propagates_and_blocks_unsafe_followup():
 
 
 def test_tool_deadline_and_cancel_event():
-    with connection(model_steps(("get_application_state", {})), replace(SETTINGS, tool_timeout=0.05)) as client, open_session(client) as ws:
+    with connection(model_steps(("get_application_state", {}), "No observation arrived.", "Still connected."),
+                    replace(SETTINGS, tool_timeout=0.05)) as client, open_session(client) as ws:
         ws.send_json(hello([STATE]))
         ws.receive_json()
         ws.send_json(user())
         ws.receive_json()
         call = ws.receive_json()
-        assert ws.receive_json()["call_id"] == call["call_id"]
-        error = ws.receive_json()
-        assert error["type"] == "error" and error["requires_reconnect"]
+        cancelled = ws.receive_json()
+        assert cancelled["type"] == "tool_cancel" and cancelled["call_id"] == call["call_id"]
+        ws.send_json(reply(call))  # Late observation cannot become the next call's receipt.
+        assert ws.receive_json()["text"] == "No observation arrived."
+        assert ws.receive_json()["type"] == "completed"
+        ws.send_json(user("turn-2"))
+        assert ws.receive_json()["type"] == "started"
+        assert ws.receive_json()["text"] == "Still connected."
+        assert ws.receive_json()["type"] == "completed"
 
 
 def test_absolute_run_deadline_without_a_tool():
@@ -724,6 +734,17 @@ def test_schema_limits_and_screenshot_no_files():
     validate_arguments(selected, {"include_alpha": False})
     with pytest.raises(ProtocolError):
         validate_arguments(selected, {"output_path": "/tmp/private.png"})
+    with pytest.raises(ProtocolError):
+        validate_arguments(selected, {"max_width": 100})
+    preview = definition("capture_screenshot", {"max_width": {"type": "integer"},
+                                                "output_path": {"type": "string"}})
+    selected = select_tools([ToolDefinition.model_validate(preview)])[0]
+    validate_arguments(selected, {"include_alpha": False, "max_width": 100})
+    for invalid in (True, 0, -1, 1.5, 16385, "100", None):
+        with pytest.raises(ProtocolError):
+            validate_arguments(selected, {"max_width": invalid})
+    with pytest.raises(ProtocolError):
+        validate_arguments(selected, {"max_width": 100, "output_path": "/tmp/private.png"})
     for schema in ({"type": "object"},
                    {"type": "object", "additionalProperties": False, "$ref": "http://localhost/private"},
                    {"type": "object", "additionalProperties": False, "properties": {"x": {"pattern": ".*"}}},
@@ -739,6 +760,22 @@ def test_history_keeps_only_two_images():
     message = ModelRequest(parts=[UserPromptPart([BinaryContent(b"image", media_type="image/png") for _ in range(4)])])
     result = asyncio.run(bounded_history([message]))
     assert sum(isinstance(value, BinaryContent) for value in result[0].parts[0].content) == 2
+
+
+def test_saved_view_and_edit_state_management_cannot_bypass_local_gates():
+    edit_id = "C957EFFE-02CE-4A07-8AA0-56136EE347D7"
+    load = ToolDefinition.model_validate(definition("load_visualization_state",
+        {"input_path": {"type": "string"}}))
+    delete = ToolDefinition.model_validate(definition("delete_edit_state",
+        {"id": {"type": "string"}, "confirm": {"type": "boolean"}}))
+    validate_arguments(load, {})
+    validate_arguments(delete, {"id": edit_id})
+    with pytest.raises(ProtocolError):
+        validate_arguments(load, {"input_path": "/tmp/other.json"})
+    with pytest.raises(ProtocolError):
+        validate_arguments(delete, {"id": edit_id, "confirm": True})
+    with pytest.raises(ProtocolError):
+        validate_arguments(delete, {"id": "original"})
 
 
 def screenshot_picker_definition():
@@ -810,12 +847,26 @@ def test_spatial_picking_guidance_absent_with_screenshot_only():
         assert ws.receive_json()["type"] == "completed"
 
 
-def test_progress_is_separate_from_final_answer():
-    with connection(model_steps(("report_progress", {"text": "Checking the view."}), "Ready")) as client, open_session(client) as ws:
+@pytest.mark.parametrize("language,status", [("de", "Ich prüfe die aktuelle Ansicht."),
+                                             ("en", "I'm inspecting the current view.")])
+@pytest.mark.parametrize("invalid", [
+    {"text": "The seeds form a ring. Shall I rotate the view?"},
+    {"activity": "I found the seeds in a ring.", "language": "en"},
+    {"activity": "inspect_view", "language": "en", "text": "The seeds form a ring."},
+])
+def test_only_fixed_activity_is_displayed_before_the_final_answer(language, status, invalid):
+    answer = "Die Samen bilden einen Ring. Soll ich die Ansicht drehen?"
+    model = model_steps(("report_progress", invalid), ("report_progress", {
+        "activity": "inspect_view", "language": language}), answer)
+    with connection(model) as client, open_session(client) as ws:
         ws.send_json(hello())
         ws.receive_json()
         ws.send_json(user())
         assert ws.receive_json()["type"] == "started"
-        assert ws.receive_json()["final"] is False
-        assert ws.receive_json()["final"] is True
+        progress = ws.receive_json()
+        assert progress["type"] == "assistant_message" and progress["final"] is False
+        assert progress["text"] == status
+        final = ws.receive_json()
+        assert final["type"] == "assistant_message" and final["final"] is True
+        assert final["text"] == answer
         assert ws.receive_json()["type"] == "completed"

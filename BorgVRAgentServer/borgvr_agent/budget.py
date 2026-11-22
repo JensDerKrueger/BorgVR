@@ -18,21 +18,21 @@ class ControlBudget(AbstractCapability):
         self.requests = self.tool_calls = 0
 
     def phase(self, ctx):
-        remaining = (getattr(self.session, "request_timeout", self.session.settings.run_timeout) - (time.monotonic() - self.session.run_started)
-                     if self.session.run_started is not None else float("inf"))
+        remaining = (getattr(self.session, "request_timeout", self.session.settings.run_timeout) - (time.monotonic() - self.session.turn.run_started)
+                     if self.session.turn.run_started is not None else float("inf"))
         native_limit = getattr(self.session, "native_call_limit", MAX_NATIVE_CALLS)
         tool_limit = getattr(self.session, "tool_call_limit", MAX_TOOL_CALLS)
         model_limit = getattr(self.session, "model_request_limit", MAX_MODEL_REQUESTS)
-        if (self.session.native_calls >= native_limit or ctx.usage.tool_calls >= tool_limit - 8 or
+        if (self.session.turn.native_calls >= native_limit or ctx.usage.tool_calls >= tool_limit - 8 or
                 ctx.usage.requests >= model_limit - 4 or remaining <= 35):
             return "answer"
-        if self.session.native_calls >= native_limit - 6 or ctx.usage.tool_calls >= tool_limit - 24 or remaining <= 75:
+        if self.session.turn.native_calls >= native_limit - 6 or ctx.usage.tool_calls >= tool_limit - 24 or remaining <= 75:
             return "wrap_up"
         return "investigate"
 
     def instructions(self, ctx):
         return (f"Server control phase={self.phase(ctx)}; BorgVR calls remaining="
-                f"{getattr(self.session, 'native_call_limit', MAX_NATIVE_CALLS) - self.session.native_calls}; "
+                f"{getattr(self.session, 'native_call_limit', MAX_NATIVE_CALLS) - self.session.turn.native_calls}; "
                 f"total tool calls used={ctx.usage.tool_calls}/{getattr(self.session, 'tool_call_limit', MAX_TOOL_CALLS)}.")
 
     async def prepare_tools(self, ctx, tool_defs):

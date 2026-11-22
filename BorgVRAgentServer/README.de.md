@@ -467,6 +467,62 @@ sudo docker compose exec -T agent python client.py --url https://127.0.0.1:8766 
   --text "Was ist ein Mandelbulb? Antworte kurz auf Deutsch."
 ```
 
+### Expertenwissen von BorgVR
+
+Die englischen Strategien stehen gruppiert in `AppSupport/Voice/expert-knowledge.toml`.
+Jede Regel beschreibt eine Situation oder ein Ziel sowie die Schritte und gegebenenfalls
+die benötigten Werkzeuge oder Parameter. BorgVR liefert die Datei beim Verbindungsaufbau;
+für Textänderungen braucht es danach nur einen neuen App-Build, kein neues Agenten-Image.
+Ältere Clients und Server können sich weiterhin ohne das Wissenspaket verbinden.
+
+Das Agenten-Image enthält einen lokalen CPU-Encoder
+([Multilingual E5 Small](https://huggingface.co/intfloat/multilingual-e5-small),
+[quantisierte ONNX-Fassung](https://huggingface.co/Xenova/multilingual-e5-small/tree/761b726dd34fb83930e26aab4e9ac3899aa1fa78)).
+Anfragen werden dabei nicht an einen Übersetzungsdienst geschickt. Lokal lässt sich
+die Suche mit `BORGVR_STRATEGY_ENCODER` aktivieren. Die Variable verweist auf ein
+Verzeichnis mit dem in der Dockerfile festgelegten `model.onnx` und `tokenizer.json`.
+Für die Deutsch-/Englischtests in `tests/test_strategies.py` dasselbe Verzeichnis
+als `BORGVR_STRATEGY_TEST_ENCODER` angeben.
+
+### Separate OpenAI-Testinstanz
+
+Die Testinstanz läuft neben der lokalen vLLM-Installation als eigenes Docker-Compose-Projekt.
+Sie benötigt keine GPU und ändert weder den laufenden Qwen-Agenten noch dessen Zugangsdaten.
+Voraussetzung ist ein separat abgerechneter OpenAI-API-Schlüssel. Für Tests ein eigenes
+API-Projekt mit einem auf diesen Zweck beschränkten Schlüssel verwenden.
+
+Auf dem Linux-Server als normaler Benutzer im Verzeichnis `BorgVRAgentServer` ausführen:
+
+```
+./setup-openai.sh init
+./setup-openai.sh key
+./setup-openai.sh start
+./setup-openai.sh test
+```
+
+`key` fragt verdeckt nach dem API-Schlüssel und speichert ihn in `.openai-test/openai_api_key`
+(Dateirechte `0600`). Nicht in BorgVR, `.env` oder die Shell-Kommandozeile eintragen.
+Nur die Docker-Befehle im Skript verwenden `sudo`. Der Test prüft Werkzeugaufrufe und
+Bildverarbeitung mit einem synthetischen Bild. Das Modell lässt sich in `.openai-test/compose.env`
+ändern und muss Bild- und Werkzeugunterstützung haben. Dort lässt sich auch der Denkaufwand
+setzen, etwa `BORGVR_OPENAI_REASONING_EFFORT=low` oder `medium` für GPT-6.2 Sol. Ist die
+Einstellung leer oder fehlt sie, verwendet die API ihren Standard. Nach einer Änderung
+`./setup-openai.sh start` ausführen; `./setup-openai.sh test` zeigt die Einstellung an.
+Mit `./setup-openai.sh stop` wird nur die Testinstanz gestoppt.
+
+Der Dienst lauscht ausschließlich auf `127.0.0.1:8767`. Auf dem Mac einen SSH-Tunnel öffnen
+(`ai2` durch den eigenen SSH-Host ersetzen):
+
+```
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:8767:127.0.0.1:8767 ai2
+```
+
+In BorgVR `https://127.0.0.1:8767` eintragen und `.openai-test/tls/server.crt` sowie
+`.openai-test/agent_token` vom Server importieren. Der App-Zugangsschlüssel ist **nicht**
+der OpenAI-API-Schlüssel. Der Tunnel muss während des Tests geöffnet bleiben.
+Prompts, Werkzeugergebnisse und vom Client freigegebene Screenshots werden an OpenAI
+übermittelt. Für den Vergleich zunächst nur synthetische oder anonymisierte Daten verwenden.
+
 ## 5. Native App verbinden
 
 Voraussetzung ist ein erfolgreich geprüfter Server, der vom Gerät aus erreichbar ist.
@@ -582,6 +638,17 @@ Das Assistentenfenster zeigt nach dem Auftrag die ausstehenden Bricks und meldet
 den lokalen Berechnungs- und Speicherabschluss auch dann, wenn das Modell schon
 geantwortet hat. Ein kurzes Timeout beim Warten stoppt die Berechnung nicht. Die
 Meldung garantiert nicht, dass sämtliche aktualisierten Bricks im GPU-Atlas liegen.
+
+### Darstellungen und Editierstände verwalten
+
+Der Assistent kann eine gespeicherte BorgVR-Darstellung nach lokaler Auswahl der JSON-Datei
+für den geöffneten Datensatz laden. Pfad und Dateiinhalt bleiben auf dem Gerät.
+Marker, Messungen und Voxelbearbeitungen werden dabei nicht ersetzt.
+
+Persönliche Editierstände lassen sich anlegen, duplizieren, auswählen und umbenennen.
+BorgVR wählt einen neu angelegten oder duplizierten Stand direkt aus. Löschen betrifft
+nur einen inaktiven gespeicherten Stand und erfordert eine lokale Bestätigung für genau
+diesen Stand. Das Original und der aktive Stand bleiben erhalten.
 
 ### Gemeinsame Bearbeitung und bestätigte Regeln
 
@@ -725,8 +792,8 @@ ungeöffnet. Zugangsschlüssel werden im Authorization-Header übertragen, nicht
 Der Agent speichert keine Gespräche, Bilder oder Werkzeugdaten auf Platte und protokolliert
 deren Inhalte nicht. vLLM-Request-Logging und Nutzungs-Telemetrie sind abgeschaltet.
 Gespräche liegen während der Verbindung im RAM; nach Trennung werden sie verworfen.
-Es gibt keinen Cloud-Fallback. Externe Verbindungen entstehen für Paket-/Modelldownloads,
-nicht für die eigentliche Inferenz.
+Die Standardinstallation nutzt für die Inferenz nur das lokale Modell. Sie hat keinen
+Cloud-Fallback. Nur die separat eingerichtete OpenAI-Testinstanz sendet Anfragen an OpenAI.
 
 ## 7. Betrieb und Updates
 

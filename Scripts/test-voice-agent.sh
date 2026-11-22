@@ -30,4 +30,4 @@ done
 xcrun swiftc -parse-as-library -module-cache-path "$TEMP/modules" -I "$PRODUCTS" \
   "$ROOT/Tests/VoiceAgentTests.swift" "$PRODUCTS/BorgVR.app/Contents/MacOS/BorgVR.debug.dylib" \
   -Xlinker -rpath -Xlinker "$PRODUCTS/BorgVR.app/Contents/MacOS" -o "$TEMP/voice-agent-tests"
-if ! "$TEMP/voice-agent-tests" "$ROOT/c60_32.data" "$TEMP"; then cat "$TEMP/server.log"; exit 1; fi
+if ! "$TEMP/voice-agent-tests" "$ROOT/c60_32.data" "$TEMP" "$PRODUCTS/BorgVR.app"; then cat "$TEMP/server.log"; exit 1; fi

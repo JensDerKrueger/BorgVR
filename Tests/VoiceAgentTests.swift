@@ -237,9 +237,9 @@ struct VoiceAgentTests {
     let catalog = VoiceAgentPolicy.catalog(definitions, vision: false, transferFunctions: true, images: true)
     let applicationCatalog = VoiceAgentPolicy.catalog(definitions, vision: false,
       transferFunctions: true, images: true, datasetReady: false)
-    let diagnosticTools = catalog + applicationCatalog.filter {
+    let diagnosticTools = VoiceAgentPolicy.wireCatalog(catalog + applicationCatalog.filter {
       VoiceAgentPolicy.conversionTools.contains($0["name"] as? String ?? "")
-    }
+    }, typed: false)
     let catalogURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent("BorgVRAgentServer/diagnostic_catalog.json")
     if ProcessInfo.processInfo.environment["BORGVR_WRITE_AGENT_CATALOG"] == "1" {
@@ -257,13 +257,22 @@ struct VoiceAgentTests {
     try rejects { try VoiceAgentPolicy.validate(["output_path": "/tmp/forbidden.png"], schema: screenshot) }
     try rejects { try VoiceAgentPolicy.validate(["include_alpha": 1], schema: screenshot) }
     try VoiceAgentPolicy.validate(["include_alpha": false], schema: screenshot)
+    try VoiceAgentPolicy.validate(["max_width": 100], schema: screenshot)
+    try rejects { try VoiceAgentPolicy.validate(["max_width": 0], schema: screenshot) }
+    try rejects { try VoiceAgentPolicy.validate(["max_width": true], schema: screenshot) }
+    let loadView = catalog.first { $0["name"] as? String == "load_visualization_state" }!["inputSchema"] as! [String: Any]
+    try VoiceAgentPolicy.validate([:], schema: loadView)
+    try rejects { try VoiceAgentPolicy.validate(["input_path": "/tmp/forbidden.json"], schema: loadView) }
+    let deleteState = catalog.first { $0["name"] as? String == "delete_edit_state" }!["inputSchema"] as! [String: Any]
+    try rejects { try VoiceAgentPolicy.validate(["id": UUID().uuidString, "confirm": true], schema: deleteState) }
     let rotate = catalog.first { $0["name"] as? String == "rotate_view" }!["inputSchema"] as! [String: Any]
     try rejects { try VoiceAgentPolicy.validate(["axis": [0, 1, 0], "degrees": true], schema: rotate) }
     try rejects { try VoiceAgentPolicy.validate(["axis": [0, 1], "degrees": 30], schema: rotate) }
     try rejects { try VoiceAgentPolicy.validate(["axis": [0, 1, 0], "degrees": Double.infinity], schema: rotate) }
     try rejects { try VoiceAgentPolicy.validate(["axis": [0, 1, 0], "degrees": 30, "path": "/secret"], schema: rotate) }
     let rgb = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: true, transferFunctions: false, images: false)
-    try expect(!rgb.contains { ["set_transfer_function", "set_render_mode", "capture_screenshot", "pick_screenshot_positions",
+    try expect(!rgb.contains { ["set_transfer_function", "set_transfer_function_component", "set_render_mode",
+      "capture_screenshot", "pick_screenshot_positions",
                                "set_screen_projection", "set_background"].contains($0["name"] as? String ?? "") }, "Unsupported tools exposed")
     let rgbReset = rgb.first { $0["name"] as? String == "reset_state" }!["inputSchema"] as! [String: Any]
     try VoiceAgentPolicy.validate(["scope": "clipping"], schema: rgbReset)
@@ -291,10 +300,11 @@ struct VoiceAgentTests {
     let positionBuffer = BorgVRScreenshotPositions(depth: Data(count: 1600 * 1200 * 4), depthBytesPerRow: 1600 * 4,
       clipToVolume: matrix_identity_float4x4, columns: Array(repeating: 0.5, count: 1600),
       rows: Array(repeating: 0.5, count: 1200))
-    app.renderScreenshotHandler = { id, url, _, completion in
+    app.renderScreenshotHandler = { id, url, _, maxWidth, completion in
       do {
         guard let url else { throw Failure.failed("No screenshot destination") }
-        try (png as Data).write(to: url)
+        let image = try maxWidth.map { try VoiceAgentController.agentImage(png as Data, sizes: [$0]).data }
+        try (image ?? png as Data).write(to: url)
         app.screenshotCache.begin(id)
         app.screenshotCache.store(positionBuffer, id: id, renderedFrame: app.completedRenderFrameCount)
         completion(.success(url))
@@ -311,17 +321,19 @@ struct VoiceAgentTests {
     }
     let conversationStore = isolatedConversationStore("main")
     defer { try? conversationStore.remove() }
-    try expect(settings.workMinutes == 30 && settings.maximumCalls == 256, "Long-run defaults missing")
+    try expect(settings.workMinutes == 60 && settings.maximumCalls == 256, "Long-run defaults missing")
     try expect(!settings.savesConversation && settings.confirmsVolumeEdits,
                "Conversation must be opt-in and edits must ask by default")
-    settings.workMinutes = 60
+    settings.workMinutes = 75
     settings.maximumCalls = 512
     let persisted = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
-    try expect(persisted.workMinutes == 60 && persisted.maximumCalls == 512, "Execution settings not persisted")
+    try expect(persisted.workMinutes == 75 && persisted.maximumCalls == 512, "Execution settings not persisted")
     settings.workMinutes = 999
     settings.maximumCalls = -1
-    try expect(settings.workMinutes == 120 && settings.maximumCalls == 24, "Execution settings not bounded")
-    settings.workMinutes = 30
+    try expect(settings.workMinutes == 180 && settings.maximumCalls == 24, "Execution settings not bounded")
+    settings.workMinutes = 1
+    try expect(settings.workMinutes == 5, "Work time must not be shorter than five minutes")
+    settings.workMinutes = 180
     settings.maximumCalls = 256
     try expect(settings.speechRateMultiplier == 1, "Default speech rate changed")
     let initialIdentity = settings.identity
@@ -350,9 +362,9 @@ struct VoiceAgentTests {
     workflowAgent.configure(bridge: bridge)
     var shotCount = 0
     let screenshotHandler = app.renderScreenshotHandler
-    app.renderScreenshotHandler = { id, url, access, completion in
+    app.renderScreenshotHandler = { id, url, access, maxWidth, completion in
       shotCount += 1
-      screenshotHandler?(id, url, access, completion)
+      screenshotHandler?(id, url, access, maxWidth, completion)
     }
     workflowAgent.startDemonstration(goal: .exposeRegion, includeViewSettings: true)
     try session.perform(.rotate(axis: [0, 1, 0], degrees: 1), source: .mouse)
@@ -445,6 +457,24 @@ struct VoiceAgentTests {
     }
     try expect(restarted.analysis?.report?.episodes == 1 && restarted.analysis?.report?.patterns.isEmpty == true,
                "The native workflow report did not reflect its own uploaded demonstration")
+    guard let portableState = await restarted.exportState(settings: settings) else {
+      throw Failure.failed("Workflow state could not be exported")
+    }
+    let stateFile = fixture.appending(path: "workflow-state.json")
+    try portableState.write(to: stateFile, options: .atomic)
+    await restarted.link(workflowAccounts[1]["token"]!, settings: settings)
+    await restarted.importState(stateFile, capturedFor: ownerA, settings: settings)
+    try expect(restarted.errorText != nil, "A profile change silently redirected a workflow import")
+    await restarted.refreshReport(settings: settings)
+    try expect(restarted.analysis?.status == .empty, "An unconfirmed workflow import modified the other profile")
+    await restarted.importState(stateFile, capturedFor: ownerB, settings: settings)
+    try expect(restarted.errorText == nil, "An explicit workflow import failed")
+    for _ in 0..<30 {
+      await restarted.refreshReport(settings: settings)
+      if restarted.analysis?.status == .ready { break }
+      try await Task.sleep(for: .milliseconds(50))
+    }
+    try expect(restarted.analysis?.report?.episodes == 1, "Imported workflow evidence was not analyzed")
     let replacement = WorkflowDestination(origin: ownerA.origin, certificateDigest: ownerA.certificateDigest,
                                           profileID: ownerA.profileID, corpusID: UUID())
     try outbox.enqueue(demonstration, for: ownerA)
@@ -476,20 +506,21 @@ struct VoiceAgentTests {
                  "Request acknowledgement was duplicated")
     }
     for turn in 1...2 {
-      let before = startAgent.messages.filter { !$0.user && $0.text == "Repeated assistant answer." }.count
+      let text = "I'm checking the current state."
+      let before = startAgent.messages.filter { !$0.user && $0.text == text }.count
       await startAgent.submit("duplicate-response")
       try await wait { !startAgent.busy }
       try expect(startAgent.errorText == nil &&
-                 startAgent.messages.filter { !$0.user && $0.text == "Repeated assistant answer." }.count == before + 1,
+                 startAgent.messages.filter { !$0.user && $0.text == text }.count == before + 1,
                  "Repeated progress/final answer was not collapsed on turn \(turn)")
-      try expect(!startAgent.messages.contains { !$0.user && $0.text.hasPrefix("  Repeated assistant") },
+      try expect(!startAgent.messages.contains { !$0.user && $0.text.hasPrefix("  " + text) },
                  "Whitespace-only response variation was duplicated")
     }
     let distinctStart = startAgent.messages.count
     await startAgent.submit("distinct-responses")
     try await wait { !startAgent.busy }
     let distinctReplies = startAgent.messages.dropFirst(distinctStart).filter { !$0.user }.map(\.text)
-    try expect(startAgent.errorText == nil && distinctReplies.contains("Distinct progress update.") &&
+    try expect(startAgent.errorText == nil && distinctReplies.contains("I'm checking the result.") &&
                distinctReplies.contains("Distinct final answer."), "Different progress/final answers were suppressed")
     startAgent.cancel()
     var openCount = 0
@@ -577,7 +608,14 @@ struct VoiceAgentTests {
                "A delayed agent opener replaced the user's manual selection")
     guard case .opening(_, let retainedOpening) = emptyApp.datasetSessionState else { fatalError() }
     try expect(manualOpening == retainedOpening, "Manual opening identity was overwritten")
-    let agent = VoiceAgentController(settings: settings, conversationStore: conversationStore)
+    let testStrategies = ProcessInfo.processInfo.environment["BORGVR_STRATEGY_TEST_ENCODER"] != nil
+    let expertKnowledge = CommandLine.arguments.dropFirst(3).first.flatMap { Bundle(path: $0) }
+      .flatMap(VoiceAgentExpertKnowledge.load(from:))
+    if testStrategies {
+      try expect(expertKnowledge?.contains("[inspection.preview]") == true, "Expert TOML was not bundled with the app")
+    }
+    let agent = VoiceAgentController(settings: settings, conversationStore: conversationStore,
+                                     expertKnowledgeSource: expertKnowledge)
     var context: VoiceAgentContext? = .init(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
     let activeAgentBridge = BorgVRVoiceAgentBridge(service: service) { context }
     agent.configure(bridge: activeAgentBridge)
@@ -597,7 +635,7 @@ struct VoiceAgentTests {
     try await wait { !agent.busy }
     try expect(agent.errorText == nil, "Native agent failed: \(agent.errorText ?? "")")
     try expect(agent.messages.last?.text == "Native voice agent roundtrip passed.", "No final answer/image acknowledgement")
-    try expect(agent.messages.contains { $0.text == "Inspecting the synthetic volume." }, "Progress message missing")
+    try expect(agent.messages.contains { $0.text == "I'm inspecting the current view." }, "Progress message missing")
     let expected = session.currentSnapshot().transform
     let expectedTF = try service.transferFunction(channel: 0)
     try expect(expectedTF.samples.last == [255, 64, 32, 255], "TF tool did not apply")
@@ -618,6 +656,15 @@ struct VoiceAgentTests {
     try await wait { !agent.busy }
     try expect(agent.errorText == nil && agent.messages.last?.text == "Screenshot position verified.",
                "Agent picking did not use the screenshot's position buffer: \(agent.errorText ?? "")")
+    if testStrategies {
+      for prompt in ["Mach einen kleinen Screenshot mit 100 Pixeln Breite.",
+                     "Take a low-resolution screenshot for a quick preview."] {
+        await agent.submit(prompt)
+        try await wait { !agent.busy }
+        try expect(agent.errorText == nil && agent.messages.last?.text == "Preview strategy selected.",
+                   "Expert strategy did not survive the native hello: \(agent.errorText ?? "")")
+      }
+    }
     agent.newConversation()
     await agent.submit("invalid-clipping-recovery")
     try await wait { !agent.busy }
@@ -794,7 +841,7 @@ struct VoiceAgentTests {
 
     agent.newConversation()
     await agent.submit("replace-source")
-    try await wait { agent.messages.contains { $0.text == "Old request waiting." } }
+    try await wait { agent.messages.contains { $0.text == "I'm waiting for the updated view." } }
     await agent.submit("replacement-target")
     try await wait { !agent.busy && !agent.interrupting }
     try expect(agent.errorText == nil && agent.messages.last?.text == "Native voice agent roundtrip passed.",
@@ -975,6 +1022,95 @@ struct VoiceAgentTests {
     let selectedStatus = selected["structuredContent"] as? [String: Any]
     try expect(selectedStatus?["activeStateID"] as? String == savedID.uuidString &&
                app.volumeBrush.activeState?.id == savedID, "Could not select a saved edit state")
+    let managerBridge = BorgVRVoiceAgentBridge(service: service) {
+      .init(datasetID: entry.uniqueId, openingID: newOpening, editStateID: app.volumeBrush.editingContextID)
+    }
+    let manager = VoiceAgentController(settings: recoveredSettings, conversationStore: isolatedConversationStore("edit-manager"))
+    manager.configure(bridge: managerBridge)
+    defer { manager.newConversation() }
+
+    let savedView = fixture.appendingPathComponent("view.json")
+    let savedClipping = service.applicationState().clipMinimum
+    try service.setClipping(minimum: SIMD3(0.35, 0.35, 0.35), maximum: .one)
+    let modifiedClipping = service.applicationState().clipMinimum
+    let invalid = fixture.appendingPathComponent("bad-view.json")
+    try Data("{}".utf8).write(to: invalid)
+    var committed = false
+    let invalidLoad = try await managerBridge.executeFileTool(name: "load_visualization_state", arguments: [:],
+      select: { _ in invalid }, validateContext: {}, willCommit: { committed = true })
+    try expect(!committed && (invalidLoad["structuredContent"] as? [String: Any])?["not_applied"] as? Bool == true &&
+               service.applicationState().clipMinimum == modifiedClipping, "Invalid visualization changed the renderer")
+    await manager.submit("cancel-load-view")
+    try await wait { manager.fileSelection != nil || !manager.busy }
+    guard let skippedFile = manager.fileSelection else { throw Failure.failed("No local load picker") }
+    manager.resolveFileSelection(id: skippedFile.id, url: nil)
+    try await wait { !manager.busy }
+    try expect(service.applicationState().clipMinimum == modifiedClipping &&
+               manager.messages.last?.text == "View selection cancelled.", "Cancelling the picker changed the view")
+    await manager.submit("load-view")
+    try await wait { manager.fileSelection != nil || !manager.busy }
+    guard let viewPicker = manager.fileSelection else { throw Failure.failed("No local visualization picker") }
+    try expect(viewPicker.kind == .visualization, "Visualization loader did not request a JSON file")
+    manager.resolveFileSelection(id: viewPicker.id, url: savedView)
+    try await wait { !manager.busy }
+    try expect(service.applicationState().clipMinimum == savedClipping && manager.messages.last?.text == "View loaded.",
+               "Picking a saved view did not restore the original visualization")
+
+    manager.newConversation()
+    await manager.submit("edit-state-create")
+    try await wait { !manager.busy }
+    guard let emptyState = app.volumeBrush.activeState else { throw Failure.failed("Created state did not become active") }
+    let emptyMask = try await app.volumeBrush.stateSnapshot().mask
+    try expect(manager.connectionState == .ready && manager.messages.last?.text == "New edit state active." &&
+               emptyState.name == "Assistant empty" && emptyState.id != savedID &&
+               emptyMask.isOriginal, "Empty state or verified context switch failed: \(manager.messages.last?.text ?? "")")
+    let extent = SIMD3<Double>(metadata.physicalExtentMeters)
+    try await app.volumeBrush.editVolume(mode: .erase, samples: [
+      .init(center: extent / 2, radius: min(extent.x, extent.y, extent.z) / 5)
+    ])
+    try expect(!(try await app.volumeBrush.stateSnapshot()).mask.isOriginal, "Edit fixture was empty")
+    manager.newConversation()
+    await manager.submit("edit-state-duplicate")
+    try await wait { !manager.busy }
+    guard let copy = app.volumeBrush.activeState else { throw Failure.failed("Duplicate did not become active") }
+    let copyMask = try await app.volumeBrush.stateSnapshot().mask
+    try expect(manager.connectionState == .ready && manager.messages.last?.text == "New edit state active." &&
+               copy.id != emptyState.id && copy.name == "Assistant duplicate" &&
+               !copyMask.isOriginal, "Duplicate did not preserve the edit mask: \(manager.messages.last?.text ?? "")")
+
+    await manager.submit("edit-state-rename")
+    try await wait { !manager.busy }
+    try expect(manager.messages.last?.text == "Edit state renamed." && app.volumeBrush.activeState?.id == copy.id,
+               "Renaming an inactive state changed selection")
+    let bypass = try await managerBridge.executeTool(name: "delete_edit_state",
+      arguments: ["id": emptyState.id.uuidString, "confirm": true], validateContext: {})
+    try expect((bypass["structuredContent"] as? [String: Any])?["code"] as? String == "confirmation_required" &&
+               managerBridge.prepareEditStateDeletion(id: copy.id) == nil, "Nonlocal or active-state deletion was allowed")
+    guard let stale = managerBridge.prepareEditStateDeletion(id: emptyState.id) else { throw Failure.failed("Missing deletion preview") }
+    try app.volumeBrush.renameState(emptyState.id, name: "Assistant delete target")
+    let staleResult = try await managerBridge.executeEditStateDeletion(stale, validateContext: {})
+    try expect((staleResult["structuredContent"] as? [String: Any])?["code"] as? String == "edit_state_changed",
+               "A stale local confirmation deleted a renamed edit state")
+    manager.newConversation()
+    await manager.submit("edit-state-decline-delete")
+    try await wait { manager.editStateDeletion != nil || !manager.busy }
+    guard let declined = manager.editStateDeletion else { throw Failure.failed("No edit-state deletion confirmation") }
+    manager.resolveEditStateDeletion(id: declined.id, accepted: false)
+    try await wait { !manager.busy }
+    try expect(manager.messages.last?.text == "Edit state deletion declined." &&
+               app.volumeBrush.states.contains(where: { $0.id == emptyState.id }), "Declining did not preserve the targeted state")
+    await manager.submit("edit-state-delete")
+    try await wait { manager.editStateDeletion != nil || !manager.busy }
+    guard let approved = manager.editStateDeletion else { throw Failure.failed("New request did not ask for local approval") }
+    try expect(approved.stateID == emptyState.id && approved.name == "Assistant delete target",
+               "Confirmation did not identify the exact inactive state")
+    manager.resolveEditStateDeletion(id: approved.id, accepted: true)
+    try await wait { !manager.busy }
+    try expect(manager.messages.last?.text == "Edit state deleted." &&
+               !app.volumeBrush.states.contains(where: { $0.id == emptyState.id }) &&
+               app.volumeBrush.activeState?.id == copy.id && (try Data(contentsOf: editURL)) == originalData,
+               "Deletion removed the wrong state or changed the source file")
+    manager.newConversation()
     context = nil
     app.closeDataset(destination: .datasetSelection)
     recovered.invalidateContext()

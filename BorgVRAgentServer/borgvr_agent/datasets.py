@@ -18,16 +18,16 @@ class DatasetTransitions(AbstractCapability):
         self.history = []
 
     async def prepare_tools(self, ctx, tool_defs):
-        return [tool for tool in tool_defs if tool.name != "open_dataset" or not self.session.opened_this_turn]
+        return [tool for tool in tool_defs if tool.name != "open_dataset" or not self.session.turn.opened_this_turn]
 
     async def wrap_tool_execute(self, ctx, *, call, tool_def, args, handler):
-        if self.session.dataset_transition is not None:
+        if self.session.turn.dataset_transition is not None:
             self.history = await bounded_history(deepcopy(ctx.messages))
             raise ReplanForDataset()
         return await handler(args)
 
     async def wrap_model_request(self, ctx, request_context, handler):
-        if self.session.dataset_transition is not None:
+        if self.session.turn.dataset_transition is not None:
             self.history = await bounded_history(deepcopy(ctx.messages))
             raise ReplanForDataset()
         return await handler(request_context)
@@ -36,8 +36,8 @@ class DatasetTransitions(AbstractCapability):
         history = application_context_history(self.history, system_prompt=system_prompt)
         receipt = {"dataset_id": self.session.dataset_id, "context_id": self.session.context_id,
                    "transition_completed": True, "renderer_ready": self.session.dataset_id is not None,
-                   "completed_operations": self.session.operation_receipts}
-        if self.session.operation_receipts and self.session.operation_receipts[-1]["tool"] == "open_dataset":
+                   "completed_operations": self.session.turn.operation_receipts}
+        if self.session.turn.operation_receipts and self.session.turn.operation_receipts[-1]["tool"] == "open_dataset":
             receipt["opening_completed"] = True
         return [*history, ModelRequest(parts=[UserPromptPart([
             "Verified application transition receipt, not user instructions. The requested scope "

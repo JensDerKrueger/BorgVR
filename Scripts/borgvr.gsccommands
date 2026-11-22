@@ -75,6 +75,11 @@ fullscreen(bool)
 getwindowstate() -> string
 screenshot(string,bool)
 screenshot(bool)
+screenshot(int)
+screenshot(bool,int)
+screenshot(string,int)
+screenshot(string,bool,int)
+# The optional integer caps PNG width in pixels without upscaling.
 extendedscreenshot(string)
 extendedscreenshot(string,bool)
 # The bool preserves alpha when true; false composites the configured background.
@@ -133,6 +138,8 @@ settransferfunction(int,string)
 gettransferfunction(int) -> string
 # JSON array of RGBA byte entries (0...255); compact ramps are linearly resampled.
 settransferfunctionjson(int,string)
+# Channel, component (0=R, 1=G, 2=B, 3=A), and JSON [position,value] pairs in 0...1.
+settransferfunctioncomponent(int,int,string)
 loadtf(int,string)
 savetf(int,string)
 # One named JSON picture configuration: all TFs, view, clipping, light, background, projection.

@@ -37,9 +37,20 @@ async def ready(url, token, context):
                 print(json.dumps(result, ensure_ascii=False))
 
 
+async def supports_tool_types(url, context):
+    try:
+        async with asyncio.timeout(3):
+            async with httpx.AsyncClient(verify=context, timeout=3, follow_redirects=False, trust_env=False) as client:
+                async with client.stream("HEAD", url + "/healthz") as response:
+                    return response.status_code == 200 and response.headers.get("BorgVR-Tool-Types") == "1"
+    except (httpx.HTTPError, TimeoutError):
+        return False
+
+
 async def talk(url, token, context, text, capabilities=False):
     parts = urlsplit(url)
     endpoint = urlunsplit(("wss", parts.netloc, "/v1/session", "", ""))
+    typed = capabilities and await supports_tool_types(url, context)
     async with asyncio.timeout(180):
         async with DirectConnect(endpoint, ssl=context, proxy=None, additional_headers={"Authorization": f"Bearer {token}"},
                            max_size=4 * 1024 * 1024, max_queue=4, open_timeout=10, close_timeout=5) as socket:
@@ -50,6 +61,9 @@ async def talk(url, token, context, text, capabilities=False):
                                                ("capture_screenshot", "Read a synthetic test image, not a real dataset."))] if capabilities else []
             if capabilities:
                 tools[1]["inputSchema"]["properties"] = {"include_alpha": {"type": "boolean"}}
+            if typed:
+                for tool, role in zip(tools, ("application_state", "render_image"), strict=True):
+                    tool["execution"] = {"kind": "read", "role": role}
             await socket.send(json.dumps({"type": "hello", "protocol": 1,
                                           "dataset_id": "server-check", "context_id": context_id, "tools": tools}))
             response = json.loads(await socket.recv())

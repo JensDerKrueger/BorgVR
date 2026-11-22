@@ -96,7 +96,14 @@ enum MetalScreenshotEncoder {
       clipToVolume: inverse, columns: columns, rows: rows))
   }
 
-  static func pngData(from readback: MetalScreenshotReadback) throws -> Data {
+  static func pngData(from readback: MetalScreenshotReadback, maxWidth: Int? = nil) throws -> Data {
+    try pngImage(from: readback, maxWidth: maxWidth).data
+  }
+
+  static let maximumPreviewWidth = 16_384
+
+  static func pngImage(from readback: MetalScreenshotReadback, maxWidth: Int?) throws
+    -> (data: Data, width: Int, height: Int) {
     let byteCount = readback.bytesPerRow * readback.height
     let pixels = Data(bytes: readback.buffer.contents(), count: byteCount)
     guard let provider = CGDataProvider(data: pixels as CFData) else {
@@ -106,7 +113,7 @@ enum MetalScreenshotEncoder {
     let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(
       CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
     )
-    guard let image = CGImage(
+    guard var image = CGImage(
       width: readback.width,
       height: readback.height,
       bitsPerComponent: 8,
@@ -122,6 +129,18 @@ enum MetalScreenshotEncoder {
       throw MetalScreenshotError.imageCreationFailed
     }
 
+    if let maxWidth, maxWidth < image.width {
+      let height = max(1, Int((Double(image.height) * Double(maxWidth) / Double(image.width)).rounded()))
+      guard maxWidth > 0, let context = CGContext(data: nil, width: maxWidth, height: height,
+        bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: bitmapInfo.rawValue) else {
+        throw MetalScreenshotError.imageCreationFailed
+      }
+      context.interpolationQuality = .high
+      context.draw(image, in: CGRect(x: 0, y: 0, width: maxWidth, height: height))
+      guard let scaled = context.makeImage() else { throw MetalScreenshotError.imageCreationFailed }
+      image = scaled
+    }
+
     let output = NSMutableData()
     guard let destination = CGImageDestinationCreateWithData(
       output,
@@ -135,7 +154,7 @@ enum MetalScreenshotEncoder {
     guard CGImageDestinationFinalize(destination) else {
       throw MetalScreenshotError.writeFailed
     }
-    return output as Data
+    return (output as Data, image.width, image.height)
   }
 }
 

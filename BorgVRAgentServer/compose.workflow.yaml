@@ -1,11 +1,27 @@
-# Explicit opt-in for experiments. Use a private, pre-created host directory.
+# Optional workflow service. Use a private, pre-created host directory.
+x-workflow-data: &workflow-data
+  type: bind
+  source: ${BORGVR_WORKFLOW_DATA:?Set a private workflow data directory}
+  target: /var/lib/borgvr-workflow
+  bind:
+    create_host_path: false
+
 services:
   agent:
     environment:
       BORGVR_WORKFLOW_DB: /var/lib/borgvr-workflow/workflow.sqlite3
     volumes:
-      - type: bind
-        source: ${BORGVR_WORKFLOW_DATA:?Set a private workflow data directory}
-        target: /var/lib/borgvr-workflow
-        bind:
-          create_host_path: false
+      - *workflow-data
+  learner:
+    image: ${BORGVR_AGENT_IMAGE:?Run setup.sh first}
+    user: "${BORGVR_UID}:${BORGVR_GID}"
+    command: ["python", "-m", "borgvr_agent.learner_worker"]
+    environment:
+      BORGVR_WORKFLOW_DB: /var/lib/borgvr-workflow/workflow.sqlite3
+    volumes:
+      - *workflow-data
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped

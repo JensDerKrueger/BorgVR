@@ -4,6 +4,7 @@ struct ScreenScreenshotRequest {
   let id: UUID
   let url: URL
   let accessURL: URL?
+  let maxWidth: Int?
   let completion: (Result<URL, Error>) -> Void
 }
 

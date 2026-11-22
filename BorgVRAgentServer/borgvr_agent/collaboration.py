@@ -72,8 +72,8 @@ class Collaboration(AbstractCapability):
                     self.help_supplied = (self.session.request_id, identifier)
                     future.set_result(None)
         self.changed.set()
-        self.session.state_seen = False
-        self.session.volume_edit_state_seen = False
+        self.session.turn.state_seen = False
+        self.session.turn.volume_edit_state_seen = False
 
     def context_message(self):
         data = {"revision": self.revision, "changed_domains": sorted(self.domains),
@@ -134,8 +134,8 @@ class Collaboration(AbstractCapability):
         async def ask_collaboration_feedback(purpose: Literal["help"], language: QuestionLanguage) -> dict:
             """Ask the user to show a more informative view when blocked by missing visual evidence.
 
-            Explain the missing evidence separately using report_progress. Select de or en to
-            match the user. A completed manual view change can answer this question directly.
+            Select de or en to match the user. A completed manual view change can answer
+            this question directly.
             Available once per request. Do not use it to ask about intent or permission.
             """
             if self.asked_for_help:

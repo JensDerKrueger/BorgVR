@@ -85,7 +85,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   func attach(to view: MTKView) {
     self.view = view
     core.attach(to: view)
-    appModel.renderScreenshotHandler = { [weak self] id, url, accessURL, completion in
+    appModel.renderScreenshotHandler = { [weak self] id, url, accessURL, maxWidth, completion in
       Task { @MainActor in
         guard let self else {
           completion(.failure(AppModelError.rendererUnavailable))
@@ -95,6 +95,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
           id: id,
           to: url,
           accessURL: accessURL,
+          maxWidth: maxWidth,
           completion: completion
         )
       }
@@ -236,6 +237,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     id: UUID,
     to requestedURL: URL?,
     accessURL requestedAccessURL: URL?,
+    maxWidth: Int?,
     completion: @escaping (Result<URL, Error>) -> Void
   ) {
     guard appModel.activeDataset != nil else {
@@ -271,6 +273,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       id: id,
       url: screenshotURL,
       accessURL: accessURL,
+      maxWidth: maxWidth,
       completion: completion
     )
     guard screenshotRequests.enqueue(request) else {
@@ -352,7 +355,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
 
     do {
-      let png = try MetalScreenshotEncoder.pngData(from: capture.readback.color)
+      let png = try MetalScreenshotEncoder.pngData(from: capture.readback.color, maxWidth: request.maxWidth)
       try png.write(to: request.url, options: .atomic)
       if let positions = capture.readback.positionReadback?.positions() {
         appModel.screenshotCache.store(positions, id: request.id, renderedFrame: appModel.completedRenderFrameCount)

@@ -42,7 +42,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   func attach(to view: MTKView) {
     core.attach(to: view)
     installInteractionGestures(on: view)
-    appModel.renderScreenshotHandler = { [weak self, weak view] id, requestedURL, _, completion in
+    appModel.renderScreenshotHandler = { [weak self, weak view] id, requestedURL, _, maxWidth, completion in
       Task { @MainActor in
         guard let self else {
           completion(.failure(AppModelError.rendererUnavailable))
@@ -59,6 +59,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
           id: id,
           url: url,
           accessURL: nil,
+          maxWidth: maxWidth,
           completion: completion
         )
         guard self.screenshotRequests.enqueue(request) else {
@@ -167,7 +168,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     guard let screenshot,
           let request = screenshotRequests.complete(id: screenshot.id) else { return }
     do {
-      let data = try MetalScreenshotEncoder.pngData(from: screenshot.readback.color)
+      let data = try MetalScreenshotEncoder.pngData(from: screenshot.readback.color, maxWidth: request.maxWidth)
       try data.write(to: request.url, options: .atomic)
       if let positions = screenshot.readback.positionReadback?.positions() {
         appModel.screenshotCache.store(positions, id: request.id, renderedFrame: appModel.completedRenderFrameCount)

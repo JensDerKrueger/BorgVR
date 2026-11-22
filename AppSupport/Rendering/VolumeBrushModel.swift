@@ -696,23 +696,29 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     try await activate(state, snapshot: nil, displayAsOriginal: id == nil)
   }
 
-  func duplicateState(name: String = "", empty: Bool = false) async throws {
+  @discardableResult
+  func duplicateState(name: String = "", empty: Bool = false, validateContext: (() throws -> Void)? = nil) async throws -> UUID {
     guard !isPreparingRecording else { throw BorgVRVolumeEditingCommandError.busy }
     if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      var createdID: UUID?
       try await commandExecutor.performResolvedAction(.duplicateEditState(name: name, empty: empty),
         source: BorgVRCommandExecutionContext.source) {
-        try await self.duplicateState(name: name, empty: empty)
+        createdID = try await self.duplicateState(name: name, empty: empty, validateContext: validateContext)
         return .restoreEditState(snapshot: try await self.stateSnapshot(), state: self.activeState, workingStateID: self.workingState?.id)
       }
-      return
+      guard let createdID else { throw BorgVRVolumeEditingCommandError.unavailable }
+      return createdID
     }
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState, let source = dataSource else { throw BorgVRVolumeEditingCommandError.busy }
     let previous = try await stateSnapshot()
+    try Task.checkCancellation()
+    try validateContext?()
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState, dataSource === source else { throw BorgVRVolumeEditingCommandError.busy }
     let state = makeState(datasetID: source.catalog.datasetID, kind: empty ? .local : .copy, name: name)
     let mask = empty ? try BorgVRVolumeEditMask(size: previous.mask.size, spacing: previous.mask.spacing,
       componentCount: previous.mask.componentCount) : previous.mask
     try await activate(state, snapshot: .init(datasetID: state.datasetID, stateID: state.id, revision: 0, mask: mask))
+    return state.id
   }
 
   func renameState(_ id: UUID, name: String) throws {

@@ -12,6 +12,28 @@ private func rejects(_ operation: () throws -> Void) throws {
 @main
 struct VoiceAgentPolicyTests {
   static func main() throws {
+    if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-catalog" {
+      let source = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2]))
+      guard let definitions = try JSONSerialization.jsonObject(with: source) as? [[String: Any]] else {
+        throw Failure.failed("Missing catalog fixture")
+      }
+      var catalogs: [String: [[String: Any]]] = [:]
+      for (name, vision, transferFunctions, images, ready) in [
+        ("start_menu", false, true, true, false), ("renderer", false, true, true, true),
+        ("no_images", false, true, false, true), ("rgba", false, false, true, true),
+        ("vision", true, true, true, true)
+      ] {
+        let catalog = VoiceAgentPolicy.catalog(definitions, vision: vision,
+          transferFunctions: transferFunctions, images: images, datasetReady: ready)
+        catalogs[name] = VoiceAgentPolicy.wireCatalog(catalog, typed: true)
+        try check(VoiceAgentPolicy.wireCatalog(catalog, typed: false).allSatisfy { $0["execution"] == nil },
+                  "Unnegotiated connection gained execution metadata")
+        try check(catalogs[name]?.allSatisfy { $0["execution"] is [String: Any] } == true,
+                  "A catalog entry lost execution metadata")
+      }
+      print(String(decoding: try JSONSerialization.data(withJSONObject: catalogs), as: UTF8.self))
+      return
+    }
     let endpoint = try VoiceAgentEndpoint("https://ai1:8766/")
     try check(endpoint.socket.absoluteString == "wss://ai1:8766/v1/session", "Wrong WSS path")
     try check(try VoiceAgentEndpoint("https://[::1]:8766").host == "::1", "IPv6 host normalization")

@@ -13,6 +13,7 @@ import sqlite3
 import stat
 from uuid import uuid4
 
+from .learner_state import hypotheses_for, portable_state
 from .workflow_learner import MAX_EPISODES, Episode, find_patterns
 
 
@@ -33,6 +34,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     profile TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
     id TEXT NOT NULL, report TEXT,
     queued INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workflow_states (
+    profile TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+    job_id TEXT NOT NULL,
+    hypotheses TEXT NOT NULL
 );
 """
 
@@ -140,28 +146,64 @@ class WorkflowStore:
             return {"profile_id": profile, "device_id": device, "corpus_id": corpus}
 
     def upload(self, digest, expected_corpus, episode: Episode):
+        return self.merge(digest, expected_corpus, [episode]) == 1
+
+    @staticmethod
+    def _episode_row(episode):
         data = asdict(episode)
         if episode.evidence is None:
             data.pop("evidence")  # Preserve the canonical v1 payload for existing retries.
-        payload = json.dumps(data, sort_keys=episode.evidence is not None, separators=(",", ":"))
+        return json.dumps(data, sort_keys=episode.evidence is not None, separators=(",", ":"))
+
+    @staticmethod
+    def _episode_value(raw):
+        data = json.loads(raw)
+        data["actions"] = tuple(data["actions"])
+        return Episode(**data)
+
+    def merge(self, digest, expected_corpus, episodes):
         with self.connection(write=True) as db:
             profile, _, corpus = self._identity(db, digest)
             if expected_corpus != corpus:
                 raise WorkflowError(409, "corpus_changed")
-            old = db.execute("SELECT payload FROM episodes WHERE profile=? AND id=?", (profile, episode.id)).fetchone()
-            if old is not None:
-                if old[0] != payload:
-                    raise WorkflowError(409, "episode_conflict")
-                return False
-            if db.execute("SELECT COUNT(*) FROM episodes WHERE profile=?", (profile,)).fetchone()[0] >= MAX_EPISODES:
+            rows = dict(db.execute("SELECT id, payload FROM episodes WHERE profile=?", (profile,)))
+            additions = {}
+            for episode in episodes:
+                existing = rows.get(episode.id, additions.get(episode.id))
+                if existing is not None:
+                    if self._episode_value(existing) != episode:
+                        raise WorkflowError(409, "episode_conflict")
+                else:
+                    additions[episode.id] = self._episode_row(episode)
+            if not additions:
+                return 0
+            if len(rows) + len(additions) > MAX_EPISODES:
                 raise WorkflowError(409, "episode_limit")
-            db.execute("INSERT INTO episodes VALUES (?, ?, ?)", (profile, episode.id, payload))
+            db.executemany("INSERT INTO episodes VALUES (?, ?, ?)",
+                           ((profile, identifier, payload) for identifier, payload in additions.items()))
             db.execute(
                 "INSERT INTO jobs VALUES (?, ?, NULL, unixepoch()) "
                 "ON CONFLICT(profile) DO UPDATE SET id=excluded.id, report=NULL, queued=excluded.queued",
                 (profile, str(uuid4())),
             )
-        return True
+        return len(additions)
+
+    def state(self, digest):
+        with self.connection() as db:
+            profile, _, corpus = self._identity(db, digest)
+            job = db.execute("SELECT id, report FROM jobs WHERE profile=?", (profile,)).fetchone()
+            result = {"corpus_id": corpus}
+            if job is None:
+                return {**result, "status": "empty", "state": portable_state([], [])}
+            if job[1] is None:
+                return {**result, "status": "queued", "job_id": job[0]}
+            rows = db.execute("SELECT payload FROM episodes WHERE profile=? ORDER BY id", (profile,))
+            episodes = [self._episode_value(raw) for raw, in rows]
+            checkpoint = db.execute("SELECT hypotheses FROM workflow_states WHERE profile=? AND job_id=?",
+                                    (profile, job[0])).fetchone()
+            hypotheses = json.loads(checkpoint[0]) if checkpoint else hypotheses_for(episodes)
+            return {**result, "status": "ready", "job_id": job[0],
+                    "state": portable_state(episodes, hypotheses)}
 
     def report(self, digest):
         with self.connection() as db:
@@ -183,6 +225,7 @@ class WorkflowStore:
             replacement = str(uuid4())
             db.execute("UPDATE profiles SET corpus=? WHERE id=?", (replacement, profile))
             db.execute("DELETE FROM jobs WHERE profile=?", (profile,))
+            db.execute("DELETE FROM workflow_states WHERE profile=?", (profile,))
             db.execute("DELETE FROM episodes WHERE profile=?", (profile,))
             return {"corpus_id": replacement}
 
@@ -195,16 +238,17 @@ class WorkflowStore:
                 return False
             profile, identifier = job
             rows = db.execute("SELECT payload FROM episodes WHERE profile=? ORDER BY id", (profile,)).fetchall()
-        episodes = []
-        for (raw,) in rows:
-            data = json.loads(raw)
-            data["actions"] = tuple(data["actions"])
-            episodes.append(Episode(**data))
+        episodes = [self._episode_value(raw) for raw, in rows]
         report = json.dumps(analyze(episodes), separators=(",", ":"))
+        hypotheses = json.dumps(hypotheses_for(episodes), separators=(",", ":"))
         with self.connection(write=True) as db:
             # A newer upload or a deletion invalidates this result.
-            db.execute("UPDATE jobs SET report=? WHERE profile=? AND id=? AND report IS NULL",
-                       (report, profile, identifier))
+            committed = db.execute("UPDATE jobs SET report=? WHERE profile=? AND id=? AND report IS NULL",
+                                   (report, profile, identifier))
+            if committed.rowcount:
+                db.execute("INSERT INTO workflow_states VALUES (?, ?, ?) ON CONFLICT(profile) DO UPDATE SET "
+                           "job_id=excluded.job_id, hypotheses=excluded.hypotheses",
+                           (profile, identifier, hypotheses))
         return True
 
 

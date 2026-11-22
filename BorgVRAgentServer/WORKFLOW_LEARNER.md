@@ -124,7 +124,9 @@ image tag that can be built locally:
 
 ```sh
 sudo docker compose -f compose.yaml -f compose.cuda.yaml -f compose.workflow.yaml \
-  -f compose.build.yaml up -d --no-deps --build agent
+  -f compose.build.yaml build agent
+sudo docker compose -f compose.yaml -f compose.cuda.yaml -f compose.workflow.yaml \
+  up -d --no-deps --pull never agent learner
 ```
 
 The regular setup commands do not manage this experimental overlay. Keep the
@@ -155,14 +157,19 @@ deleted locally but will not be sent into it.
 
 The server keeps a bounded corpus and the latest durable analysis job for
 each profile. It can finish the descriptive analysis after BorgVR quits
-and resume queued work after a service restart. There are no model or GPU
-calls in this phase. The HTTP API is separate from chat:
+and resume queued work after a service restart. The `learner` service has no
+network, chat credentials, GPU access, or dependency on an active client. It
+keeps pending hypotheses as well as candidates, with references to supporting
+and contradicting demonstrations. A candidate is not an approved rule. There
+are no model calls in this phase. The HTTP API is separate from chat:
 
 | Request | Behavior |
 |---|---|
 | `GET /v1/workflow/profile` | Profile, device and corpus IDs for this bearer token. |
 | `POST /v1/workflow/episodes` | Accept a single v1 or v2 episode with `X-BorgVR-Corpus` set to the capture's corpus ID; duplicate receipt is safe. |
 | `GET /v1/workflow/report` | Empty, queued or ready report for the caller's profile. No foreign profile selector. |
+| `GET /v1/workflow/state` | Export the current versioned evidence and hypotheses. Returns HTTP 202 without a snapshot while analysis is queued. |
+| `PUT /v1/workflow/state` | Merge a snapshot into the authenticated profile with its current `X-BorgVR-Corpus` header. Identical imports are no-ops; conflicting episode IDs reject the entire import. |
 | `DELETE /v1/workflow/corpus` | Delete episodes and report, invalidating queued work and uploads for the old `X-BorgVR-Corpus` ID. |
 
 For devices you no longer trust, use `revoke-device PROFILE_ID DEVICE_ID`
@@ -173,3 +180,14 @@ in this trial. Do not use real clinical data in the demonstration trial.
 Use **Fetch workflow report** in the workflow profile settings to see whether
 analysis is queued and, once ready, view opening patterns and their support.
 The report does not change the interactive assistant.
+
+### Move a profile to another server
+
+In the BorgVR debug build, use **Export workflow state** in the linked profile
+settings after analysis finishes. Configure the new server and link its profile,
+then select the file with **Import workflow state**. A profile on the new server
+has its own token and corpus ID. The snapshot includes neither, and does not
+include screenshots, prompts or executable commands. It does include the
+demonstrations and their numeric evidence; keep it private. Existing evidence
+on the destination is retained. The worker recomputes hypotheses over the
+combined evidence.

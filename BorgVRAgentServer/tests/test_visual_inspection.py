@@ -23,7 +23,7 @@ def test_multiview_inspection_preserves_evidence_and_restores_view_past_old_requ
     original_rotation = [0, 0, 0, 1]
     steps = [
         ("get_application_state", {}),
-        ("report_progress", {"text": "Ich untersuche mehrere Ansichten und achte auf verdeckte Muenzen."}),
+        ("report_progress", {"activity": "compare_views", "language": "de"}),
         ("wait_until_rendered", {}),
         ("capture_screenshot", {}),
         ("record_visual_observation", {"observation": "Front: A und B sind getrennt erkennbar; der Rest ist verdeckt."}),

@@ -24,6 +24,7 @@ private func request(id: UUID = UUID()) -> ScreenScreenshotRequest {
     id: id,
     url: FileManager.default.temporaryDirectory.appendingPathComponent(id.uuidString),
     accessURL: nil,
+    maxWidth: nil,
     completion: { _ in }
   )
 }

@@ -44,9 +44,10 @@ def test_http_client_rejects_redirects_and_large_responses(monkeypatch, status, 
     assert len(requests) == 1
 
 
+@pytest.mark.parametrize("typed", [False, True])
 @pytest.mark.parametrize("color,omit_tool,alpha,success", [("red", False, False, True),
     ("red", False, True, True), ("blue", False, False, False), ("red", True, False, False)])
-def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch, color, omit_tool, alpha, success):
+def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch, color, omit_tool, alpha, success, typed):
     class Socket:
         async def send(self, raw):
             data = json.loads(raw)
@@ -54,6 +55,9 @@ def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch,
                 case "hello":
                     self.context = data["context_id"]
                     assert {tool["name"] for tool in data["tools"]} == {"get_application_state", "capture_screenshot"}
+                    assert all(("execution" in tool) is typed for tool in data["tools"])
+                    if typed:
+                        assert [tool["execution"]["role"] for tool in data["tools"]] == ["application_state", "render_image"]
                     self.queue = [{"type": "ready", "capabilities": {"vision": True}}]
                 case "user_message":
                     self.request = data["request_id"]
@@ -85,6 +89,9 @@ def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch,
             pass
 
     monkeypatch.setattr(client_module, "DirectConnect", lambda *args, **kwargs: Socket())
+    async def features(*_):
+        return typed
+    monkeypatch.setattr(client_module, "supports_tool_types", features)
     coroutine = client_module.talk("https://localhost:8766", "secret", ssl.create_default_context(), "test", True)
     if success:
         asyncio.run(coroutine)

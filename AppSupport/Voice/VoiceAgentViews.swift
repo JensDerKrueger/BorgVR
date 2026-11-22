@@ -175,6 +175,10 @@ private struct WorkflowProfileSettingsView: View {
   @ObservedObject var settings: VoiceAgentSettings
   @State private var token = ""
   @State private var confirmsDelete = false
+  @State private var stateDocument: WorkflowDemonstrationDocument?
+  @State private var exportingState = false
+  @State private var importingState = false
+  @State private var importOwner: WorkflowDestination?
 
   var body: some View {
     let linked = upload.destination(for: settings) != nil
@@ -203,6 +207,20 @@ private struct WorkflowProfileSettingsView: View {
         Text(voiceAgentText("Workflow profile linked")).foregroundStyle(.secondary)
         Button(voiceAgentText("Fetch workflow report"), systemImage: "chart.bar.xaxis") {
           Task { await upload.refreshReport(settings: settings) }
+        }.buttonStyle(.bordered).disabled(upload.busy)
+        HStack {
+          Button(voiceAgentText("Export workflow state"), systemImage: "square.and.arrow.up") {
+            Task {
+              if let data = await upload.exportState(settings: settings) {
+                stateDocument = WorkflowDemonstrationDocument(data: data)
+                exportingState = true
+              }
+            }
+          }
+          Button(voiceAgentText("Import workflow state"), systemImage: "square.and.arrow.down") {
+            importOwner = upload.destination(for: settings)
+            importingState = importOwner != nil
+          }
         }.buttonStyle(.bordered).disabled(upload.busy)
         if let analysis = upload.analysis {
           switch analysis.status {
@@ -245,6 +263,14 @@ private struct WorkflowProfileSettingsView: View {
     .confirmationDialog(voiceAgentText("Remove this profile's queued demonstrations?"), isPresented: $confirmsDelete) {
       Button(voiceAgentText("Delete queued demonstrations"), role: .destructive) { upload.clearPending(settings: settings) }
     }
+    .fileExporter(isPresented: $exportingState, document: stateDocument, contentType: .json,
+                  defaultFilename: "BorgVR-Workflow") { _ in stateDocument = nil }
+    .fileImporter(isPresented: $importingState, allowedContentTypes: [.json]) { selection in
+      let owner = importOwner
+      importOwner = nil
+      guard let owner, case .success(let url) = selection else { return }
+      Task { await upload.importState(url, capturedFor: owner, settings: settings) }
+    }
   }
 }
 
@@ -272,7 +298,7 @@ struct VoiceAgentView: View {
         HStack {
           Label(agent.status, systemImage: agent.connectionState == .ready ? "checkmark.shield" : "network")
           Spacer()
-          if (agent.busy && agent.collaborationQuestion == nil && agent.annotationDeletion == nil &&
+          if (agent.busy && agent.collaborationQuestion == nil && agent.annotationDeletion == nil && agent.editStateDeletion == nil &&
               agent.volumeEditApproval == nil && !agent.userIsInteracting) || agent.connectionState == .connecting {
             ProgressView().controlSize(.small)
           }
@@ -450,7 +476,7 @@ struct VoiceAgentView: View {
     #endif
     .task { await agent.connect() }
     .fileImporter(isPresented: $filePickerPresented,
-                  allowedContentTypes: pickerSelection?.kind == .folder ? [.folder] : [.item],
+                  allowedContentTypes: selectionContentTypes,
                   allowsMultipleSelection: false, onCompletion: { result in
       if let selection = pickerSelection {
         agent.resolvePresentedFileSelection(id: selection.id, url: (try? result.get())?.first)
@@ -473,6 +499,20 @@ struct VoiceAgentView: View {
         Text(String(format: voiceAgentText("Markers: %lld. Measurements: %lld. Placed meshes are kept."),
                     Int64(preview.markerCount), Int64(preview.measurementCount)))
       }
+    .alert(voiceAgentText("Delete saved edit state?"), isPresented: Binding(
+      get: { agent.editStateDeletion != nil },
+      set: { visible in
+        if !visible, let preview = agent.editStateDeletion { agent.resolveEditStateDeletion(id: preview.id, accepted: false) }
+      }), presenting: agent.editStateDeletion) { preview in
+        Button(voiceAgentText("Delete edit state"), role: .destructive) {
+          agent.resolveEditStateDeletion(id: preview.id, accepted: true)
+        }
+        Button(voiceAgentText("Cancel"), role: .cancel) { agent.resolveEditStateDeletion(id: preview.id, accepted: false) }
+      } message: { preview in
+        let label = preview.name.isEmpty ? voiceAgentText("Unnamed edit state") : preview.name
+        Text(String(format: voiceAgentText("Delete “%@” (%@)? The original dataset and active edit state are kept."),
+                    label, String(preview.stateID.uuidString.prefix(8))))
+      }
     .alert(voiceAgentText(agent.volumeEditApproval?.erase == true ? "Erase this volume region?" : "Restore this volume region?"),
            isPresented: Binding(
              get: { agent.volumeEditApproval != nil },
@@ -494,10 +534,19 @@ struct VoiceAgentView: View {
     .onDisappear {
       speech.cancel()
       if let preview = agent.annotationDeletion { agent.resolveAnnotationDeletion(id: preview.id, accepted: false) }
+      if let preview = agent.editStateDeletion { agent.resolveEditStateDeletion(id: preview.id, accepted: false) }
       if let preview = agent.volumeEditApproval { agent.resolveVolumeEditApproval(id: preview.id, accepted: false) }
       if let selection = agent.fileSelection { agent.resolveFileSelection(id: selection.id, url: nil) }
     }
     .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
+  }
+
+  private var selectionContentTypes: [UTType] {
+    switch pickerSelection?.kind {
+      case .folder: [.folder]
+      case .visualization: [.json]
+      default: [.item]
+    }
   }
 
   private func formatEditBounds(_ point: SIMD3<Double>) -> String {
@@ -699,7 +748,7 @@ struct VoiceAgentSettingsView: View {
       }
       Toggle(voiceAgentText("Confirm volume edits"), isOn: $settings.confirmsVolumeEdits)
       Toggle(voiceAgentText("Speak responses"), isOn: $settings.speaks)
-      Stepper(value: $settings.workMinutes, in: 1...120) {
+      Stepper(value: $settings.workMinutes, in: VoiceAgentSettings.workMinutesRange) {
         HStack {
           Text(voiceAgentText("Maximum work time (minutes)"))
           Spacer()

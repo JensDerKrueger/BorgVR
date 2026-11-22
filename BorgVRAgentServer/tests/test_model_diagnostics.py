@@ -13,7 +13,7 @@ PRIVATE = "private_diagnostic_sentinel"
 @pytest.mark.parametrize("tool,arguments,category,logged_tool", [
     ("get_application_state", {"extra": PRIVATE}, "tool_arguments_rejected", "get_application_state"),
     ("get_application_state", "{ " + PRIVATE, "tool_json_invalid", "get_application_state"),
-    ("report_progress", {"text": {"private": PRIVATE}}, "tool_arguments_invalid", "report_progress"),
+    ("report_progress", {"activity": {"private": PRIVATE}, "language": "en"}, "tool_arguments_invalid", "report_progress"),
     ("rotate_view", {"axis": [0, 1, 0], "degrees": 12}, "tool_application_state_required", "rotate_view"),
     (PRIVATE, {}, "tool_unknown", "-"),
 ])

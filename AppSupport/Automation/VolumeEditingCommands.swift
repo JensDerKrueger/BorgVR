@@ -32,7 +32,7 @@ enum BorgVRRecordedAction: Codable, Sendable {
   case deleteEditState(UUID)
   case openDataset(String)
   case closeDataset
-  case captureScreenshot(path: String?, includeAlpha: Bool)
+  case captureScreenshot(path: String?, includeAlpha: Bool, maxWidth: Int? = nil)
   case captureExtendedScreenshot(path: String?, includeAlpha: Bool)
   case resizeWindow(width: Int, height: Int, units: String, area: String)
   case setFullscreen(Bool)
@@ -196,7 +196,8 @@ enum BorgVRVolumeEditingCommandError: LocalizedError {
 @MainActor
 protocol BorgVRVolumeEditingCommands: AnyObject {
   func selectState(_ id: UUID?) async throws
-  func duplicateState(name: String, empty: Bool) async throws
+  @discardableResult
+  func duplicateState(name: String, empty: Bool, validateContext: (() throws -> Void)?) async throws -> UUID
   func renameState(_ id: UUID, name: String) throws
   func deleteState(_ id: UUID) throws
   func volumeEditingState() -> BorgVRVolumeEditingState
@@ -214,6 +215,10 @@ protocol BorgVRVolumeEditingCommands: AnyObject {
 }
 
 extension BorgVRVolumeEditingCommands {
+  func duplicateState(name: String, empty: Bool) async throws {
+    _ = try await duplicateState(name: name, empty: empty, validateContext: nil)
+  }
+
   func editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample]) async throws {
     try await editVolume(mode: mode, samples: samples, validateContext: nil)
   }

@@ -59,6 +59,7 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   private var searchResults: [String: Date] = [:]
   private var assistantExportID: UUID?
   private var deletionPreview: (value: VoiceAgentAnnotationDeletion, context: VoiceAgentContext, digest: Data, expires: Date)?
+  private var editStateDeletionPreview: (id: UUID, state: BorgVRVolumeEditState, context: VoiceAgentContext, expires: ContinuousClock.Instant)?
   private struct ApprovedVolumeEdit {
     let id: UUID
     let context: VoiceAgentContext
@@ -216,6 +217,49 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
         }
         _ = try await callMCP(name, arguments, validateContext: validateContext)
         return ["structuredContent": volumeEditStatus()]
+      case "create_edit_state":
+        guard let previous = context, personalEditStatesAvailable(service.volumeEditing.volumeEditingState()) else {
+          return volumeEditRejection("edit_state_unavailable", "An open personal edit state with no ongoing export is required.")
+        }
+        let name = arguments["name"].flatMap(editStateName) ?? ""
+        guard arguments["name"] == nil || !name.isEmpty else {
+          return volumeEditRejection("invalid_edit_state_name", "Use a short, nonempty display name.")
+        }
+        let duplicate = try BorgVRVolumeEditingArguments.boolean(arguments["duplicate"]) ?? false
+        let createdID: UUID
+        do {
+          createdID = try await BorgVRCommandExecutionContext.$originOverride.withValue(origin) {
+            try await service.volumeEditing.duplicateState(name: name, empty: !duplicate, validateContext: {
+              try validateContext()
+              guard self.applicationDatasetContext == previous else { throw VoiceAgentError.contextChanged }
+            })
+          }
+        } catch BorgVRVolumeEditingCommandError.busy {
+          return volumeEditRejection("edit_state_unavailable", "An active operation is using the volume.")
+        }
+        let status = volumeEditStatus()
+        guard let current = context, current.hasSameOpening(as: previous), current.editStateID == createdID,
+              status["activeStateID"] as? String == createdID.uuidString else { throw VoiceAgentError.contextChanged }
+        return ["structuredContent": status.merging(["createdStateID": createdID.uuidString]) { _, new in new }]
+      case "rename_edit_state":
+        let state = service.volumeEditing.volumeEditingState()
+        guard personalEditStatesAvailable(state),
+              let id = (arguments["id"] as? String).flatMap(UUID.init(uuidString:)),
+              let saved = state.savedStates.first(where: { $0.id == id && $0.kind != .sharePlay }) else {
+          return volumeEditRejection("edit_state_unavailable", "Read the list of personal edit states again.")
+        }
+        guard let name = arguments["name"].flatMap(editStateName) else {
+          return volumeEditRejection("invalid_edit_state_name", "Use a short, nonempty display name.")
+        }
+        guard name != saved.name else { return volumeEditRejection("already_named", "The state already has that name.") }
+        do {
+          _ = try await callMCP("rename_edit_state", ["id": id.uuidString, "name": name], validateContext: validateContext)
+        } catch BorgVRVolumeEditingCommandError.busy {
+          return volumeEditRejection("edit_state_unavailable", "An active operation is using the volume.")
+        }
+        return ["structuredContent": volumeEditStatus()]
+      case "delete_edit_state":
+        return volumeEditRejection("confirmation_required", "Deleting a saved edit state requires fresh local approval.")
       case "configure_volume_brush":
         let state = service.volumeEditing.volumeEditingState()
         guard state.available, !state.shared, state.export?.isActive != true,
@@ -370,6 +414,28 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
     if VoiceAgentPolicy.conversionTools.contains(name) {
       return try await executeImport(name: name, arguments: arguments, select: select,
                                      validateContext: validateContext, willCommit: willCommit)
+    }
+    if name == "load_visualization_state" {
+      guard arguments.isEmpty else { throw VoiceAgentError.protocolViolation }
+      guard let url = await select(.init(title: voiceAgentText("Choose saved visualization"), kind: .visualization)) else {
+        return volumeEditRejection("user_declined", "The user did not choose a file. Do not ask again in this request.")
+      }
+      try validateContext()
+      try Task.checkCancellation()
+      var applying = false
+      do {
+        try BorgVRCommandExecutionContext.$originOverride.withValue(origin) {
+          try service.loadVisualizationState(from: url) {
+            try validateContext()
+            willCommit()
+            applying = true
+          }
+        }
+      } catch where !applying {
+        return volumeEditRejection("visualization_file_rejected",
+          "No visualization was loaded. Choose a compatible BorgVR visualization JSON for the open dataset.")
+      }
+      return ["structuredContent": ["loaded": true]]
     }
     let exporting = name == "export_edited_dataset"
     guard let filename = VoiceAgentPolicy.outputName(arguments["filename"], extension: exporting ? "data" : "json") else {
@@ -625,6 +691,51 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   }
 
   private struct DeletionPreviewChanged: Error {}
+
+  private func personalEditStatesAvailable(_ state: BorgVRVolumeEditingState) -> Bool {
+    state.available && !state.shared && !state.waitingForSharedState && state.export?.isActive != true
+  }
+
+  private func editStateName(_ value: Any) -> String? {
+    guard let value = value as? String, value.count <= 120,
+          !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return nil }
+    let name = value.trimmingCharacters(in: .whitespaces)
+    return name.isEmpty ? nil : name
+  }
+
+  private func deletableEditState(id: UUID) -> BorgVRVolumeEditState? {
+    let status = service.volumeEditing.volumeEditingState()
+    guard personalEditStatesAvailable(status), status.activeStateID != id else { return nil }
+    return status.savedStates.first { $0.id == id && $0.kind != .sharePlay }
+  }
+
+  func prepareEditStateDeletion(id: UUID) -> VoiceAgentEditStateDeletion? {
+    editStateDeletionPreview = nil
+    guard let context, let state = deletableEditState(id: id) else { return nil }
+    let prompt = VoiceAgentEditStateDeletion(id: UUID(), stateID: state.id, name: String(state.name.prefix(120)))
+    editStateDeletionPreview = (prompt.id, state, context, ContinuousClock.now + .seconds(300))
+    return prompt
+  }
+
+  func executeEditStateDeletion(_ confirmation: VoiceAgentEditStateDeletion,
+                                validateContext: @escaping () throws -> Void) async throws -> [String: Any] {
+    guard let preview = editStateDeletionPreview, preview.id == confirmation.id else {
+      return volumeEditRejection("confirmation_required", "Deletion approval is missing or already used.")
+    }
+    editStateDeletionPreview = nil
+    do {
+      _ = try await callMCP("delete_edit_state", ["id": preview.state.id.uuidString, "confirm": true], validateContext: {
+        try validateContext()
+        guard self.context == preview.context, ContinuousClock.now < preview.expires,
+              self.deletableEditState(id: preview.state.id) == preview.state else { throw DeletionPreviewChanged() }
+      })
+    } catch is DeletionPreviewChanged {
+      return volumeEditRejection("edit_state_changed", "The approved inactive edit state changed, or approval expired. Nothing was deleted.")
+    } catch BorgVRVolumeEditingCommandError.busy {
+      return volumeEditRejection("edit_state_unavailable", "The edit state is now in use. Nothing was deleted.")
+    }
+    return ["structuredContent": volumeEditStatus()]
+  }
 
   func prepareVolumeEdit(arguments: [String: Any]) throws -> VoiceAgentVolumeEdit {
     volumeEditPreview = nil

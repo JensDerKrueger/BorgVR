@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import math
 import re
+from typing import Optional
 
 CUDA_IMAGE = "vllm/vllm-openai:v0.34.0@sha256:20fdb089454afbb324efa4110a2c025ff7b27cc1a086e07aa580b18df8ad1ce1"
 ROCM_IMAGE = "vllm/vllm-openai-rocm:v0.34.0@sha256:3cb773d23f063afa86291ef75773cdd486154ddea94c213300f4ed7cc42b7af1"
@@ -67,6 +68,33 @@ def identifier(value, optional=False):
 
 def profile_values(name):
     return {"BORGVR_" + key: value for key, value in {**BASE, **PROFILES[name]}.items()}
+
+
+@dataclass(frozen=True)
+class OpenAIConfig:
+    model: str
+    context: int
+    output_tokens: int
+    sequences: int
+    vision: bool = True
+    reasoning_effort: Optional[str] = None
+
+    @classmethod
+    def from_env(cls, env):
+        model = identifier(env.get("BORGVR_OPENAI_MODEL", "gpt-5.4-mini"))
+        context = number(env.get("BORGVR_CONTEXT_LENGTH", "65536"), 2048, 1048576, True)
+        effort = env.get("BORGVR_OPENAI_REASONING_EFFORT") or None
+        if effort is not None:
+            effort = choice(effort, ("none", "minimal", "low", "medium", "high", "xhigh", "max"))
+        return cls(model, context,
+                   number(env.get("BORGVR_MAX_OUTPUT_TOKENS", "4096"), 128, context - 1024, True),
+                   number(env.get("BORGVR_MAX_SEQS", "1"), 1, 16, True), reasoning_effort=effort)
+
+    def request_settings(self):
+        settings = {"max_tokens": self.output_tokens, "parallel_tool_calls": False, "openai_store": False}
+        if self.reasoning_effort is not None:
+            settings["openai_reasoning_effort"] = self.reasoning_effort
+        return settings
 
 
 @dataclass(frozen=True)

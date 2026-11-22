@@ -1,31 +1,15 @@
 """Optional TLS endpoints for minimized demonstration data, separate from chat."""
 
 import asyncio
-import logging
 import sqlite3
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from starlette.requests import ClientDisconnect
 
+from .learner_state import MAX_STATE_BYTES, decode_state
 from .workflow_learner import MAX_FILE_BYTES, decode_episode
 from .workflow_store import WorkflowError
-
-logger = logging.getLogger(__name__)
-
-
-async def run_workflow_worker(store, stop):
-    while not stop.is_set():
-        try:
-            if await asyncio.to_thread(store.process_one):
-                continue
-        except sqlite3.Error:
-            logger.warning("Workflow database temporarily unavailable")
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=0.5)
-        except TimeoutError:
-            pass
-
 
 def workflow_router(store):
     router = APIRouter(prefix="/v1/workflow")
@@ -65,8 +49,7 @@ def workflow_router(store):
     async def read_report(_, digest):
         return response(await asyncio.to_thread(store.report, digest))
 
-    async def upload(request, digest):
-        expected_corpus = corpus_guard(request)
+    async def bounded_json(request, limit):
         if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
             raise WorkflowError(415, "json_required")
         if request.headers.get("content-encoding", "identity").lower() != "identity":
@@ -75,19 +58,34 @@ def workflow_router(store):
         if lengths and (len(lengths) != 1 or not 1 <= len(lengths[0]) <= 10
                         or not lengths[0].isascii() or not lengths[0].isdigit() or int(lengths[0]) == 0):
             raise WorkflowError(400, "invalid_length")
-        if lengths and int(lengths[0]) > MAX_FILE_BYTES:
+        if lengths and int(lengths[0]) > limit:
             raise WorkflowError(413, "episode_too_large")
         data = bytearray()
         async with asyncio.timeout(10):
             async for chunk in request.stream():
-                if len(data) + len(chunk) > MAX_FILE_BYTES:
+                if len(data) + len(chunk) > limit:
                     raise WorkflowError(413, "episode_too_large")
                 data.extend(chunk)
         if lengths and len(data) != int(lengths[0]):
             raise WorkflowError(400, "invalid_length")
-        episode = decode_episode(bytes(data))
+        return bytes(data)
+
+    async def upload(request, digest):
+        expected_corpus = corpus_guard(request)
+        episode = decode_episode(await bounded_json(request, MAX_FILE_BYTES))
         created = await asyncio.to_thread(store.upload, digest, expected_corpus, episode)
         return response({"accepted": True, "created": created, "episode_id": episode.id}, 202 if created else 200)
+
+    async def read_state(_, digest):
+        value = await asyncio.to_thread(store.state, digest)
+        return response(value, 202 if value["status"] == "queued" else 200)
+
+    async def merge_state(request, digest):
+        corpus = corpus_guard(request)
+        raw = await bounded_json(request, MAX_STATE_BYTES)
+        episodes = await asyncio.to_thread(decode_state, raw)
+        imported = await asyncio.to_thread(store.merge, digest, corpus, episodes)
+        return response({"imported": imported}, 202 if imported else 200)
 
     async def clear(request, digest):
         return response(await asyncio.to_thread(store.clear, digest, corpus_guard(request)))
@@ -103,6 +101,14 @@ def workflow_router(store):
     @router.get("/report")
     async def report(request: Request):
         return await handle(request, read_report)
+
+    @router.get("/state")
+    async def state(request: Request):
+        return await handle(request, read_state)
+
+    @router.put("/state")
+    async def import_state(request: Request):
+        return await handle(request, merge_state)
 
     @router.delete("/corpus")
     async def delete(request: Request):

@@ -567,7 +567,7 @@ protocol BorgVRMCPCommandService: AnyObject {
     to outputURL: URL,
     normalizedIsoValue: Float?
   ) async throws -> BorgVRMCPIsoSurfaceExport
-  func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage
+  func captureScreenshot(includeAlpha: Bool, maxWidth: Int?) async throws -> BorgVRMCPImage
   func screenshotPositions(id: UUID) -> BorgVRScreenshotPositions?
 }
 
@@ -625,14 +625,22 @@ extension BorgVRMCPCommandService {
     }
   }
 
-  func captureScreenshot(to outputURL: URL?, includeAlpha: Bool, overwrite: Bool) async throws -> BorgVRMCPImage {
+  func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage {
+    try await captureScreenshot(includeAlpha: includeAlpha, maxWidth: nil)
+  }
+
+  func captureScreenshot(to outputURL: URL?, includeAlpha: Bool, overwrite: Bool,
+                         maxWidth: Int? = nil) async throws -> BorgVRMCPImage {
+    if let maxWidth, !(1...MetalScreenshotEncoder.maximumPreviewWidth).contains(maxWidth) {
+      throw BorgVRMCPCommandError.invalidArgument("max_width must be a positive integer up to \(MetalScreenshotEncoder.maximumPreviewWidth).")
+    }
     if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
-      return try await commandExecutor.performAction(.captureScreenshot(path: outputURL?.path, includeAlpha: includeAlpha),
+      return try await commandExecutor.performAction(.captureScreenshot(path: outputURL?.path, includeAlpha: includeAlpha, maxWidth: maxWidth),
         source: BorgVRCommandExecutionContext.source) {
-        try await self.captureScreenshot(to: outputURL, includeAlpha: includeAlpha, overwrite: overwrite)
+        try await self.captureScreenshot(to: outputURL, includeAlpha: includeAlpha, overwrite: overwrite, maxWidth: maxWidth)
       }
     }
-    let image = try await captureScreenshot(includeAlpha: includeAlpha)
+    let image = try await captureScreenshot(includeAlpha: includeAlpha, maxWidth: maxWidth)
     if let outputURL { try BorgVRAutomationFile.write(image.pngData, to: outputURL, overwrite: overwrite) }
     return image
   }
@@ -673,8 +681,9 @@ extension BorgVRMCPCommandService {
         case .deleteEditState(let id): try volumeEditing.deleteState(id)
         case .openDataset(let id): try await openDataset(id: id)
         case .closeDataset: try await closeDataset()
-        case .captureScreenshot(let path, let alpha):
-          _ = try await captureScreenshot(to: path.map { URL(fileURLWithPath: $0) }, includeAlpha: alpha, overwrite: true)
+        case .captureScreenshot(let path, let alpha, let maxWidth):
+          _ = try await captureScreenshot(to: path.map { URL(fileURLWithPath: $0) }, includeAlpha: alpha,
+                                          overwrite: true, maxWidth: maxWidth)
         case .captureExtendedScreenshot(let path, let alpha):
           _ = try await captureExtendedScreenshot(to: path.map { URL(fileURLWithPath: $0) },
             includeAlpha: alpha, overwrite: true)
@@ -848,6 +857,42 @@ extension BorgVRMCPCommandService {
     try setTransferFunction(.init(channel: channel, samples: tf.data))
   }
 
+  @discardableResult
+  func setTransferFunctionComponent(channel: Int, component: Int, points: [[Double]]) throws -> Int {
+    guard (0...3).contains(component), !points.isEmpty,
+          points.count <= TransferFunction1D.maximumEntryCount else {
+      throw BorgVRMCPCommandError.invalidArgument("Provide a component in 0...3 and 1...65536 control points.")
+    }
+    var previous = -1.0
+    for point in points {
+      guard point.count == 2, (0...1).contains(point[0]), (0...1).contains(point[1]), point[0] > previous else {
+        throw BorgVRMCPCommandError.invalidArgument("Each point must be [position, value] in 0...1, with strictly increasing positions.")
+      }
+      previous = point[0]
+    }
+
+    var samples = try transferFunction(channel: channel).validatedSamples()
+    let end = points.count - 1
+    var upper = 1
+    for index in samples.indices {
+      let position = Double(index) / Double(max(1, samples.count - 1))
+      let value: Double
+      if position <= points[0][0] {
+        value = points[0][1]
+      } else if position >= points[end][0] {
+        value = points[end][1]
+      } else {
+        while points[upper][0] < position { upper += 1 }
+        let a = points[upper - 1], b = points[upper]
+        let weight = (position - a[0]) / (b[0] - a[0])
+        value = a[1] + (b[1] - a[1]) * weight
+      }
+      samples[index][component] = UInt8((value * 255).rounded())
+    }
+    try setTransferFunction(.init(channel: channel, samples: samples))
+    return samples.count
+  }
+
   func saveTransferFunction(channel: Int, to url: URL, overwrite: Bool = false) throws {
     if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
       return try commandExecutor.performAction(.saveTransferFunction(channel: channel, path: url.path), source: .mcp) {
@@ -879,7 +924,7 @@ extension BorgVRMCPCommandService {
     try BorgVRAutomationFile.write(encoder.encode(document), to: url, overwrite: overwrite)
   }
 
-  func loadVisualizationState(from url: URL) throws {
+  func loadVisualizationState(from url: URL, beforeApplying: () throws -> Void = {}) throws {
     let data = try BorgVRAutomationFile.read(url, maximumBytes: 16_000_000)
     let document = try JSONDecoder().decode(BorgVRMCPVisualizationDocument.self, from: data)
     let view = try DatasetViewStateDocument.decode(from: document.viewState)
@@ -901,6 +946,7 @@ extension BorgVRMCPCommandService {
       _ = try transferFunction(channel: value.channel)
       _ = try value.validatedSamples()
     }
+    try beforeApplying()
     try restoreDatasetViewState(document.viewState)
     for value in document.transferFunctions { try setTransferFunction(value) }
     try setBackground(document.background)

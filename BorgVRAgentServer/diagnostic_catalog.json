@@ -88,6 +88,66 @@
     "name" : "select_edit_state"
   },
   {
+    "description" : "Create and select an empty personal edit state. Set duplicate:true to copy the current state instead. Name is optional. Read get_volume_edit_state first and reread state after the switch.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "duplicate" : {
+          "type" : "boolean"
+        },
+        "name" : {
+          "maxLength" : 120,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "create_edit_state"
+  },
+  {
+    "description" : "Rename a personal saved edit state. Read get_volume_edit_state first and use an exact UUID from savedStates. Does not select the state or alter its voxels.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "maxLength" : 36,
+          "minLength" : 36,
+          "type" : "string"
+        },
+        "name" : {
+          "maxLength" : 120,
+          "minLength" : 1,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id",
+        "name"
+      ],
+      "type" : "object"
+    },
+    "name" : "rename_edit_state"
+  },
+  {
+    "description" : "Delete one inactive personal edit state on explicit user request. Read get_volume_edit_state first and use an exact UUID from savedStates. The app requires local confirmation; no model argument can approve this. Do not retry a declined deletion.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "maxLength" : 36,
+          "minLength" : 36,
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "id"
+      ],
+      "type" : "object"
+    },
+    "name" : "delete_edit_state"
+  },
+  {
     "description" : "Choose the editable channels for subsequent erase\/restore operations. Read componentCount in get_volume_edit_state first. Channel numbers start at 1. Pass every channel number to edit all channels.",
     "inputSchema" : {
       "additionalProperties" : false,
@@ -877,12 +937,26 @@
     "name" : "save_visualization_state"
   },
   {
-    "description" : "Capture a PNG, with screenshotId when pixel positions are available. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.",
+    "description" : "Load a saved BorgVR visualization JSON for the open dataset. The user chooses the file locally. No arguments or file paths. Changes the presentation, not voxels or annotations.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {},
+      "type" : "object"
+    },
+    "name" : "load_visualization_state"
+  },
+  {
+    "description" : "Capture a PNG, with screenshotId when pixel positions are available. Optional max_width limits the PNG width in pixels without cropping or upscaling; omit it for full resolution. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
         "include_alpha" : {
           "type" : "boolean"
+        },
+        "max_width" : {
+          "maximum" : 16384,
+          "minimum" : 1,
+          "type" : "integer"
         }
       },
       "type" : "object"

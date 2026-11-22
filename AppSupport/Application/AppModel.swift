@@ -9,6 +9,7 @@ final class AppModel: ObservableObject {
     _ id: UUID,
     _ url: URL?,
     _ accessURL: URL?,
+    _ maxWidth: Int?,
     _ completion: @escaping (Result<URL, Error>) -> Void
   ) -> Void
   typealias RenderScreenshotCancelHandler = (_ id: UUID, _ error: Error) -> Void
@@ -705,21 +706,22 @@ final class AppModel: ObservableObject {
     id: UUID = UUID(),
     to url: URL?,
     accessURL: URL?,
+    maxWidth: Int? = nil,
     completion: @escaping (Result<URL, Error>) -> Void
   ) -> UUID {
     if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
       Task { @MainActor in
         do {
           var output: URL?
-          try await commandExecutor.performResolvedAction(.captureScreenshot(path: url?.path, includeAlpha: true),
+          try await commandExecutor.performResolvedAction(.captureScreenshot(path: url?.path, includeAlpha: true, maxWidth: maxWidth),
             source: BorgVRCommandExecutionContext.source) {
             let saved = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-              self.requestRenderScreenshot(id: id, to: url, accessURL: accessURL) {
+              self.requestRenderScreenshot(id: id, to: url, accessURL: accessURL, maxWidth: maxWidth) {
                 continuation.resume(with: $0)
               }
             }
             output = saved
-            return .captureScreenshot(path: saved.path, includeAlpha: true)
+            return .captureScreenshot(path: saved.path, includeAlpha: true, maxWidth: maxWidth)
           }
           if let output { completion(.success(output)) }
         } catch { completion(.failure(error)) }
@@ -730,7 +732,7 @@ final class AppModel: ObservableObject {
       completion(.failure(AppModelError.rendererUnavailable))
       return id
     }
-    renderScreenshotHandler(id, url, accessURL, completion)
+    renderScreenshotHandler(id, url, accessURL, maxWidth, completion)
     return id
   }
 

@@ -472,6 +472,18 @@ final class BorgVRScriptRunner: ObservableObject {
     register("screenshot", [.bool]) { [weak self] args in
       self?.takeScreenshot(filename: nil, includeAlpha: args.bool(0)) ?? .callbackError
     }
+    register("screenshot", [.int]) { [weak self] args in
+      self?.takeScreenshot(filename: nil, maxWidth: args.int(0)) ?? .callbackError
+    }
+    register("screenshot", [.bool, .int]) { [weak self] args in
+      self?.takeScreenshot(filename: nil, includeAlpha: args.bool(0), maxWidth: args.int(1)) ?? .callbackError
+    }
+    register("screenshot", [.string, .int]) { [weak self] args in
+      self?.takeScreenshot(filename: args.string(0), maxWidth: args.int(1)) ?? .callbackError
+    }
+    register("screenshot", [.string, .bool, .int]) { [weak self] args in
+      self?.takeScreenshot(filename: args.string(0), includeAlpha: args.bool(1), maxWidth: args.int(2)) ?? .callbackError
+    }
     register("extendedscreenshot", [.string]) { [weak self] args in
       self?.takeScreenshot(filename: args.string(0), extended: true) ?? .callbackError
     }
@@ -704,6 +716,13 @@ final class BorgVRScriptRunner: ObservableObject {
       return self.performAutomation { service in
         let samples = try JSONDecoder().decode([[UInt8]].self, from: Data(args.string(1).utf8))
         try service.setTransferFunction(.init(channel: args.int(0), samples: samples))
+      }
+    }
+    register("settransferfunctioncomponent", [.int, .int, .string]) { [weak self] args in
+      guard let self else { return .callbackError }
+      return self.performAutomation { service in
+        let points = try JSONDecoder().decode([[Double]].self, from: Data(args.string(2).utf8))
+        try service.setTransferFunctionComponent(channel: args.int(0), component: args.int(1), points: points)
       }
     }
     for name in ["loadtf", "settffile"] {
@@ -1529,8 +1548,9 @@ final class BorgVRScriptRunner: ObservableObject {
     }
   }
 
-  private func takeScreenshot(filename: String?, includeAlpha: Bool = true, extended: Bool = false) -> CommandResultCode {
-    let key = "\(filename ?? "<default>"):\(includeAlpha):\(extended)"
+  private func takeScreenshot(filename: String?, includeAlpha: Bool = true,
+                              maxWidth: Int? = nil, extended: Bool = false) -> CommandResultCode {
+    let key = "\(filename ?? "<default>"):\(includeAlpha):\(maxWidth ?? 0):\(extended)"
     if pendingScreenshotKey == key {
       if let result = pendingScreenshotResult {
         pendingScreenshotKey = nil
@@ -1556,7 +1576,7 @@ final class BorgVRScriptRunner: ObservableObject {
           if extended {
             _ = try await service.captureExtendedScreenshot(to: url, includeAlpha: includeAlpha, overwrite: true)
           } else {
-            _ = try await service.captureScreenshot(to: url, includeAlpha: includeAlpha, overwrite: true)
+            _ = try await service.captureScreenshot(to: url, includeAlpha: includeAlpha, overwrite: true, maxWidth: maxWidth)
           }
         }
         self?.logInfo("Screenshot saved: \(url.path)")

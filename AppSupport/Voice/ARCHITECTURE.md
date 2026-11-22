@@ -51,6 +51,10 @@ vermittelt lokale Datei-/Ordnerauswahl, aber kein Werkzeug akzeptiert Dateipfade
 Server. Import und Fusion laufen im Adapter über den gemeinsamen Konvertierungsdienst;
 die App-Wurzel liefert nur Einstellungen, das Datensatzverzeichnis und die Freigabe für
 einen exklusiven Import. Ein Abbruch folgt dem vorhandenen Konvertierungs-Token.
+Darstellungs-JSON wird ausschließlich aus einer lokal gewählten Datei geladen.
+Anlegen und Duplizieren liefern einen verifizierten Wechsel des Editierkontexts.
+Die lokale Löschfreigabe ist an den angezeigten inaktiven Stand gebunden und
+wird vor der Ausführung erneut geprüft.
 
 ## Gespräch und Ausführungsbelege
 
@@ -85,8 +89,9 @@ Aktivierung in den Einstellungen, startet aber weder Mikrofonaufnahme noch einen
 Der Bridge-Kontext ist ohne Datensatz wirklich `nil`. Im ausgehandelten Protokollzusatz
 `application_session` wird `dataset_id: null` übertragen. Ohne renderbereiten Datensatz
 geben Client und Server `get_application_state`, `search_datasets`, `open_dataset`
-und `get_command_history` frei. Die Historie zeigt dort nur App-Kontext-Belege.
-Schließen und Import-/Fusionsjobs sind noch nachfolgende Ausbauschritte, keine implizite Freigabe.
+und `get_command_history` sowie die lokalen Import-/Fusionswerkzeuge frei.
+Die Historie zeigt dort nur App-Kontext-Belege. Schließen wechselt zurück in diesen
+Kontext; das Gespräch bleibt bestehen.
 
 Bei einem Wechsel im Leerlauf werden Kontext-ID und Werkzeugkatalog neu abgeglichen.
 Die Verbindung und der sichtbare Gesprächsverlauf bleiben erhalten. Der Server übernimmt

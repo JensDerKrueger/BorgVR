@@ -333,10 +333,18 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   Fullscreen transitions finish before the next command continues.
 - `get_transfer_function` / `set_transfer_function` expose each zero-based channel as straight
   RGBA bytes (0...255). Compact ramps are linearly resampled to the current table size.
+  `set_transfer_function_component` changes only one component (0=R, 1=G, 2=B, 3=A)
+  using normalized `[position, value]` pairs with strictly increasing positions.
+  Values interpolate linearly between points and hold the endpoint values outside them.
+  For example, GSC `settransferfunctioncomponent 0 2 '[[0.25,0],[0.75,1]]'` creates a blue ramp
+  without changing the red, green or alpha values.
   `load_transfer_function` / `save_transfer_function` use native `.tf1d` files.
 - `get_background` / `set_background` expose system, solid, and vertical-gradient screen
   backgrounds with primary/secondary RGBA colors (0...1). visionOS retains passthrough.
-  `capture_screenshot` supports `include_alpha` (default true) and an optional `output_path`.
+  `capture_screenshot` supports `include_alpha` (default true), optional `output_path`, and
+  optional `max_width` in pixels (1–16384). A smaller width preserves the aspect ratio
+  without cropping; omitting the option preserves the original size and larger values
+  never upscale. For example, GSC `screenshot "preview.png" 100` writes a 100-pixel preview.
   Without alpha, the configured screen background is composited into the PNG; on visionOS
   passthrough is replaced by black. With alpha, only the transparent render image is captured.
 - **Extended screenshot:** In the macOS **Rendering** menu, use **Extended Screenshot**.

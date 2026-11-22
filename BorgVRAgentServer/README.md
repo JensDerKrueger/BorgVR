@@ -448,6 +448,58 @@ agent token as a password. It is currently **one installation-wide token**, not 
 identity/user-management system. Devices sharing it have equal access to the allowed tools.
 Use `--capabilities` instead of `--smoke` for the tool/image check when calling the client directly.
 
+### BorgVR expert strategies
+
+The grouped English rules are bundled with the native apps from
+`AppSupport/Voice/expert-knowledge.toml`. Each rule has a situation or goal, steps,
+and optional tool or parameter requirements. BorgVR sends this bundle at connection time.
+Once both sides support the feature, editing the rules only requires a new app build;
+older clients and servers can still connect without the bundle.
+
+The agent image includes a local CPU encoder
+([Multilingual E5 Small](https://huggingface.co/intfloat/multilingual-e5-small),
+[quantized ONNX export](https://huggingface.co/Xenova/multilingual-e5-small/tree/761b726dd34fb83930e26aab4e9ac3899aa1fa78)).
+It does not send searches to a translation service. In source-only installations, set
+`BORGVR_STRATEGY_ENCODER` to a directory containing the `model.onnx` and `tokenizer.json`
+pinned in the Dockerfile. Use `BORGVR_STRATEGY_TEST_ENCODER` for the bilingual cases
+in `tests/test_strategies.py`.
+
+### Separate OpenAI test instance
+
+This optional Docker Compose project runs alongside the local vLLM installation. It has its
+own credentials and uses no GPU. An OpenAI API project key is required; API billing is
+separate from ChatGPT subscriptions.
+
+On the Linux server, in `BorgVRAgentServer`, run as your normal user:
+
+```
+./setup-openai.sh init
+./setup-openai.sh key
+./setup-openai.sh start
+./setup-openai.sh test
+```
+
+The hidden prompt in `key` writes `.openai-test/openai_api_key` with mode `0600`.
+Do not put that key into BorgVR, `.env`, or the command line. Only Docker commands use
+`sudo`. The test checks tool calling and vision with a synthetic image. To change models,
+edit `.openai-test/compose.env` and run `start` again; the model must support image inputs
+and tool calling. Set `BORGVR_OPENAI_REASONING_EFFORT` there to a level supported by the
+model, such as `low` or `medium` for GPT-6.2 Sol. Leave it unset or empty to keep the API
+default. Run `start` to apply it and `test` to see the configured level.
+Run `./setup-openai.sh stop` to stop only the test instance.
+
+The endpoint listens only on `127.0.0.1:8767` on the server. Open an SSH tunnel on the Mac
+(replace `ai2` with the server's SSH host):
+
+```
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:8767:127.0.0.1:8767 ai2
+```
+
+In BorgVR, set `https://127.0.0.1:8767` and import `.openai-test/tls/server.crt` and
+`.openai-test/agent_token` from the server. The BorgVR token is **not** the OpenAI API key.
+Keep the tunnel open during testing. Prompts, tool results, and any screenshots shared by
+the client are sent to OpenAI. Start with synthetic or anonymized datasets.
+
 ## 5. Connect the native app
 
 First complete the server test and ensure the server is reachable from the device.
@@ -688,9 +740,9 @@ origins and URL query parameters are rejected; bearer tokens belong in the autho
 
 Prompts, screenshots, tool payloads and conversations are not persisted by the agent or
 included in its logs. vLLM request logging and usage telemetry are disabled. Conversations
-exist in RAM while connected and are discarded at disconnect. Downloads/builds contact
-external package/model hosts; inference uses the local model. There is no configured cloud
-fallback. Authenticated clients explicitly decide which screenshots/metadata to transmit.
+exist in RAM while connected and are discarded at disconnect. The default installation uses
+local inference with no cloud fallback. Only the separately configured OpenAI test instance
+sends requests to OpenAI. Authenticated clients decide which screenshots/metadata to transmit.
 
 ## 7. Operations and updates
 

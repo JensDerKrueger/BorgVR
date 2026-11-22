@@ -15,7 +15,7 @@ struct VoiceAgentFileSelection: Identifiable, Equatable {
   let id = UUID()
   let title: String
   let kind: Kind
-  enum Kind { case file, folder }
+  enum Kind { case file, folder, visualization }
 }
 
 struct VoiceAgentImportStatus: Equatable {
@@ -41,6 +41,12 @@ struct VoiceAgentAnnotationDeletion: Identifiable {
   let scope: String
   let markerCount: Int
   let measurementCount: Int
+}
+
+struct VoiceAgentEditStateDeletion: Identifiable {
+  let id: UUID
+  let stateID: UUID
+  let name: String
 }
 
 struct VoiceAgentVolumeEdit: Identifiable {
@@ -81,6 +87,9 @@ protocol VoiceAgentApplicationBridge: AnyObject {
   func prepareAnnotationDeletion(scope: String, targetID: String?) throws -> VoiceAgentAnnotationDeletion?
   func executeAnnotationDeletion(_ confirmation: VoiceAgentAnnotationDeletion,
                                 validateContext: @escaping () throws -> Void) async throws -> [String: Any]
+  func prepareEditStateDeletion(id: UUID) -> VoiceAgentEditStateDeletion?
+  func executeEditStateDeletion(_ confirmation: VoiceAgentEditStateDeletion,
+                                validateContext: @escaping () throws -> Void) async throws -> [String: Any]
   func prepareVolumeEdit(arguments: [String: Any]) throws -> VoiceAgentVolumeEdit
   func executeVolumeEdit(_ confirmation: VoiceAgentVolumeEdit,
                          validateContext: @escaping () throws -> Void) async throws -> [String: Any]
@@ -101,6 +110,9 @@ extension VoiceAgentApplicationBridge {
   func captureWorkflowScreenshot(in context: VoiceAgentContext) async throws -> Data { throw VoiceAgentError.commandFailed }
   func prepareAnnotationDeletion(scope: String, targetID: String?) throws -> VoiceAgentAnnotationDeletion? { throw VoiceAgentError.commandFailed }
   func executeAnnotationDeletion(_ confirmation: VoiceAgentAnnotationDeletion,
+                                validateContext: @escaping () throws -> Void) async throws -> [String: Any] { throw VoiceAgentError.commandFailed }
+  func prepareEditStateDeletion(id: UUID) -> VoiceAgentEditStateDeletion? { nil }
+  func executeEditStateDeletion(_ confirmation: VoiceAgentEditStateDeletion,
                                 validateContext: @escaping () throws -> Void) async throws -> [String: Any] { throw VoiceAgentError.commandFailed }
   func prepareVolumeEdit(arguments: [String: Any]) throws -> VoiceAgentVolumeEdit { throw VoiceAgentError.commandFailed }
   func executeVolumeEdit(_ confirmation: VoiceAgentVolumeEdit,

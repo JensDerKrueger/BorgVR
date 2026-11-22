@@ -68,12 +68,16 @@ def read_inventory(root=ROOT):
         return set(ast.literal_eval(assignment.value.args[0]))
     agent = tool_set("ALLOWED_TOOLS")
     local_client = tool_set("LOCAL_CLIENT_TOOLS")
-    client = swift_set(read("AppSupport/Voice/VoiceAgentProtocol.swift"), "allowed")
+    voice_policy = read("AppSupport/Voice/VoiceAgentProtocol.swift")
+    client = swift_set(voice_policy, "allowed")
+    typed_only = swift_set(voice_policy, "typedOnlyTools")
     diagnostic = {item["name"] for item in json.loads(read("BorgVRAgentServer/diagnostic_catalog.json"))}
     if not agent == client == diagnostic or agent - mcp != local_client:
         raise ValueError("Agent server/client/diagnostic catalogs differ")
+    if typed_only & agent or not typed_only <= mcp:
+        raise ValueError("Typed-only tools must be MCP tools outside the legacy catalog")
     internal = set()
-    for file in ("BorgVRAgentServer/borgvr_agent/app.py", "BorgVRAgentServer/borgvr_agent/collaboration.py"):
+    for file in ("BorgVRAgentServer/borgvr_agent/agent_factory.py", "BorgVRAgentServer/borgvr_agent/collaboration.py"):
         internal.update(node.args[0].id for node in ast.walk(ast.parse(read(file))) if isinstance(node, ast.Call) and
                         isinstance(node.func, ast.Name) and node.func.id == "Tool" and node.args and
                         isinstance(node.args[0], ast.Name))
@@ -84,7 +88,7 @@ def read_inventory(root=ROOT):
     settings = {platform: registered_settings(read(file)) for platform, file in SETTINGS.items()}
     if recorded & local or not set.union(*settings.values()) <= recorded | local:
         raise ValueError("A registered setting has no unambiguous GSC recording policy")
-    return {"symbols": symbols, "mcp": mcp, "agent": agent, "local_client": local_client,
+    return {"symbols": symbols, "mcp": mcp, "agent": agent | typed_only, "local_client": local_client,
             "internal_agent": internal, "gsc": gsc,
             "settings": settings, "recorded_settings": recorded, "local_settings": local}
 

@@ -4,7 +4,7 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 
 from borgvr_agent.protocol import Hello
-from test_agent import STATE, ROTATE, connection, definition, hello, model_steps, open_session, reply, user
+from test_agent import EDIT_STATUS, STATE, ROTATE, connection, definition, hello, model_steps, open_session, reply, user
 
 
 SEARCH = definition("search_datasets", {"query": {"type": "string", "maxLength": 256},
@@ -193,4 +193,52 @@ def test_edit_state_transition_must_match_the_requested_scope(result, dataset):
         ws.send_json(reply(ws.receive_json()))
         ws.send_json(reply(ws.receive_json(), result=result, dataset_transition={
             "dataset_id": dataset, "context_id": "edit", "tools": WORKFLOW_TOOLS}))
+        assert ws.receive_json()["code"] == "invalid_message"
+
+
+CREATE = definition("create_edit_state", {"name": {"type": "string"}, "duplicate": {"type": "boolean"}})
+CREATE_TOOLS = [STATE, EDIT_STATUS, CREATE]
+EDIT_RECEIPT = {"available": True, "shared": False, "createdStateID": EDIT_ID, "activeStateID": EDIT_ID}
+
+
+def test_created_edit_state_switches_context_without_replaying_creation():
+    steps = [("get_application_state", {}), ("get_volume_edit_state", {}),
+             ("create_edit_state", {"name": "Review"}),
+             ("get_application_state", {}), ("create_edit_state", {"name": "Review", "duplicate": False}),
+             "New edit state ready."]
+    with connection(model_steps(*steps)) as client, open_session(client) as ws:
+        ws.send_json(hello(CREATE_TOOLS))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        ws.send_json(reply(ws.receive_json()))
+        ws.send_json(reply(ws.receive_json(), result={"available": True, "shared": False}))
+        create = ws.receive_json()
+        assert create["name"] == "create_edit_state"
+        ws.send_json(reply(create, result=EDIT_RECEIPT, dataset_transition={
+            "dataset_id": "test-volume", "context_id": "created", "tools": CREATE_TOOLS}))
+        assert ws.receive_json()["context_id"] == "created"
+        fresh = ws.receive_json()
+        assert fresh["name"] == "get_application_state" and fresh["context_id"] == "created"
+        ws.send_json(reply(fresh))
+        assert ws.receive_json()["text"] == "New edit state ready."
+        assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("previous,result,dataset", [
+    (None, {**EDIT_RECEIPT, "createdStateID": "not-a-uuid"}, "test-volume"),
+    (None, EDIT_RECEIPT, "another-dataset"),
+    (EDIT_ID, EDIT_RECEIPT, "test-volume"),
+])
+def test_creation_requires_a_new_verified_edit_state(previous, result, dataset):
+    with connection(model_steps(("get_application_state", {}), ("get_volume_edit_state", {}),
+                                ("create_edit_state", {"duplicate": True}))) as client, open_session(client) as ws:
+        ws.send_json(hello(CREATE_TOOLS))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        ws.send_json(reply(ws.receive_json()))
+        ws.send_json(reply(ws.receive_json(), result={"available": True, "shared": False, "activeStateID": previous}))
+        ws.send_json(reply(ws.receive_json(), result=result, dataset_transition={
+            "dataset_id": dataset, "context_id": "created", "tools": CREATE_TOOLS}))
         assert ws.receive_json()["code"] == "invalid_message"

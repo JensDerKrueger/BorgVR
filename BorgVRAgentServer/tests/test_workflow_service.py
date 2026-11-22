@@ -38,8 +38,9 @@ def send(client, credentials, corpus, data):
     return client.post(PREFIX + "/episodes", headers={**credentials, "X-BorgVR-Corpus": corpus}, json=data)
 
 
-def wait_report(client, credentials):
+def wait_report(client, credentials, store):
     for _ in range(100):
+        store.process_one()
         reply = client.get(PREFIX + "/report", headers=credentials).json()
         if reply["status"] == "ready":
             return reply["report"]
@@ -70,8 +71,8 @@ def test_two_profiles_same_server_id_do_not_mix(store):
         assert send(client, auth(b), cb, payload(1, ("volume",))).status_code == 202
         assert send(client, auth(a2), ca, payload(1)).json()["created"] is False
         assert send(client, auth(a2), ca, payload(1, ("volume",))).json() == {"error": "episode_conflict"}
-        assert wait_report(client, auth(a2))["patterns"][0]["opening_sequence"] == ["clipping"]
-        assert wait_report(client, auth(b))["episodes"] == 1
+        assert wait_report(client, auth(a2), store)["patterns"][0]["opening_sequence"] == ["clipping"]
+        assert wait_report(client, auth(b), store)["episodes"] == 1
         denied = client.delete(PREFIX + "/corpus", headers={**auth(b), "X-BorgVR-Corpus": ca})
         assert denied.status_code == 409
         assert store.revoke_device(a["profile_id"], a2["device_id"])
@@ -126,7 +127,7 @@ def test_evidence_upload_round_trips_without_leaking_into_baseline_report(store)
             "version": 1, "demonstration": data,
             "screenshots": {"before_png_base64": "AA==", "after_png_base64": "AA=="},
         }).status_code == 400
-        assert wait_report(client, auth(device))["episodes"] == 1
+        assert wait_report(client, auth(device), store)["episodes"] == 1
 
     assert store.upload(digest, corpus, decode_episode(json.dumps(payload(2)).encode()))
     def analyze(rows):
@@ -152,7 +153,7 @@ def test_clear_does_not_revive_deleted_corpus_or_affect_another_user(store):
         assert result.status_code == 200 and result.json()["corpus_id"] != corpus_a
         assert client.get(PREFIX + "/report", headers=auth(a)).json()["status"] == "empty"
         assert send(client, auth(a), corpus_a, payload(1)).status_code == 409
-        assert wait_report(client, auth(b))["episodes"] == 1
+        assert wait_report(client, auth(b), store)["episodes"] == 1
 
 
 def test_request_bounds_and_storage_limit(store):

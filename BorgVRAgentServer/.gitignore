@@ -1,4 +1,5 @@
 .env
+.openai-test/
 runtime/
 __pycache__/
 .pytest_cache/

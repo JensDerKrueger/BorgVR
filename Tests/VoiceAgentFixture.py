@@ -2,6 +2,7 @@
 import asyncio
 from dataclasses import replace
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import socket
@@ -19,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "BorgVRAgentServer"
 from configure import create_configuration
 from borgvr_agent.app import Settings, create_app
 from borgvr_agent.context import SUMMARY_MARKER
+from borgvr_agent.learner_worker import work as run_learner
+from borgvr_agent.strategies import STRATEGY_MARKER, MultilingualEncoder
 from borgvr_agent.workflow_store import WorkflowStore
 from model_config import ModelConfig
 
@@ -51,9 +54,15 @@ async def model(messages, info):
     resumed = any(isinstance(part, UserPromptPart) and not isinstance(part.content, str) and
                   "explicitly chose to continue" in str(part.content)
                   for message in messages for part in message.parts)
+    created_state = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
+                        '"tool":"create_edit_state"' in str(part.content) and '"transition_completed":true' in str(part.content)
+                        for message in messages for part in message.parts)
     latest = next((i for i in reversed(range(len(messages))) if any(
         isinstance(part, UserPromptPart) and isinstance(part.content, str) and
         not part.content.startswith(SUMMARY_MARKER) for part in messages[i].parts)), 0)
+    strategy_hints = [value for message in messages for part in message.parts
+                      if isinstance(part, UserPromptPart) and not isinstance(part.content, str)
+                      for value in part.content if isinstance(value, str) and value.startswith(STRATEGY_MARKER)]
     messages = messages[latest:]
     returned = [part for message in messages for part in message.parts if isinstance(part, ToolReturnPart)]
     user = next((part.content for message in messages for part in message.parts
@@ -62,17 +71,21 @@ async def model(messages, info):
     opening_receipt = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
                           '"opening_completed":true' in str(part.content)
                           for message in messages for part in message.parts)
+    if user in {"Mach einen kleinen Screenshot mit 100 Pixeln Breite.", "Take a low-resolution screenshot for a quick preview."}:
+        assert len(strategy_hints) == 1
+        assert json.loads(strategy_hints[0].removeprefix(STRATEGY_MARKER))[0]["id"] == "inspection.preview"
+        return ModelResponse(parts=[TextPart("Preview strategy selected.")])
     if user == "slow-acknowledgement":
         await asyncio.sleep(1)
         return ModelResponse(parts=[TextPart("Slow request completed.")])
     elif user == "duplicate-response":
-        text = "Repeated assistant answer."
+        text = "I'm checking the current state."
         if len(returned) < 2:
-            return ModelResponse(parts=[ToolCallPart("report_progress", {"text": text if not returned else "  " + text + "\n"})])
-        return ModelResponse(parts=[TextPart(text)])
+            return ModelResponse(parts=[ToolCallPart("report_progress", {"activity": "read_state", "language": "en"})])
+        return ModelResponse(parts=[TextPart("  " + text + "\n")])
     elif user == "distinct-responses":
         if not returned:
-            return ModelResponse(parts=[ToolCallPart("report_progress", {"text": "Distinct progress update."})])
+            return ModelResponse(parts=[ToolCallPart("report_progress", {"activity": "verify_result", "language": "en"})])
         return ModelResponse(parts=[TextPart("Distinct final answer.")])
     elif user == "invalid-clipping-recovery":
         if len(returned) >= 3:
@@ -204,13 +217,55 @@ async def model(messages, info):
         return ModelResponse(parts=[TextPart("Dataset ready." if state["rendererReady"] else "Start menu ready.")])
     elif user == "pick-position":
         if not returned:
-            return ModelResponse(parts=[ToolCallPart("capture_screenshot", {}, tool_call_id="image")])
+            return ModelResponse(parts=[ToolCallPart("capture_screenshot", {"max_width": 100}, tool_call_id="image")])
         if len(returned) == 1:
+            assert (returned[0].content["width"], returned[0].content["height"]) == (100, 75)
             capture_id = returned[0].content["screenshotId"]
             return ModelResponse(parts=[ToolCallPart("pick_screenshot_positions",
                 {"screenshot_id": capture_id, "points": [{"x": 0.5, "y": 0.5}]}, tool_call_id="pick")])
         assert returned[1].content == {"available": True, "positions": [[0.5, 0.5, 0]]}
         return ModelResponse(parts=[TextPart("Screenshot position verified.")])
+    elif user in {"load-view", "cancel-load-view"}:
+        steps = [("get_application_state", {}), ("load_visualization_state", {})]
+        if len(returned) >= 2:
+            result = returned[-1].content
+            if user == "cancel-load-view":
+                assert result["code"] == "user_declined"
+                return ModelResponse(parts=[TextPart("View selection cancelled.")])
+            assert result == {"loaded": True}
+            return ModelResponse(parts=[TextPart("View loaded.")])
+    elif user in {"edit-state-create", "edit-state-duplicate"}:
+        duplicate = user == "edit-state-duplicate"
+        target = "Assistant duplicate" if duplicate else "Assistant empty"
+        if created_state:
+            steps = [("get_application_state", {}), ("get_volume_edit_state", {})]
+            if len(returned) >= 2:
+                state = returned[-1].content
+                assert any(item["id"] == state["activeStateID"] and item["name"] == target for item in state["savedStates"])
+                return ModelResponse(parts=[TextPart("New edit state active.")])
+        else:
+            steps = [("get_application_state", {}), ("get_volume_edit_state", {}),
+                     ("create_edit_state", {"name": target, "duplicate": duplicate})]
+    elif user in {"edit-state-rename", "edit-state-delete", "edit-state-decline-delete"}:
+        steps = [("get_application_state", {}), ("get_volume_edit_state", {})]
+        renaming = user == "edit-state-rename"
+        if len(returned) >= 2:
+            target = next(row["id"] for row in returned[1].content["savedStates"] if
+                          row["name"] == ("Assistant empty" if renaming else "Assistant delete target"))
+            command = ("rename_edit_state", {"id": target, "name": "Assistant renamed"}) if renaming else (
+                "delete_edit_state", {"id": target})
+            steps.append(command)
+            if user == "edit-state-decline-delete":
+                steps.append(command)
+                if len(returned) >= 4:
+                    assert all(part.content["code"] == "user_declined" for part in returned[-2:])
+                    return ModelResponse(parts=[TextPart("Edit state deletion declined.")])
+            elif len(returned) >= 3:
+                states = returned[-1].content["savedStates"]
+                assert any(row["id"] == target and row["name"] == "Assistant renamed" for row in states) is renaming
+                if not renaming:
+                    assert not any(row["id"] == target for row in states)
+                return ModelResponse(parts=[TextPart("Edit state renamed." if renaming else "Edit state deleted.")])
     elif user == "collaborate":
         supplied_view = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
                             '"user_supplied_requested_view":true' in str(part.content)
@@ -228,7 +283,7 @@ async def model(messages, info):
         if len(returned) >= 2:
             await asyncio.sleep(30)
             raise RuntimeError("Interrupted request was not cancelled")
-        steps = [("get_application_state", {}), ("report_progress", {"text": "Old request waiting."})]
+        steps = [("get_application_state", {}), ("report_progress", {"activity": "wait_for_render", "language": "en"})]
     elif user == "replace-at-tool":
         if len(returned) >= 2:
             return ModelResponse(parts=[TextPart("Old render wait completed.")])
@@ -249,7 +304,7 @@ async def model(messages, info):
                 raise RuntimeError("Synthetic verification failure")
             raise ModelContextWindowExceededError("test", "Synthetic context limit")
     else:
-        steps = [("get_application_state", {}), ("report_progress", {"text": "Inspecting the synthetic volume."}),
+        steps = [("get_application_state", {}), ("report_progress", {"activity": "inspect_view", "language": "en"}),
                  ("rotate_view", {"axis": [0, 1, 0], "degrees": 30}),
                  ("set_transfer_function", {"channel": 0, "samples": [[0, 0, 0, 0], [255, 64, 32, 255]]}),
                  ("wait_until_rendered", {"after_frame": 0, "timeout_seconds": 1}),
@@ -268,11 +323,15 @@ port = listener.getsockname()[1]
 workflow_path = root / "workflow.sqlite3"
 workflow = WorkflowStore(workflow_path)
 (root / "workflow-fixture.json").write_text(json.dumps([workflow.create_profile(), workflow.create_profile()]))
+learner_stop = threading.Event()
+threading.Thread(target=run_learner, args=(WorkflowStore(workflow_path), learner_stop), daemon=True).start()
+encoder_dir = os.environ.get("BORGVR_STRATEGY_TEST_ENCODER")
 server = uvicorn.Server(uvicorn.Config(create_app(Settings(token=token, vllm_token="test-token-" * 8,
     # FunctionModel estimates serialized SDK history, not real vLLM tokens. Keep
     # this execution-budget fixture separate from the dedicated context tests.
     inference=replace(ModelConfig.from_env({}), context=65536),
-    vllm_url=f"http://127.0.0.1:{catalog.server_port}/v1", workflow_database=workflow_path), FunctionModel(model)),
+    vllm_url=f"http://127.0.0.1:{catalog.server_port}/v1", workflow_database=workflow_path), FunctionModel(model),
+    strategy_encoder=MultilingualEncoder(Path(encoder_dir)) if encoder_dir else None),
     ssl_certfile=str(root / "runtime/tls/server.crt"), ssl_keyfile=str(root / "runtime/tls/server.key"),
     ws="websockets-sansio", ws_max_size=4194304, access_log=False, log_level="error"))
 thread = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)
@@ -283,4 +342,7 @@ while not server.started and thread.is_alive() and time.monotonic() < deadline:
 if not server.started:
     raise RuntimeError("Fixture did not start")
 (root / "ready.json").write_text(json.dumps({"port": port}))
-thread.join()
+try:
+    thread.join()
+finally:
+    learner_stop.set()

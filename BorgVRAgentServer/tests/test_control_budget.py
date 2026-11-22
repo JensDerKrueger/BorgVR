@@ -21,7 +21,7 @@ from test_agent import STATE, ROTATE, SCREENSHOT, SETTINGS, connection, hello, o
     (1, 1, 44, 0, "answer"), (1, 1, 1, 150, "answer"),
 ])
 def test_budget_reserves_calls_and_time_for_a_final_answer(native, tools, requests, elapsed, phase):
-    session = SimpleNamespace(native_calls=native, settings=SETTINGS, run_started=time.monotonic() - elapsed)
+    session = SimpleNamespace(turn=SimpleNamespace(native_calls=native, run_started=time.monotonic() - elapsed), settings=SETTINGS)
     ctx = SimpleNamespace(usage=SimpleNamespace(tool_calls=tools, requests=requests))
     budget = ControlBudget(session)
     assert budget.phase(ctx) == phase
@@ -30,7 +30,7 @@ def test_budget_reserves_calls_and_time_for_a_final_answer(native, tools, reques
 
 
 def test_budget_stops_advertising_tools_and_restricts_final_output_tokens():
-    session = SimpleNamespace(native_calls=18, settings=SETTINGS, run_started=None)
+    session = SimpleNamespace(turn=SimpleNamespace(native_calls=18, run_started=None), settings=SETTINGS)
     budget = ControlBudget(session)
     ctx = SimpleNamespace(usage=SimpleNamespace(tool_calls=18, requests=18))
     tools = [SimpleNamespace(name=name) for name in ("rotate_view", "set_transform", "set_clipping",
@@ -39,7 +39,7 @@ def test_budget_stops_advertising_tools_and_restricts_final_output_tokens():
     async def check():
         allowed = await budget.prepare_tools(ctx, tools)
         assert {tool.name for tool in allowed} == {"set_transform", "set_clipping", "wait_until_rendered", "capture_screenshot"}
-        session.native_calls = MAX_NATIVE_CALLS
+        session.turn.native_calls = MAX_NATIVE_CALLS
         assert await budget.prepare_tools(ctx, tools) == []
         request = SimpleNamespace(model_settings={"max_tokens": 2048, "temperature": 0.2},
                                   messages=[ModelRequest(parts=[SystemPromptPart("Trusted policy")])])
@@ -51,14 +51,14 @@ def test_budget_stops_advertising_tools_and_restricts_final_output_tokens():
 
 
 def test_budget_updates_one_system_message_without_accumulating_instructions():
-    session = SimpleNamespace(native_calls=0, settings=SETTINGS, run_started=None)
+    session = SimpleNamespace(turn=SimpleNamespace(native_calls=0, run_started=None), settings=SETTINGS)
     ctx = SimpleNamespace(usage=SimpleNamespace(tool_calls=0, requests=0), messages=[])
     budget = ControlBudget(session)
     request = SimpleNamespace(messages=[ModelRequest(parts=[SystemPromptPart("Trusted static rules")])], model_settings={})
 
     async def check():
         for count in range(25):
-            session.native_calls = count
+            session.turn.native_calls = count
             await budget.before_model_request(ctx, request)
             parts = [part for message in request.messages for part in message.parts if isinstance(part, SystemPromptPart)]
             assert len(parts) == 1 and parts[0].content.count(BUDGET_MARKER) == 1
@@ -126,10 +126,10 @@ def test_internal_evidence_notes_do_not_consume_native_call_budget():
 def test_native_call_guard_never_sends_an_excess_call_even_if_model_bypasses_filter():
     async def check():
         session = Session(None, SETTINGS, None, asyncio.Semaphore(1))
-        session.native_calls = MAX_NATIVE_CALLS
+        session.turn.native_calls = MAX_NATIVE_CALLS
         with pytest.raises(ModelRetry, match="budget exhausted"):
             await session.call_tool(ToolDefinition.model_validate(STATE), {})
-        assert session.native_calls == MAX_NATIVE_CALLS and session.pending is None
+        assert session.turn.native_calls == MAX_NATIVE_CALLS and session.pending is None
     asyncio.run(check())
 
 

@@ -228,7 +228,8 @@ def test_deployment_has_no_public_inference_port_or_privileged_mode():
     assert "--trust-remote-code" not in (root / "vllm_start.py").read_text()
     assert "build:" not in text
     assert "build:" in (root / "compose.build.yaml").read_text()
-    assert (root / "Dockerfile").read_text().splitlines()[0] == "FROM " + PYTHON_IMAGE
+    base_image = next(line for line in (root / "Dockerfile").read_text().splitlines() if line.startswith("FROM "))
+    assert base_image == "FROM " + PYTHON_IMAGE
     vllm = yaml.safe_load(text)["services"]["vllm"]
     cuda = yaml.safe_load((root / "compose.cuda.yaml").read_text())["services"]["vllm"]
     assert cuda["group_add"] == ["${BORGVR_GID}"]

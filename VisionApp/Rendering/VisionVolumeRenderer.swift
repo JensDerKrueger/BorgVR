@@ -2226,15 +2226,15 @@ extension VisionVolumeRenderer {
       request.completion(.failure(error))
     } else if let request = mcpScreenshotRequest, let readback = mcpScreenshotReadback {
       do {
-        let png = try MetalScreenshotEncoder.pngData(from: readback.color)
+        let png = try MetalScreenshotEncoder.pngImage(from: readback.color, maxWidth: request.maxWidth)
         let positions = readback.positionReadback?.positions()
         if let positions {
           runtimeAppModel.mcpRenderBridge.screenshotCache.store(positions, id: request.id, renderedFrame: completedFrame)
         }
         request.completion(.success(BorgVRMCPImage(
-          pngData: png,
-          width: readback.color.width,
-          height: readback.color.height,
+          pngData: png.data,
+          width: png.width,
+          height: png.height,
           renderedFrame: completedFrame,
           screenshotID: positions == nil ? nil : request.id
         )))

@@ -22,10 +22,10 @@ def change(revision=1, active=False, **kwargs):
 
 
 def test_events_are_bounded_and_stale_events_cannot_reopen_a_finished_intervention():
-    session = SimpleNamespace(state_seen=True)
+    session = SimpleNamespace(turn=SimpleNamespace(state_seen=True))
     collaboration = Collaboration(session, ["Prefer high-contrast bone views."])
     collaboration.update(UserChange.model_validate(change(active=True)))
-    assert not collaboration.idle.is_set() and not session.state_seen
+    assert not collaboration.idle.is_set() and not session.turn.state_seen
     collaboration.update(UserChange.model_validate(change(revision=2)))
     assert collaboration.idle.is_set() and collaboration.revision == 2
     collaboration.changed.clear()
@@ -120,15 +120,15 @@ def test_rejected_stale_command_is_not_claimed_as_applied_or_uncertain():
         class Socket:
             async def send_text(self, raw):
                 event = json.loads(raw)
-                session.pending[2].set_result(ToolResult.model_validate(reply(event, view_revision=1,
+                session.pending.result.set_result(ToolResult.model_validate(reply(event, view_revision=1,
                     result={"ok": False, "not_applied": True, "code": "user_changed_view"})))
         session = Session(Socket(), SETTINGS, None, asyncio.Semaphore(1))
         session.dataset_id, session.context_id, session.request_id = "test-volume", "opening-1", "turn-1"
         session.collaboration = Collaboration(session, [])
-        session.state_seen = True
+        session.turn.state_seen = True
         result = await session.call_tool(ToolDefinition.model_validate(ROTATE), {"axis": [0, 1, 0], "degrees": 20})
-        assert result["not_applied"] and not session.changes_applied and not session.uncertain
-        assert session.collaboration.changed.is_set() and not session.state_seen
+        assert result["not_applied"] and not session.turn.changes_applied and not session.uncertain
+        assert session.collaboration.changed.is_set() and not session.turn.state_seen
     asyncio.run(check())
 
 
@@ -172,7 +172,7 @@ def test_only_completed_change_answers_help_and_concurrent_reply_is_safe():
         sent = []
         async def send(event):
             sent.append(event)
-        collaboration = Collaboration(SimpleNamespace(send=send, request_id="request", tools=[]), [])
+        collaboration = Collaboration(SimpleNamespace(send=send, request_id="request", tools=[], turn=SimpleNamespace()), [])
         ask = collaboration.tools()[0].function
         question = asyncio.create_task(ask("help", "de"))
         await asyncio.sleep(0)
@@ -233,7 +233,8 @@ def test_cancel_during_human_pause_does_not_resume():
 def test_help_remains_available_at_budget_end_but_native_mutations_do_not():
     async def check():
         collaboration = SimpleNamespace(asked_for_help=False)
-        session = SimpleNamespace(native_calls=24, settings=SETTINGS, run_started=None, collaboration=collaboration)
+        session = SimpleNamespace(turn=SimpleNamespace(native_calls=24, run_started=None),
+                                  settings=SETTINGS, collaboration=collaboration)
         ctx = SimpleNamespace(usage=SimpleNamespace(tool_calls=24, requests=24))
         tools = [SimpleNamespace(name=name) for name in ["rotate_view", "ask_collaboration_feedback"]]
         budget = ControlBudget(session)
