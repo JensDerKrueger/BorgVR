@@ -256,6 +256,12 @@ def available(entries, native, dataset_id, opened=False):
     return flows, guidance
 
 
+def procedure_inputs(definition, arguments):
+    defaults = {name: schema["default"] for name, schema in definition["input_schema"].get("properties", {}).items()
+                if isinstance(schema, dict) and "default" in schema}
+    return {**defaults, **arguments}
+
+
 class Run:
     def __init__(self, port, turn, revision, max_calls):
         self.port, self.turn, self.revision = port, turn, revision
@@ -358,10 +364,7 @@ class Run:
         return self.value(block["yield"], values)
 
     async def execute(self, definition, arguments):
-        data = dict(arguments)
-        for name, schema in definition["input_schema"].get("properties", {}).items():
-            if name not in data and isinstance(schema, dict) and "default" in schema:
-                data[name] = schema["default"]
+        data = procedure_inputs(definition, arguments)
         self.check()
         if not Draft202012Validator(definition["input_schema"]).is_valid(data):
             raise InvalidMessage("procedure_arguments")

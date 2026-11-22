@@ -1,12 +1,16 @@
-"""Deterministic comparison of alpha masks from isolated volume previews."""
+"""Deterministic comparison and texture hints for isolated volume previews."""
 
 import base64
 import io
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 MAX_RENDERS = 32
 MIN_WIDTH = 0.01
+SPECKLE_THRESHOLD = 0.2
+TEXTURE_THRESHOLD = 0.25
+TEXTURE_DELTA = 4
+NOISE_GAP_THRESHOLD = 0.2
 
 
 def equal_bands(_, count):
@@ -14,9 +18,36 @@ def equal_bands(_, count):
 
 
 def observe_band(run, band, image):
-    mask = run.images[image].getchannel("A")
+    preview = run.images[image]
+    mask = preview.getchannel("A").point(lambda value: 255 if value else 0)
+    visible = mask.histogram()[255]
+    speckle = texture = None
+    if visible and min(mask.size) >= 3:
+        # Median filtering highlights isolated pixels in the silhouette, not just sparse coverage.
+        smooth = mask.filter(ImageFilter.MedianFilter(3))
+        union = ImageChops.lighter(mask, smooth).histogram()[255]
+        speckle = ImageChops.difference(mask, smooth).histogram()[255] / union
+        # Ignore object boundaries when measuring rapid changes in apparent brightness.
+        interior = mask.filter(ImageFilter.MinFilter(3))
+        inside = interior.histogram()[255]
+        if inside:
+            gray = preview.convert("L")
+            residual = ImageChops.difference(gray, gray.filter(ImageFilter.BoxBlur(1)))
+            peaks = residual.point(lambda value: 255 if value >= TEXTURE_DELTA else 0)
+            texture = ImageChops.darker(interior, peaks).histogram()[255] / inside
     return {"low": band["low"], "high": band["high"], "image": image,
-            "coverage": 1 - mask.histogram()[0] / (mask.width * mask.height)}
+            "coverage": visible / (mask.width * mask.height),
+            "speckle_fraction": speckle, "fine_texture_fraction": texture}
+
+
+def noise_candidate(leaf):
+    return ((leaf.get("speckle_fraction") or 0) >= SPECKLE_THRESHOLD
+            or (leaf.get("fine_texture_fraction") or 0) >= TEXTURE_THRESHOLD)
+
+
+def noise_gap(left, right):
+    return max(abs((left.get(key) or 0) - (right.get(key) or 0))
+               for key in ("speckle_fraction", "fine_texture_fraction"))
 
 
 def band_state(_, leaves):
@@ -35,7 +66,8 @@ def plan_refinement(run, state, threshold, initial):
     leaves = state["leaves"]
     if not leaves and state["renders"] == 0:
         return {"kept": [], "children": initial, "renders": 0, "stop_reason": "depth_limit"}
-    gaps = [difference(run, a, b) for a, b in zip(leaves, leaves[1:])]
+    gaps = [max(difference(run, a, b), noise_gap(a, b) * threshold / NOISE_GAP_THRESHOLD)
+            for a, b in zip(leaves, leaves[1:])]
     eligible = []
     for i, leaf in enumerate(leaves):
         score = max(gaps[i - 1] if i else 0, gaps[i] if i < len(gaps) else 0)
@@ -65,27 +97,29 @@ def update_bands(_, plan, children):
 
 
 def report_bands(run, state, threshold):
+    leaves = state["leaves"]
+    if len(leaves) > MAX_RENDERS:
+        raise ValueError("Too many band previews")
     groups = []
     previous = None
-    for leaf in state["leaves"]:
+    for leaf in leaves:
         if (previous is None or bool(previous["coverage"]) != bool(leaf["coverage"])
-                or difference(run, previous, leaf) >= threshold):
+                or difference(run, previous, leaf) >= threshold
+                or noise_candidate(previous) != noise_candidate(leaf)
+                or noise_gap(previous, leaf) >= NOISE_GAP_THRESHOLD):
             groups.append([])
         groups[-1].append(leaf)
         previous = leaf
 
-    visible = [(index, max(group, key=lambda leaf: leaf["coverage"])) for index, group in enumerate(groups)
-               if any(leaf["coverage"] > 0 for leaf in group)]
-    if len(visible) > 8:
-        visible = [visible[round(i * (len(visible) - 1) / 7)] for i in range(8)]
-    representatives = {index: (i + 1, leaf) for i, (index, leaf) in enumerate(visible)}
+    visible = [leaf for leaf in leaves if leaf["coverage"] > 0]
+    preview_numbers = {leaf["image"]: i + 1 for i, leaf in enumerate(visible)}
     if visible:
-        columns = min(4, len(visible))
+        columns = min(5, len(visible))
         rows = (len(visible) + columns - 1) // columns
-        tile = 148
+        tile = 120
         sheet = Image.new("RGB", (columns * tile, rows * tile), "#222222")
         draw = ImageDraw.Draw(sheet)
-        for i, (_, leaf) in enumerate(visible):
+        for i, leaf in enumerate(visible):
             x, y = (i % columns) * tile, (i // columns) * tile
             preview = run.images[leaf["image"]].copy()
             preview.thumbnail((tile - 12, tile - 26))
@@ -95,14 +129,27 @@ def report_bands(run, state, threshold):
         sheet.save(buffer, format="PNG")
         run.sheet = base64.b64encode(buffer.getvalue()).decode("ascii")
 
-    summary = []
-    for i, group in enumerate(groups):
+    summary, bins = [], []
+    for group in groups:
         row = {"interval": [group[0]["low"], group[-1]["high"]],
                "max_coverage": round(max(leaf["coverage"] for leaf in group), 4)}
-        if i in representatives:
-            number, leaf = representatives[i]
-            row.update(preview=number, preview_interval=[leaf["low"], leaf["high"]])
+        if row["max_coverage"] > 0:
+            representative = max(group, key=lambda leaf: leaf["coverage"])
+            row.update(preview=preview_numbers[representative["image"]],
+                       preview_interval=[representative["low"], representative["high"]])
         summary.append(row)
+        for leaf in group:
+            bin_row = {"interval": [round(leaf["low"], 6), round(leaf["high"], 6)],
+                       "coverage": round(leaf["coverage"], 4), "noise_candidate": noise_candidate(leaf)}
+            for key in ("speckle_fraction", "fine_texture_fraction"):
+                value = leaf.get(key)
+                bin_row[key] = round(value, 4) if value is not None else None
+            if leaf["coverage"] > 0:
+                bin_row["preview"] = preview_numbers[leaf["image"]]
+            bins.append(bin_row)
     return {"normalized": True, "view": "coarse_dataset_z_projection", "difference_threshold": threshold,
             "difference_metric": "fraction_of_pixels_with_different_alpha", "rendered_previews": state["renders"],
-            "stop_reason": state["stop_reason"], "intervals": summary}
+            "stop_reason": state["stop_reason"], "intervals": summary, "bins": bins,
+            "noise_metrics": {"speckle_fraction": "Fraction of the silhouette changed by a 3x3 median filter.",
+                              "fine_texture_fraction": "Fraction of opaque interior with a brightness change of at least 4/255 after a 3x3 box blur.",
+                              "noise_candidate": "Speckle >= 0.20 or fine texture >= 0.25. Real thin features or texture can also trigger this hint."}}

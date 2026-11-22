@@ -4,17 +4,22 @@
   "entries": [
     {
       "id": "intensity.sweep",
-      "revision": 1,
+      "revision": 3,
       "source": "bundled",
-      "situation": "The user wants to know where structures appear in the normalized intensity range, or the useful intensity ranges of a scalar channel are unknown.",
-      "goal": "Find and inspect visually distinct intensity intervals without changing the user's transfer function or view.",
+      "situation": "Useful intensity ranges are unknown and the user wants to design a transfer function, inspect structures, or reduce visual noise.",
+      "goal": "Map normalized intensity bins to visible structures and artifacts, then use the map to choose color and opacity ranges.",
       "contexts": ["dataset_ready"],
-      "keywords": ["intensity", "histogram", "sweep", "visible structures"],
-      "procedure": {
+      "keywords": ["intensity", "histogram", "sweep", "visible structures", "transfer function", "noise"],
+      "guidance": {
         "revision": 1,
         "review": "approved",
+        "text": "Use the sweep once before building a transfer function for an unfamiliar scalar channel or removing noise whose intensity is unknown. Reuse a prior report for the same dataset scope and channel whenever it answers the question. Match each relevant intensity bin to its numbered preview: note the wanted structures, background or likely noise. Do not infer a structure from coverage or a noise hint alone, especially if the preview image is no longer available. Then design the transfer function from this bin-to-structure map: assign colors to useful structures, keep opacity zero in intervals dominated by noise or background that contain nothing wanted, and preserve useful detail. Verify the combined result with a rendered view. Repeat the sweep only when a specific unresolved question needs new evidence."
+      },
+      "procedure": {
+        "revision": 3,
+        "review": "approved",
         "language": "borgvr-flow-v1",
-        "announcement_hint": "Explain that you are comparing small previews for different intensity ranges and will leave the current view unchanged.",
+        "announcement_hint": "Briefly say what you are looking for in the dataset, using everyday language. Do not describe the method or comment on whether the view will change.",
         "input_schema": {
           "type": "object",
           "additionalProperties": false,
@@ -31,6 +36,7 @@
           "required": ["intervals", "rendered_previews", "stop_reason"],
           "properties": {
             "intervals": {"type": "array"},
+            "bins": {"type": "array", "description": "Each measured intensity bin, its coverage, qualitative noise hints and numbered preview when visible."},
             "rendered_previews": {"type": "integer"},
             "stop_reason": {"type": "string"}
           }

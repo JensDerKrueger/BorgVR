@@ -69,6 +69,18 @@ steps = [
   "Consider set_transfer_function only if the intended edit really needs more than about 50 control points across the affected components and fewer points cannot adequately represent it. This is a guideline, not a tool limit. A new overall appearance is not a reason to send a full RGBA table.",
 ]
 
+[transfer_function.noise]
+situation = "A volume rendering should look clear or realistic, or the user asks to reduce speckle, grain, or obscuring background."
+goal = "Suppress visual noise without hiding useful fine structure. Noise is not a desirable effect in a normal presentation."
+contexts = ["dataset_ready"]
+keywords = ["noise", "speckle", "grain", "background artifacts", "denoise", "realistic transfer function"]
+requires_tools = ["set_transfer_function_component"]
+steps = [
+  "Do not assume that noise belongs to a particular intensity range. Use the current channel's sweep evidence, if available, and check the representative previews to distinguish incoherent speckle or background from real fine detail. A noise score is a hint, not proof.",
+  "For a noise-dominated interval that does not contain structures needed for the task, keep opacity (component 3) at zero throughout that interval with explicit control points. Preserve adjacent useful ranges and the existing colors if the user only asked to reduce noise.",
+  "Apply the supported opacity changes together, then inspect one rendered view. Make at most one targeted follow-up adjustment, and only if you can identify a specific interval and evidence for changing it. If noise overlaps the wanted structures or the evidence is inconclusive, explain that limit instead of repeatedly changing the curve.",
+]
+
 [spatial.picking]
 goal = "Locate a visible landmark in dataset-local 3D coordinates for a marker, measurement, or edit."
 contexts = ["dataset_ready"]

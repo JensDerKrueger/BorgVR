@@ -337,15 +337,22 @@ def test_repeated_model_call_never_dispatches_twice():
             assert failure["type"] == "error" and failure["changes_applied"]
 
 
-def test_empty_tool_schema_is_explicit_and_rejection_never_logs_argument_values(caplog):
+@pytest.mark.parametrize("arguments, reason", [
+    ('{}', None),
+    ('{"reason":"SYNTHETIC_PRIVATE_VALUE"}', "expected_empty_object"),
+    ('["SYNTHETIC_PRIVATE_VALUE"]', "invalid_json"),
+    ('', "invalid_json"),
+])
+def test_empty_tool_schema_normalizes_locally_without_leaking_arguments(caplog, arguments, reason):
+    caplog.set_level("INFO", logger="uvicorn.error.borgvr")
+    state_tool = {**TOOLS[0], "name": "read_snapshot"}
+
     class Model(Steps):
+        requests = 0
+
         async def complete(self, messages, tools, *, response_schema=None):
-            if response_schema is not None:
-                assert not tools
-                assert response_schema["properties"]["arguments"]["anyOf"] == [TOOLS[0]["inputSchema"], {"type": "null"}]
-                assert all("tool_calls" not in message for message in messages)
-                assert json.loads(messages[-1]["content"].splitlines()[-1])["reason"] == "expected_empty_object"
-                return '{"arguments":{}}'
+            assert response_schema is None
+            self.requests += 1
             definition = tools[0]["function"]
             assert "strict" not in definition
             assert definition["parameters"] == {
@@ -357,18 +364,24 @@ def test_empty_tool_schema_is_explicit_and_rejection_never_logs_argument_values(
                 assert "SYNTHETIC_PRIVATE_VALUE" not in str(messages)
             return await super().complete(messages, tools)
 
-    model = Model(Call("incorrect", "get_application_state", '{"reason":"SYNTHETIC_PRIVATE_VALUE"}'), "State read.")
+    model = Model(Call("read", state_tool["name"], arguments), "State read.")
     with TestClient(create_app(token=TOKEN, model=model)) as client:
         with client.websocket_connect("/v1/session", headers=AUTH) as ws:
-            ws.send_json(hello(tools=[TOOLS[0]]))
+            ws.send_json(hello(tools=[state_tool]))
             ws.receive_json()
             turn(ws)
             dispatched = ws.receive_json()
-            assert dispatched["name"] == "get_application_state" and dispatched["arguments"] == {}
+            assert dispatched["name"] == state_tool["name"] and dispatched["arguments"] == {}
+            assert model.requests == 1
             ws.send_json(receipt(dispatched, {"rendererReady": True}))
             assert ws.receive_json()["text"] == "State read."
             assert ws.receive_json()["type"] == "completed"
-    assert "reason=expected_empty_object" in caplog.text
+    assert model.requests == 2
+    normalized = [record.message for record in caplog.records if "event=normalized" in record.message]
+    if reason is None:
+        assert normalized == []
+    else:
+        assert len(normalized) == 1 and normalized[0].endswith(f"tool=read_snapshot call=- reason={reason}")
     assert "SYNTHETIC_PRIVATE_VALUE" not in caplog.text
 
 
@@ -384,13 +397,14 @@ def test_failed_schema_correction_is_not_retried_or_dispatched(caplog, correctio
         async def complete(self, messages, tools, *, response_schema=None):
             if response_schema is not None:
                 self.replies += 1
+                assert response_schema["properties"]["arguments"]["anyOf"][0] == TOOLS[1]["inputSchema"]
                 return correction
             return await super().complete(messages, tools)
 
-    model = Model(Call("invalid", "get_application_state", "not JSON"))
+    model = Model(Call("invalid", "rotate_view", "not JSON"))
     with TestClient(create_app(token=TOKEN, model=model)) as client:
         with client.websocket_connect("/v1/session", headers=AUTH) as ws:
-            ws.send_json(hello(tools=[TOOLS[0]]))
+            ws.send_json(hello())
             assert ws.receive_json()["type"] == "ready"
             turn(ws)
             error = ws.receive_json()

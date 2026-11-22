@@ -101,7 +101,7 @@ struct VoiceAgentTypedCatalogTests {
       }
       if request == "scope-sweep" {
         let afterTF = try service.transferFunction(channel: 0).validatedSamples()
-        guard controller.messages.contains(where: { $0.text == "Ich vergleiche die Intensitätsbereiche." }),
+        guard controller.messages.contains(where: { $0.text == "Ich schaue, welche Strukturen sich sichtbar machen lassen." }),
               beforeTF == afterTF, session.currentSnapshot().transform == before else {
           throw Failure.failed("Sweep did not announce itself or changed the visualization")
         }

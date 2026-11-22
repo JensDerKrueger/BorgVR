@@ -152,17 +152,19 @@ def test_wrong_schema_rejects_entire_catalog_instead_of_silently_dropping_tools(
     assert model.requests == []
 
 
-def test_only_client_approval_is_authoritative_and_denied_group_cannot_be_retried():
+@pytest.mark.parametrize("parameterized", [True, False])
+def test_only_client_approval_is_authoritative_and_denied_group_cannot_be_retried(parameterized):
     state = {**tool("read_snapshot"), "execution": {"kind": "read", "role": "application_state"}}
-    write = {**tool("first_mutation", {"amount": {"type": "number"}}),
+    write = {**tool("first_mutation", {"amount": {"type": "number"}} if parameterized else {}),
              "execution": {"kind": "mutation", "approval_group": "local_dialog"}}
-    write["inputSchema"]["required"] = ["amount"]
+    if parameterized:
+        write["inputSchema"]["required"] = ["amount"]
     alternate = {**tool("second_mutation"), "execution": write["execution"]}
 
     class Attempts(Capture):
         async def complete(self, messages, tools, *, response_schema=None):
             if response_schema is not None:
-                assert not tools
+                assert parameterized and not tools
                 assert response_schema["properties"]["arguments"]["anyOf"][0] == write["inputSchema"]
                 assert not any(message["role"] == "tool" for message in messages)
                 return '{"arguments":{"amount":15}}'
@@ -185,7 +187,8 @@ def test_only_client_approval_is_authoritative_and_denied_group_cannot_be_retrie
             assert query["name"] == state["name"]
             ws.send_json(receipt(query, {"ready": True}))
             attempted = ws.receive_json()
-            assert attempted["name"] == write["name"] and attempted["arguments"] == {"amount": 15}
+            assert attempted["name"] == write["name"]
+            assert attempted["arguments"] == ({"amount": 15} if parameterized else {})
             ws.send_json(receipt(attempted, {"ok": False, "not_applied": True, "code": "user_declined"}))
             assert ws.receive_json()["text"] == "The user declined."
             assert ws.receive_json()["type"] == "completed"

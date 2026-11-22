@@ -62,11 +62,12 @@ bounded to 256 KiB. Only the render-image role may return optional
 locally. The application validates arguments and requests any local
 confirmation; the model cannot authorize or override it.
 
-For a known, eligible tool with invalid arguments, the agent may request
-one JSON-schema correction before sending any call to the app. The tool
-cannot change, and a refusal or invalid correction dispatches nothing.
-Corrected arguments are validated against the original schema and still
-require normal state, revision and approval checks.
+For a known, eligible tool whose closed schema accepts only `{}`, the
+harness replaces invalid arguments with `{}` and validates that object
+without a model request. For other eligible tools with invalid arguments,
+the agent may request one JSON-schema correction. The tool cannot change,
+and a refusal or invalid correction dispatches nothing. Corrected calls
+still require normal state, revision and approval checks.
 
 Operational logs distinguish rejected, dispatched and acknowledged calls.
 They use server-generated session and call IDs, a server turn number,
@@ -129,6 +130,10 @@ clients that do not negotiate knowledge bundles.
   model to interpret, or an explicit partial, unavailable or cancelled
   outcome. If semantic judgment is needed during execution, return the
   evidence to the model rather than hiding a model call inside the tool.
+  The session may reuse up to four successful structured procedure
+  results (at most 12 KiB total) as evidence in later turns in the same
+  scope. This memory does not include preview images, is not persisted,
+  and is cleared when the scope changes.
 - Native subcalls use the existing dispatcher, schemas, scope and revision
   checks, and local approvals. Procedures cannot grant permissions or turn
   a refusal into another execution path. The first version supports only

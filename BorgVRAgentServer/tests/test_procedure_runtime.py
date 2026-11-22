@@ -3,6 +3,7 @@ import base64
 import io
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
@@ -12,8 +13,9 @@ from borgvr_next.app import create_app
 from borgvr_next.evidence import Evidence
 from borgvr_next.learner import process_one
 from borgvr_next.model import Call
+from borgvr_next import preview_compute as compute
 from borgvr_next.procedures import PREVIEW_ARGS
-from test_next_runtime import AUTH, TOKEN, Evaluator, hello, receipt, setup_profiles, turn
+from test_next_runtime import AUTH, TOKEN, TOOLS, Evaluator, hello, receipt, setup_profiles, tool, turn
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,9 +35,44 @@ def png_for_band(low, high, uniform=False):
     for value, rectangle in [(0.13, (0, 0, 31, 63)), (0.81, (32, 0, 63, 63))]:
         if uniform or low <= value < high:
             draw.rectangle(rectangle, fill=(160, 160, 160, 255))
+    return image_data(image)
+
+
+def image_data(image):
     output = io.BytesIO()
     image.save(output, format="PNG")
     return base64.b64encode(output.getvalue()).decode("ascii")
+
+
+def test_noise_signals_distinguish_speckles_and_fine_texture_from_smooth_structure():
+    clean = Image.new("RGBA", (64, 64))
+    ImageDraw.Draw(clean).rectangle((8, 8, 55, 55), fill=(80, 80, 80, 255))
+    texture = clean.copy()
+    for y in range(8, 56):
+        for x in range(8, 56):
+            value = 104 if (x + y) % 2 else 80
+            texture.putpixel((x, y), (value, value, value, 255))
+    speckles = Image.new("RGBA", clean.size)
+    ImageDraw.Draw(speckles).point([(x, y) for x in range(5, 60, 5) for y in range(5, 60, 5)],
+                                   fill=(30, 30, 30, 255))
+    run = SimpleNamespace(images={"clean": clean, "texture": texture, "speckles": speckles,
+                                  "empty": Image.new("RGBA", clean.size)})
+    bands = [{"low": point / 4, "high": (point + 1) / 4} for point in range(4)]
+    first, second, third, fourth = leaves = [compute.observe_band(run, band, key)
+                                            for band, key in zip(bands, run.images, strict=True)]
+    assert first["coverage"] == second["coverage"] and not compute.noise_candidate(first)
+    assert second["fine_texture_fraction"] > 0.9 and compute.noise_candidate(second)
+    assert third["speckle_fraction"] == 1 and third["fine_texture_fraction"] is None
+    assert compute.noise_candidate(third) and not compute.noise_candidate(fourth)
+    assert fourth["coverage"] == 0 and fourth["speckle_fraction"] is None
+
+    state = compute.band_state(run, leaves[:2])
+    assert compute.difference(run, first, second) == 0
+    assert len(compute.plan_refinement(run, state, threshold=0.95, initial=[])["children"]) == 4
+    result = compute.report_bands(run, compute.band_state(run, leaves), threshold=0.95)
+    assert [row.get("preview") for row in result["bins"]] == [1, 2, 3, None]
+    assert result["bins"][2]["interval"] == [0.5, 0.75]
+    assert [row["noise_candidate"] for row in result["bins"]] == [False, True, True, False]
 
 
 class ScriptedModel:
@@ -53,8 +90,8 @@ class ScriptedModel:
 
 
 @pytest.mark.parametrize("uniform,language,announcement", [
-    (True, "en", "I’ll compare a few intensity-band previews without changing your view."),
-    (False, "de", "Ich vergleiche kleine Vorschauen verschiedener Intensitätsbereiche."),
+    (True, "en", "I'll check which parts of the object we can bring out."),
+    (False, "de", "Ich schaue, bei welchen Einstellungen die einzelnen Strukturen sichtbar werden."),
 ])
 def test_bundled_sweep_autonomously_compares_previews_and_announces_first(uniform, language, announcement):
     model = ScriptedModel(Call("sweep", "flow_intensity_sweep", json.dumps({"progress_message": announcement})))
@@ -79,11 +116,16 @@ def test_bundled_sweep_autonomously_compares_previews_and_announces_first(unifor
             assert ws.receive_json()["type"] == "completed"
     assert previews[:5] == [(i / 5, (i + 1) / 5) for i in range(5)]
     assert len(model.requests) == 2
-    assert [item["function"]["name"] for item in model.requests[0][1]] == ["flow_intensity_sweep"]
+    offered = [item["function"] for item in model.requests[0][1]]
+    assert [tool["name"] for tool in offered] == ["flow_intensity_sweep"]
+    assert "using everyday language" in offered[0]["description"]
+    assert "Do not describe the method or comment on whether the view will change" in offered[0]["description"]
     messages, _ = model.requests[-1]
     assert len([item for item in messages if isinstance(item["content"], list)]) == 1
     result = json.loads(next(item["content"] for item in messages if item["role"] == "tool"))
     assert result["rendered_previews"] == len(previews)
+    assert all("preview" in row for row in result["bins"] if row["coverage"] > 0)
+    assert all("noise_candidate" in row for row in result["bins"])
     if uniform:
         assert len(previews) == 5 and result["stop_reason"] == "stable"
         assert len(result["intervals"]) == 1
@@ -91,6 +133,74 @@ def test_bundled_sweep_autonomously_compares_previews_and_announces_first(unifor
         assert 5 < len(previews) <= 32
         assert {round(value, 2) for low, high in previews for value in (low, high)} - {0, .2, .4, .6, .8, 1}
         assert len([row for row in result["intervals"] if row.get("preview")]) >= 2
+
+
+def test_sweep_findings_are_available_to_followup_without_rerendering_or_crossing_scope():
+    prefix = "Previous procedure results for this dataset scope"
+    tf_tool = tool("set_transfer_function_component", {
+        "channel": {"type": "integer"}, "component": {"type": "integer"}, "points": {"type": "array"},
+    })
+    tools = [PREVIEW, TOOLS[0], tf_tool]
+    clean = Image.new("RGBA", (64, 64))
+    draw = ImageDraw.Draw(clean)
+    draw.ellipse((8, 8, 55, 55), fill=(170, 170, 170, 255))
+    noisy = Image.new("RGBA", clean.size)
+    draw = ImageDraw.Draw(noisy)
+    draw.point([(x, y) for x in range(5, 60, 5) for y in range(5, 60, 5)], fill=(30, 30, 30, 255))
+    images = {0.13: image_data(noisy), 0.81: image_data(clean)}
+    empty = image_data(Image.new("RGBA", clean.size))
+
+    class Model(ScriptedModel):
+        async def complete(self, messages, tools):
+            self.requests.append((messages, tools))
+            notes = [msg["content"] for msg in messages
+                     if isinstance(msg["content"], str) and msg["content"].startswith(prefix)]
+            if len(self.requests) == 1:
+                assert not notes
+                assert any("transfer_function.noise" in msg["content"] for msg in messages)
+                assert any("Match each relevant intensity bin" in msg["content"] for msg in messages)
+                return Call("sweep", "flow_intensity_sweep", '{"progress_message":"Ich prüfe die sichtbaren Details."}')
+            if len(self.requests) == 3:
+                evidence, = json.loads(notes[0].split("\n", 1)[1])
+                assert evidence["tool"] == "flow_intensity_sweep" and evidence["arguments"]["channel"] == 0
+                assert "progress_message" not in evidence["arguments"]
+                assert not any(isinstance(msg["content"], list) or msg["role"] == "tool" for msg in messages)
+                low, high = next(row["interval"] for row in evidence["result"]["bins"] if row["noise_candidate"])
+                assert low <= 0.13 < high < 0.81
+                return Call("opacity", tf_tool["name"], json.dumps({
+                    "channel": 0, "component": 3, "points": [[low, 0], [high, 0], [0.81, 1]],
+                }))
+            if len(self.requests) == 5:
+                assert not notes
+            return "Analyse abgeschlossen."
+
+    model = Model()
+    expert = (ROOT / "AppSupport/Voice/expert-knowledge.toml").read_text()
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello(tools=tools, application_session=True, expert_knowledge_bundle=bundle(),
+                               expert_knowledge_toml=expert))
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws, text="Zeig mir die Struktur.")
+            assert ws.receive_json()["final"] is False
+            while (event := ws.receive_json())["type"] == "tool_call":
+                assert event["name"] == PREVIEW["name"]
+                args = event["arguments"]
+                image = next((data for value, data in images.items() if args["low"] <= value < args["high"]), empty)
+                ws.send_json({**receipt(event, {"width": 64, "height": 64}), "image_png_base64": image})
+            assert event["type"] == "assistant_message" and ws.receive_json()["type"] == "completed"
+            turn(ws, name="followup", text="Versuche Rauschen im Bild zu vermeiden.")
+            state = ws.receive_json()
+            assert state["name"] == "get_application_state"
+            ws.send_json(receipt(state, {"rendererReady": True}))
+            patch = ws.receive_json()
+            assert patch["name"] == tf_tool["name"] and patch["arguments"]["component"] == 3
+            ws.send_json(receipt(patch, {"ok": True}))
+            assert ws.receive_json()["type"] == "assistant_message" and ws.receive_json()["type"] == "completed"
+            ws.send_json({"type": "context_changed", "context_id": "new-scope", "dataset_id": "other", "tools": tools})
+            assert ws.receive_json()["type"] == "context_updated"
+            turn(ws, name="unrelated", text="Was sehe ich hier?")
+            assert ws.receive_json()["type"] == "assistant_message" and ws.receive_json()["type"] == "completed"
 
 
 def test_unavailable_or_unapproved_flow_cannot_use_preview():
@@ -131,7 +241,7 @@ def test_announcement_hint_is_not_spoken_and_cancellation_stops_the_sweep():
     for copy_hint in (True, False):
         knowledge = bundle()
         cue = knowledge["entries"][0]["procedure"]["announcement_hint"]
-        text = cue if copy_hint else "Ich untersuche die Helligkeitsbereiche."
+        text = cue if copy_hint else "Ich schaue, welche Strukturen sich sichtbar machen lassen."
         model = ScriptedModel(Call("sweep", "flow_intensity_sweep", json.dumps({"progress_message": text})))
         with TestClient(create_app(token=TOKEN, model=model)) as client:
             with client.websocket_connect("/v1/session", headers=AUTH) as ws:
@@ -159,7 +269,7 @@ def test_composition_requires_an_approved_matching_version():
     del first["announcement_hint"]
     first["program"] = {"steps": [], "yield": {"literal": {"intervals": [], "rendered_previews": 0, "stop_reason": "stable"}}}
     parent = {**child, "id": "intensity.compose", "procedure": {**first, "program": {
-        "steps": [{"kind": "call", "operation": "procedure.flow_intensity_sweep", "version": 1,
+        "steps": [{"kind": "call", "operation": "procedure.flow_intensity_sweep", "version": first["revision"],
                    "args": {}, "as": "compiled"}], "yield": {"ref": "compiled"}}}}
     knowledge["entries"] = [parent, child]
     for approved in (True, False):

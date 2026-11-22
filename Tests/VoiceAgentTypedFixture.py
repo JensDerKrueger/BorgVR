@@ -31,7 +31,7 @@ class Model:
             assert "flow_intensity_sweep" in names and "capture_tf_preview" not in names
             results = [json.loads(msg["content"]) for msg in messages if msg["role"] == "tool"]
             if not results:
-                return Call("band-sweep", "flow_intensity_sweep", '{"progress_message":"Ich vergleiche die Intensitätsbereiche."}')
+                return Call("band-sweep", "flow_intensity_sweep", '{"progress_message":"Ich schaue, welche Strukturen sich sichtbar machen lassen."}')
             assert 5 <= results[-1]["rendered_previews"] <= 32, results[-1]
             assert results[-1]["intervals"] and any(isinstance(msg["content"], list) for msg in messages)
             return "Sweep completed without changing the view."
