@@ -1,6 +1,20 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Learner state": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Lernstand" } } } },
+    "Open hypotheses and evidence": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Offene Hypothesen und Belege" } } } },
+    "Observer token": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Zugangsschlüssel für den Learner" } } } },
+    "Observer token stored in Keychain": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Learner-Schlüssel im Schlüsselbund" } } } },
+    "Share assistant interactions with the learner": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Assistenteninteraktionen mit dem Learner teilen" } } } },
+    "Fetch learner state": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Lernstand abrufen" } } } },
+    "Export learner state": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Lernstand exportieren" } } } },
+    "Import learner state on this server": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Lernstand auf diesem Server importieren" } } } },
+    "Use this guidance": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Diesen Hinweis verwenden" } } } },
+    "Procedure details": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Ablaufdetails" } } } },
+    "Allow this procedure": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Diesen Ablauf freigeben" } } } },
+    "Set an observer token for this server first.": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Hinterlegen Sie zuerst einen Learner-Schlüssel für diesen Server." } } } },
+    "The learning checkpoint is invalid or too large.": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Der Lernstand ist ungültig oder zu groß." } } } },
+    "The destination learner already has state. Nothing was overwritten.": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Der Zielserver hat bereits einen Lernstand. Es wurde nichts überschrieben." } } } },
     "Choose saved visualization": {
       "extractionState": "manual",
       "localizations": {

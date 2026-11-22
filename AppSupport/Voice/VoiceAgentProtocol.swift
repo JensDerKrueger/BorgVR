@@ -115,14 +115,24 @@ enum VoiceAgentPolicy {
     "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions"
   ]
   static let typedOnlyTools: Set<String> = [
-    "set_transfer_function_component",
+    "set_transfer_function_component", "capture_tf_preview",
+  ]
+  static let intensityPreviewTool: [String: Any] = [
+    "name": "capture_tf_preview",
+    "description": "Render a coarse, isolated Z projection of a scalar intensity band without changing the current view.",
+    "inputSchema": ["type": "object", "additionalProperties": false, "required": ["channel", "high", "low", "palette"],
+      "properties": ["channel": ["type": "integer", "minimum": 0, "maximum": 3],
+                     "low": ["type": "number", "minimum": 0, "maximum": 1],
+                     "high": ["type": "number", "minimum": 0, "maximum": 1],
+                     "palette": ["type": "string", "enum": ["grayscale", "rainbow"]]]]
   ]
   static let reads: Set<String> = ["search_datasets", "get_application_state", "get_transfer_function", "get_background",
-                                    "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions", "list_objects", "list_measurements",
+                                    "wait_until_rendered", "capture_screenshot", "capture_tf_preview", "pick_screenshot_positions", "list_objects", "list_measurements",
                                     "get_volume_edit_state", "wait_volume_edits", "get_command_history", "get_import_status"]
 
   private static let readRoles = ["get_application_state": "application_state", "search_datasets": "catalog_search",
-                                  "capture_screenshot": "render_image", "get_volume_edit_state": "edit_state"]
+                                  "capture_screenshot": "render_image", "capture_tf_preview": "render_image",
+                                  "get_volume_edit_state": "edit_state"]
   private static let annotationDeletions: Set<String> = ["remove_object", "remove_measurement", "clear_annotations"]
 
   static func wireCatalog(_ tools: [[String: Any]], typed: Bool) -> [[String: Any]] {
@@ -205,9 +215,9 @@ enum VoiceAgentPolicy {
       if !datasetReady && !applicationTools.contains(name) { return nil }
       if datasetReady && conversionTools.contains(name) { return nil }
       if vision && ["set_background", "set_screen_projection", "get_background"].contains(name) { return nil }
-      if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_transfer_function_component", "set_render_mode",
+      if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_transfer_function_component", "capture_tf_preview", "set_render_mode",
                                 "set_iso_value", "set_lighting"].contains(name) { return nil }
-      if !images && ["capture_screenshot", "pick_screenshot_positions"].contains(name) { return nil }
+      if !images && ["capture_screenshot", "capture_tf_preview", "pick_screenshot_positions"].contains(name) { return nil }
       var value = original
       if let schema = VoiceAgentAnnotationPolicy.schema(for: name) {
         value["inputSchema"] = schema

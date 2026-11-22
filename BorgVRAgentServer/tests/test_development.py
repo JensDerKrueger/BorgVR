@@ -87,6 +87,7 @@ def test_archive_limits_duplicates_and_compression():
 def test_bundle_refuses_symlinks_and_hardlinks(tmp_path):
     for name in dev.TOP_FILES:
         shutil.copyfile(ROOT / name, tmp_path / name)
+    shutil.copytree(ROOT / "schemas", tmp_path / "schemas")
     shutil.copytree(ROOT / "borgvr_next", tmp_path / "borgvr_next", ignore=shutil.ignore_patterns("__pycache__"))
     path = tmp_path / "borgvr_next/sneaky.py"
     path.symlink_to(ROOT / "client.py")
@@ -234,6 +235,7 @@ def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monk
     source.mkdir()
     for name in dev.TOP_FILES:
         shutil.copyfile(ROOT / name, source / name)
+    shutil.copytree(ROOT / "schemas", source / "schemas")
     shutil.copytree(ROOT / "borgvr_next", source / "borgvr_next", ignore=shutil.ignore_patterns("__pycache__"))
     (source / "runtime").mkdir()
     (source / ".env").write_text("BORGVR_AGENT_IMAGE=" + __import__("configure").DEFAULT_AGENT_IMAGE + "\n")

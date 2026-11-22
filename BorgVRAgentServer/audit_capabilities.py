@@ -73,8 +73,10 @@ def read_inventory(root=ROOT):
     settings = {platform: registered_settings(read(file)) for platform, file in SETTINGS.items()}
     if recorded & local or not set.union(*settings.values()) <= recorded | local:
         raise ValueError("A registered setting has no unambiguous GSC recording policy")
+    bundle = json.loads(read("AppSupport/Voice/knowledge-bundle.json"))
+    internal = {"flow_" + row["id"].replace(".", "_").replace("-", "_") for row in bundle["entries"] if "procedure" in row}
     return {"symbols": symbols, "mcp": mcp, "agent": agent, "local_client": local_client,
-            "internal_agent": set(), "gsc": gsc,
+            "internal_agent": internal, "gsc": gsc,
             "settings": settings, "recorded_settings": recorded, "local_settings": local}
 
 

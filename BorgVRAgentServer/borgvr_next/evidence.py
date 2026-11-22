@@ -10,7 +10,8 @@ import sqlite3
 import stat
 from uuid import uuid4
 
-from .wire import decode, encode
+from .procedures import CHECKPOINT_BYTES, validate_checkpoint
+from .wire import InvalidMessage, decode, encode
 
 TOKEN = re.compile(r"bn1_[0-9a-f]{64}")
 
@@ -51,6 +52,14 @@ class Evidence:
                     profile TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
                     generation TEXT NOT NULL, queued INTEGER NOT NULL,
                     lease TEXT, lease_until INTEGER, attempts INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS checkpoint_state (
+                    profile TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+                    revision INTEGER NOT NULL, imported TEXT
+                );
+                CREATE TABLE IF NOT EXISTS portable_episodes (
+                    episode TEXT PRIMARY KEY REFERENCES episodes(id) ON DELETE CASCADE,
+                    portable_id TEXT NOT NULL
                 );
             """)
 
@@ -97,7 +106,14 @@ class Evidence:
             row = db.execute("INSERT INTO episodes(id, profile, session, turn, events, created) "
                              "VALUES (?, ?, ?, ?, ?, unixepoch()) ON CONFLICT(profile, session, turn) DO NOTHING",
                              (uuid4().hex, profile, session, turn, value))
+            if row.rowcount:
+                self.bump_checkpoint(db, profile)
             return row.rowcount == 1
+
+    @staticmethod
+    def bump_checkpoint(db, profile):
+        db.execute("INSERT INTO checkpoint_state(profile, revision) VALUES (?, 2) "
+                   "ON CONFLICT(profile) DO UPDATE SET revision=revision+1", (profile,))
 
     def claim(self):
         with self.db(write=True) as db:
@@ -116,6 +132,7 @@ class Evidence:
                              "WHERE id=? AND profile=? AND lease=?",
                              (encode(verdict), episode["id"], episode["profile"], episode["lease"]))
             if row.rowcount:
+                self.bump_checkpoint(db, episode["profile"])
                 db.execute("INSERT INTO induction(profile, generation, queued) VALUES (?, ?, unixepoch()) "
                            "ON CONFLICT(profile) DO UPDATE SET generation=excluded.generation, queued=excluded.queued, "
                            "lease=NULL, lease_until=NULL, attempts=0", (episode["profile"], uuid4().hex))
@@ -123,8 +140,9 @@ class Evidence:
 
     @staticmethod
     def judged_rows(db, profile):
-        return db.execute("SELECT id, session, verdict FROM episodes WHERE profile=? AND verdict IS NOT NULL "
-                          "ORDER BY created DESC, rowid DESC LIMIT 24", (profile,)).fetchall()
+        return db.execute("SELECT coalesce(p.portable_id, e.id) AS id, e.session, e.verdict FROM episodes e "
+                          "LEFT JOIN portable_episodes p ON p.episode=e.id WHERE e.profile=? AND e.verdict IS NOT NULL "
+                          "ORDER BY e.created DESC, e.rowid DESC LIMIT 24", (profile,)).fetchall()
 
     def claim_induction(self):
         with self.db(write=True) as db:
@@ -136,7 +154,12 @@ class Evidence:
             db.execute("UPDATE induction SET lease=?, lease_until=unixepoch()+300, attempts=attempts+1 WHERE profile=?",
                        (lease, job["profile"]))
             rows = self.judged_rows(db, job["profile"])
-        return {**dict(job), "lease": lease, "rows": [
+            base = db.execute("SELECT imported FROM checkpoint_state WHERE profile=?", (job["profile"],)).fetchone()
+            previous = []
+            if base and base["imported"]:
+                previous = [{key: value for key, value in row.items() if key in {"claim", "status", "next_steps"}}
+                            for row in decode(base["imported"], CHECKPOINT_BYTES)["hypotheses"][:8]]
+        return {**dict(job), "lease": lease, "previous": previous, "rows": [
             {**dict(row), "verdict": decode(row["verdict"])} for row in rows]}
 
     def finish_induction(self, job, report):
@@ -150,6 +173,7 @@ class Evidence:
             db.execute("INSERT INTO proposals VALUES (?, ?, ?) ON CONFLICT(profile) DO UPDATE SET "
                        "episode_ids=excluded.episode_ids, report=excluded.report",
                        (profile, encode(episode_ids), encode({"hypotheses": report})))
+            self.bump_checkpoint(db, profile)
             return True
 
     def read_proposals(self, profile):
@@ -157,3 +181,93 @@ class Evidence:
             row = db.execute("SELECT report FROM proposals WHERE profile=?", (profile,)).fetchone()
             awaiting = db.execute("SELECT 1 FROM induction WHERE profile=?", (profile,)).fetchone()
         return {**(decode(row["report"]) if row else {"hypotheses": []}), "induction_pending": awaiting is not None}
+
+    def read_checkpoint(self, profile):
+        with self.db() as db:
+            state = db.execute("SELECT revision, imported FROM checkpoint_state WHERE profile=?", (profile,)).fetchone()
+            episodes = db.execute("SELECT e.*, p.portable_id FROM episodes e LEFT JOIN portable_episodes p ON "
+                                  "p.episode=e.id WHERE profile=? ORDER BY e.created, e.rowid", (profile,)).fetchall()
+            proposals = db.execute("SELECT report FROM proposals WHERE profile=?", (profile,)).fetchone()
+        revision = state["revision"] if state else 1
+        base = decode(state["imported"], CHECKPOINT_BYTES) if state and state["imported"] else {}
+        entries = {entry["id"]: entry for entry in base.get("entries", [])}
+        hypotheses = {row["id"]: row for row in base.get("hypotheses", [])}
+        evidence = {row["id"]: row for row in base.get("evidence", [])}
+        for episode in episodes:
+            key = episode["portable_id"] or episode["id"]
+            verdict = decode(episode["verdict"]) if episode["verdict"] else None
+            prior = evidence.get(key, {})
+            observation = {**prior.get("observation", {}), "session": episode["session"],
+                           "events": decode(episode["events"])["events"]}
+            if verdict:
+                observation["verdict"] = verdict
+            evidence[key] = {**prior, "id": key, "episode_id": prior.get("episode_id", key), "kind": "command_trace",
+                             "summary": verdict["description"] if verdict else "Not yet assessed.", "observation": observation}
+        for proposal in decode(proposals["report"])["hypotheses"] if proposals else ():
+            key = "learner." + hashlib.sha256(encode([proposal["situation"], proposal["recommendation"]]).encode()).hexdigest()[:24]
+            support, counters = proposal["support"], proposal["counterexamples"]
+            refs = [{"id": item, "relation": relation} for values, relation in ((support, "supports"), (counters, "contradicts"))
+                    for item in sorted(set(values)) if item in evidence]
+            entry = {"id": key, "revision": revision, "source": "learner", "situation": proposal["situation"],
+                     "goal": proposal["recommendation"][:240], "evidence_ids": sorted({row["id"] for row in refs}),
+                     "guidance": {"revision": 1, "review": "pending", "text": proposal["recommendation"]}}
+            if "procedure" in proposal:
+                program = proposal["procedure"]
+                digest = int(hashlib.sha256(encode(program).encode()).hexdigest()[:7], 16)
+                entry["procedure"] = {**program, "revision": digest + 1, "review": "pending"}
+            entries[key] = entry
+            testing = proposal["status"] == "candidate" or "procedure" in entry
+            hypotheses[key] = {"id": key, "revision": revision, "claim": proposal["recommendation"],
+                               "status": "testing" if testing else "collecting", "entry": {"id": key, "revision": revision},
+                               "next_steps": ["Evaluate on independent episodes." if testing else "Collect independent evidence."],
+                               "evidence": refs}
+        result = {"kind": "learner_checkpoint", "version": 1, "lineage_id": base.get("lineage_id", profile),
+                  "revision": revision, "entries": list(entries.values()), "hypotheses": list(hypotheses.values()),
+                  "evidence": list(evidence.values())}
+        if len(encode(result)) > CHECKPOINT_BYTES:
+            raise InvalidMessage("Checkpoint exceeds bound")
+        validate_checkpoint(result)
+        return result
+
+    def import_checkpoint(self, profile, data):
+        validate_checkpoint(data)
+        value = encode(data)
+        if len(value) > CHECKPOINT_BYTES:
+            raise InvalidMessage("Checkpoint exceeds bound")
+        with self.db(write=True) as db:
+            state = db.execute("SELECT imported FROM checkpoint_state WHERE profile=?", (profile,)).fetchone()
+            if state is not None:
+                return "unchanged" if state["imported"] == value else "conflict"
+            if db.execute("SELECT 1 FROM episodes WHERE profile=?", (profile,)).fetchone():
+                return "conflict"
+            db.execute("INSERT INTO checkpoint_state VALUES (?, ?, ?)", (profile, data["revision"], value))
+            judged = False
+            for row in data["evidence"]:
+                if row["kind"] != "command_trace":
+                    continue
+                observation = row["observation"]
+                events, session = observation.get("events"), observation.get("session")
+                if (not isinstance(events, list) or len(events) > 128 or not isinstance(session, str)
+                        or not 0 < len(session) <= 128 or any(not isinstance(event, dict) or
+                                                             not isinstance(event.get("kind"), str) for event in events)
+                        or len(encode({"events": events})) > 144 * 1024):
+                    continue
+                verdict = observation.get("verdict")
+                indices = verdict.get("evidence") if isinstance(verdict, dict) else None
+                if (isinstance(verdict, dict) and verdict.get("label") in
+                        ("aligned", "corrected", "preference", "goal_changed", "inconclusive")
+                        and isinstance(verdict.get("description"), str) and 0 < len(verdict["description"]) <= 500
+                        and isinstance(indices, list) and len(indices) <= 8 and
+                        all(type(i) is int and 0 <= i < len(events) for i in indices)):
+                    verdict = {key: verdict[key] for key in ("label", "description", "evidence")}
+                else:
+                    verdict = None
+                identity = uuid4().hex
+                db.execute("INSERT INTO episodes(id, profile, session, turn, events, verdict, created) "
+                           "VALUES (?, ?, ?, ?, ?, ?, unixepoch())",
+                           (identity, profile, session, row["id"], encode({"events": events}), encode(verdict) if verdict else None))
+                db.execute("INSERT INTO portable_episodes VALUES (?, ?)", (identity, row["id"]))
+                judged |= verdict is not None
+            if judged:
+                db.execute("INSERT INTO induction(profile, generation, queued) VALUES (?, ?, unixepoch())", (profile, uuid4().hex))
+        return "imported"

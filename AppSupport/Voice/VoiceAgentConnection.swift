@@ -13,6 +13,7 @@ struct VoiceAgentConnectionIdentity: Equatable {
   let enabled: Bool
   let images: Bool
   let workMinutes: Int
+  let knowledgeRevision: UUID
 }
 
 struct VoiceAgentRule: Codable, Identifiable, Equatable {
@@ -31,7 +32,7 @@ final class VoiceAgentSettings: ObservableObject {
   @Published var address: String {
     didSet {
       defaults.set(address, forKey: "voiceAgent.address")
-      if address != oldValue { changeArchiveOwner() }
+      if address != oldValue { changeArchiveOwner(); sharesLearningTrace = false }
     }
   }
   @Published var speaks: Bool { didSet { defaults.set(speaks, forKey: "voiceAgent.speaks") } }
@@ -43,6 +44,9 @@ final class VoiceAgentSettings: ObservableObject {
     }
   }
   @Published var sharesImages: Bool { didSet { defaults.set(sharesImages, forKey: "voiceAgent.images") } }
+  @Published var sharesLearningTrace: Bool {
+    didSet { defaults.set(sharesLearningTrace, forKey: "voiceAgent.sharesLearningTrace"); refreshKnowledge() }
+  }
   @Published var savesConversation: Bool { didSet { defaults.set(savesConversation, forKey: "voiceAgent.saveConversation") } }
   @Published var confirmsVolumeEdits: Bool { didSet { defaults.set(confirmsVolumeEdits, forKey: "voiceAgent.confirmVolumeEdits") } }
   @Published var onDeviceOnly: Bool { didSet { defaults.set(onDeviceOnly, forKey: "voiceAgent.onDeviceOnly") } }
@@ -57,10 +61,12 @@ final class VoiceAgentSettings: ObservableObject {
   @Published private(set) var knowledgeRules: [VoiceAgentRule]
   @Published private(set) var hasToken: Bool
   @Published private(set) var revision = UUID()
+  @Published private(set) var knowledgeRevision = UUID()
   private(set) var archiveOwnerID: UUID
 
   var identity: VoiceAgentConnectionIdentity {
-    .init(address: address, revision: revision, enabled: enabled, images: sharesImages, workMinutes: workMinutes)
+    .init(address: address, revision: revision, enabled: enabled, images: sharesImages, workMinutes: workMinutes,
+          knowledgeRevision: knowledgeRevision)
   }
 
   init(defaults: UserDefaults = .standard, tokenAccount: String = "voice-agent-token") {
@@ -72,6 +78,7 @@ final class VoiceAgentSettings: ObservableObject {
     speechRateMultiplier = VoiceAgentSpeechRate.normalized(
       defaults.object(forKey: "voiceAgent.speechRateMultiplier") as? Double ?? VoiceAgentSpeechRate.defaultMultiplier)
     sharesImages = defaults.object(forKey: "voiceAgent.images") as? Bool ?? true
+    sharesLearningTrace = defaults.bool(forKey: "voiceAgent.sharesLearningTrace")
     savesConversation = defaults.bool(forKey: "voiceAgent.saveConversation")
     confirmsVolumeEdits = defaults.object(forKey: "voiceAgent.confirmVolumeEdits") as? Bool ?? true
     archiveOwnerID = defaults.string(forKey: "voiceAgent.archiveOwner").flatMap(UUID.init(uuidString:)) ?? UUID()
@@ -99,6 +106,32 @@ final class VoiceAgentSettings: ObservableObject {
     return value
   }
 
+  func observerToken() -> String? {
+    guard let account = try? observerAccount() else { return nil }
+    return try? KeychainSecretStore.string(account: account)
+  }
+
+  func setObserverToken(_ raw: String) throws {
+    let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let account = try observerAccount()
+    if token.isEmpty {
+      try KeychainSecretStore.delete(account: account)
+    } else {
+      guard token.hasPrefix("bn1_"), token.utf8.count == 68,
+            token.utf8.dropFirst(4).allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
+      else { throw VoiceAgentError.configuration }
+      try KeychainSecretStore.setString(token, account: account)
+    }
+    sharesLearningTrace = false
+  }
+
+  private func observerAccount() throws -> String {
+    let endpoint = try VoiceAgentEndpoint(address)
+    return tokenAccount + "-observer-" + VoiceAgentLearnerStore.digest(Data(endpoint.origin.absoluteString.utf8) + certificate)
+  }
+
+  func refreshKnowledge() { knowledgeRevision = UUID() }
+
   func setToken(_ value: String) throws {
     let token = value.trimmingCharacters(in: .whitespacesAndNewlines)
     if token.isEmpty {
@@ -108,6 +141,7 @@ final class VoiceAgentSettings: ObservableObject {
       try KeychainSecretStore.setString(token, account: tokenAccount)
     }
     hasToken = !token.isEmpty
+    sharesLearningTrace = false
     revision = UUID()
     changeArchiveOwner()
   }
@@ -129,6 +163,7 @@ final class VoiceAgentSettings: ObservableObject {
   func importCertificate(_ data: Data) throws {
     let der = try VoiceAgentTLS.certificateData(data)
     certificate = der
+    sharesLearningTrace = false
     defaults.set(der, forKey: "voiceAgent.certificate")
     revision = UUID()
     changeArchiveOwner()
@@ -136,6 +171,7 @@ final class VoiceAgentSettings: ObservableObject {
 
   func removeCertificate() {
     certificate = Data()
+    sharesLearningTrace = false
     defaults.removeObject(forKey: "voiceAgent.certificate")
     revision = UUID()
     changeArchiveOwner()

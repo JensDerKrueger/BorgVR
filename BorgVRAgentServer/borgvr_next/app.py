@@ -14,9 +14,10 @@ from jsonschema import SchemaError
 from pydantic import ValidationError
 
 from .evidence import Evidence
+from .procedures import CHECKPOINT_BYTES
 from .model import ModelFailure, VLLM
 from .session import Session
-from .wire import InvalidMessage
+from .wire import InvalidMessage, decode
 
 
 def create_app(*, token, model, evidence=None, sequences=2, lifespan=None):
@@ -48,7 +49,7 @@ def create_app(*, token, model, evidence=None, sequences=2, lifespan=None):
     @app.head("/healthz")
     async def probe():
         return JSONResponse(None, headers={"BorgVR-Tool-Types": "1", "BorgVR-Expert-Knowledge": "1",
-                                           "BorgVR-Time-Only-Turns": "1"})
+                                           "BorgVR-Time-Only-Turns": "1", "BorgVR-Knowledge-Bundles": "1"})
 
     @app.get("/readyz")
     async def ready(request: Request):
@@ -74,6 +75,34 @@ def create_app(*, token, model, evidence=None, sequences=2, lifespan=None):
         if profile is None:
             return JSONResponse({"error": "unauthorized"}, status_code=401, headers=headers)
         return JSONResponse(await asyncio.to_thread(evidence.read_proposals, profile), headers=headers)
+
+    @app.get("/v1/observer/checkpoint")
+    @app.post("/v1/observer/checkpoint/import")
+    async def checkpoint(request: Request):
+        headers = {"Cache-Control": "no-store"}
+        if evidence is None:
+            return JSONResponse({"error": "not_available"}, status_code=404, headers=headers)
+        try:
+            profile = await observe(request.headers) if authorized(request.headers) else None
+        except InvalidMessage:
+            profile = None
+        if profile is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers=headers)
+        try:
+            if request.method == "GET":
+                result = await asyncio.to_thread(evidence.read_checkpoint, profile)
+                return JSONResponse(result, headers=headers)
+            body = bytearray()
+            async with asyncio.timeout(30):
+                async for chunk in request.stream():
+                    if len(body) + len(chunk) > CHECKPOINT_BYTES:
+                        return JSONResponse({"error": "checkpoint_too_large"}, status_code=413, headers=headers)
+                    body.extend(chunk)
+            data = decode(bytes(body), CHECKPOINT_BYTES)
+            status = await asyncio.to_thread(evidence.import_checkpoint, profile, data)
+            return JSONResponse({"status": status}, status_code=409 if status == "conflict" else 200, headers=headers)
+        except (InvalidMessage, TimeoutError):
+            return JSONResponse({"error": "invalid_checkpoint"}, status_code=422, headers=headers)
 
     @app.websocket("/v1/session")
     async def websocket(socket: WebSocket):

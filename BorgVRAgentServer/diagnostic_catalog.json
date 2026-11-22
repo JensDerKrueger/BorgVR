@@ -866,15 +866,27 @@
     "name" : "set_transfer_function"
   },
   {
-    "description" : "Replace just one component of a zero-based channel's TF. Components 0/1/2/3 are red/green/blue/alpha. Pass normalized [position,value] pairs in [0,1] with strictly increasing positions. BorgVR interpolates linearly, holding the first and last values outside the points. All other components and channels are preserved. For example, blue from 0 at 25% to 1 at 75% uses component 2 and points [[0.25,0],[0.75,1]].",
+    "description" : "Replace just one component of a zero-based channel's TF. Components 0\/1\/2\/3 are red\/green\/blue\/alpha. Pass normalized [position,value] pairs in [0,1] with strictly increasing positions. BorgVR interpolates linearly, holding the first and last values outside the points. All other components and channels are preserved. For example, blue from 0 at 25% to 1 at 75% uses component 2 and points [[0.25,0],[0.75,1]].",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
-        "channel" : { "maximum" : 3, "minimum" : 0, "type" : "integer" },
-        "component" : { "maximum" : 3, "minimum" : 0, "type" : "integer" },
+        "channel" : {
+          "maximum" : 3,
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "component" : {
+          "maximum" : 3,
+          "minimum" : 0,
+          "type" : "integer"
+        },
         "points" : {
           "items" : {
-            "items" : { "maximum" : 1, "minimum" : 0, "type" : "number" },
+            "items" : {
+              "maximum" : 1,
+              "minimum" : 0,
+              "type" : "number"
+            },
             "maxItems" : 2,
             "minItems" : 2,
             "type" : "array"
@@ -884,7 +896,11 @@
           "type" : "array"
         }
       },
-      "required" : ["channel", "component", "points"],
+      "required" : [
+        "channel",
+        "component",
+        "points"
+      ],
       "type" : "object"
     },
     "name" : "set_transfer_function_component"
@@ -964,7 +980,9 @@
     "description" : "Load a saved BorgVR visualization JSON for the open dataset. The user chooses the file locally. No arguments or file paths. Changes the presentation, not voxels or annotations.",
     "inputSchema" : {
       "additionalProperties" : false,
-      "properties" : {},
+      "properties" : {
+
+      },
       "type" : "object"
     },
     "name" : "load_visualization_state"
@@ -996,19 +1014,36 @@
           "items" : {
             "additionalProperties" : false,
             "properties" : {
-              "x" : {"maximum": 1, "minimum": 0, "type": "number"},
-              "y" : {"maximum": 1, "minimum": 0, "type": "number"}
+              "x" : {
+                "maximum" : 1,
+                "minimum" : 0,
+                "type" : "number"
+              },
+              "y" : {
+                "maximum" : 1,
+                "minimum" : 0,
+                "type" : "number"
+              }
             },
-            "required" : ["x", "y"],
+            "required" : [
+              "x",
+              "y"
+            ],
             "type" : "object"
           },
           "maxItems" : 64,
           "minItems" : 1,
           "type" : "array"
         },
-        "screenshot_id" : {"maxLength": 36, "type": "string"}
+        "screenshot_id" : {
+          "maxLength" : 36,
+          "type" : "string"
+        }
       },
-      "required" : ["screenshot_id", "points"],
+      "required" : [
+        "screenshot_id",
+        "points"
+      ],
       "type" : "object"
     },
     "name" : "pick_screenshot_positions"
@@ -1047,6 +1082,44 @@
       "type" : "object"
     },
     "name" : "cancel_import"
+  },
+  {
+    "description" : "Render a coarse, isolated Z projection of a scalar intensity band without changing the current view.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "channel" : {
+          "maximum" : 3,
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "high" : {
+          "maximum" : 1,
+          "minimum" : 0,
+          "type" : "number"
+        },
+        "low" : {
+          "maximum" : 1,
+          "minimum" : 0,
+          "type" : "number"
+        },
+        "palette" : {
+          "enum" : [
+            "grayscale",
+            "rainbow"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "channel",
+        "high",
+        "low",
+        "palette"
+      ],
+      "type" : "object"
+    },
+    "name" : "capture_tf_preview"
   },
   {
     "description" : "Read confirmed historical BorgVR tool executions in this conversation and current app\/dataset\/edit context. Use source 'chat' for the user's earlier messages and final assistant text. Filter command receipts by tool or kind, then pass nextCursor as cursor for older matches. Larger fields can be read by id, field and nextOffset (byte offset). History is not current state, permission, or a replay command.",

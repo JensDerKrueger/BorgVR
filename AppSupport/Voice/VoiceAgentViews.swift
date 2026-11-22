@@ -656,6 +656,9 @@ struct VoiceAgentSettingsView: View {
       }
       .disabled(!settings.speaks)
       Toggle(voiceAgentText("On-device speech recognition only"), isOn: $settings.onDeviceOnly)
+      DisclosureGroup(voiceAgentText("Learner state")) {
+        VoiceAgentLearnerSettings(settings: settings)
+      }
       if !settings.knowledgeRules.isEmpty {
         Text(voiceAgentText("Remembered rules")).font(.headline)
         ForEach(settings.knowledgeRules) { rule in
@@ -705,6 +708,150 @@ struct VoiceAgentSettingsView: View {
         }
         errorText = nil
       } catch { errorText = VoiceAgentError.configuration.localizedDescription }
+    }
+  }
+}
+
+private struct LearnerCheckpointDocument: FileDocument {
+  static var readableContentTypes: [UTType] { [.json] }
+  var bytes: Data
+
+  init(bytes: Data) { self.bytes = bytes }
+  init(configuration: ReadConfiguration) throws {
+    guard let bytes = configuration.file.regularFileContents else { throw VoiceAgentLearnerStore.Failure.invalid }
+    self.bytes = bytes
+  }
+  func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { .init(regularFileWithContents: bytes) }
+}
+
+private struct VoiceAgentLearnerSettings: View {
+  @ObservedObject var settings: VoiceAgentSettings
+  @State private var observer = ""
+  @State private var busy = false
+  @State private var importing = false
+  @State private var exporting = false
+  @State private var document: LearnerCheckpointDocument?
+  @State private var error: String?
+
+  private var store: VoiceAgentLearnerStore { .init() }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        SecureField(voiceAgentText(settings.observerToken() == nil ? "Observer token" : "Observer token stored in Keychain"), text: $observer)
+          .textFieldStyle(.roundedBorder)
+        Button { saveToken(observer) } label: { Image(systemName: "checkmark") }
+          .help(voiceAgentText("Save token")).accessibilityLabel(voiceAgentText("Save token"))
+          .disabled(observer.isEmpty)
+        if settings.observerToken() != nil {
+          Button { saveToken("") } label: { Image(systemName: "trash") }
+            .help(voiceAgentText("Remove token")).accessibilityLabel(voiceAgentText("Remove token"))
+        }
+      }.buttonStyle(.bordered)
+      if settings.observerToken() != nil {
+        let checkpoint = store.cached(settings)
+        Toggle(voiceAgentText("Share assistant interactions with the learner"), isOn: $settings.sharesLearningTrace)
+        VStack(alignment: .leading, spacing: 6) {
+          Button(voiceAgentText("Fetch learner state"), systemImage: "arrow.down.circle") {
+            run { _ = try await store.fetch(settings) }
+          }
+          Button(voiceAgentText("Export learner state"), systemImage: "square.and.arrow.up") {
+            run {
+              document = try LearnerCheckpointDocument(bytes: store.exportCheckpoint(settings))
+              exporting = true
+            }
+          }.disabled(checkpoint == nil)
+          Button(voiceAgentText("Import learner state on this server"), systemImage: "square.and.arrow.down") {
+            importing = true
+          }
+        }.buttonStyle(.bordered)
+        if busy { ProgressView().controlSize(.small) }
+        let entries = store.entries(in: checkpoint)
+        if !entries.isEmpty {
+          ForEach(entries) { entry in
+            DisclosureGroup {
+              Text(entry.situation).font(.caption).foregroundStyle(.secondary)
+              if let guidance = entry.guidance {
+                Text(guidance).font(.callout).textSelection(.enabled)
+                approvalSwitch(entry, .guidance, label: "Use this guidance")
+              }
+              if let program = entry.program {
+                DisclosureGroup(voiceAgentText("Procedure details")) {
+                  ScrollView {
+                    Text(verbatim: program).font(.caption.monospaced()).textSelection(.enabled)
+                      .frame(maxWidth: .infinity, alignment: .leading)
+                  }.frame(maxHeight: 180)
+                }
+                approvalSwitch(entry, .procedure, label: "Allow this procedure")
+              }
+            } label: { Text(entry.goal).fixedSize(horizontal: false, vertical: true) }
+          }
+        }
+        if let checkpoint {
+          hypotheses(checkpoint)
+        }
+      }
+      if let error { Text(error).font(.callout).foregroundStyle(.red) }
+    }
+    .disabled(busy)
+    .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+      run { try await store.importCheckpoint(try result.get(), settings: settings) }
+    }
+    .fileExporter(isPresented: $exporting, document: document, contentType: .json, defaultFilename: "BorgVR-Learner") { result in
+      if case .failure(let failure) = result { error = failure.localizedDescription }
+      document = nil
+    }
+  }
+
+  private func hypotheses(_ checkpoint: [String: Any]) -> some View {
+    let rows = checkpoint["hypotheses"] as? [[String: Any]] ?? []
+    let records = checkpoint["evidence"] as? [[String: Any]] ?? []
+    return DisclosureGroup(voiceAgentText("Open hypotheses and evidence")) {
+      ForEach(rows.indices, id: \.self) { index in
+        let row = rows[index]
+        if let claim = row["claim"] as? String {
+          DisclosureGroup(claim) {
+            ForEach(row["next_steps"] as? [String] ?? [], id: \.self) { step in
+              Text(step).font(.caption)
+            }
+            let refs = row["evidence"] as? [[String: Any]] ?? []
+            ForEach(refs.indices, id: \.self) { ref in
+              let item = refs[ref]
+              if let id = item["id"] as? String,
+                 let record = records.first(where: { $0["id"] as? String == id }),
+                 let summary = record["summary"] as? String {
+                Label(summary, systemImage: item["relation"] as? String == "supports" ? "plus.circle" :
+                  item["relation"] as? String == "contradicts" ? "minus.circle" : "questionmark.circle")
+                  .font(.caption).textSelection(.enabled)
+              }
+            }
+          }
+        }
+      }
+    }.disabled(rows.isEmpty)
+  }
+
+  private func approvalSwitch(_ entry: VoiceAgentLearnerStore.Entry, _ part: VoiceAgentLearnerStore.Part, label: String) -> some View {
+    Toggle(voiceAgentText(label), isOn: Binding(
+      get: { store.approval(entry, part, settings: settings) },
+      set: { approved in
+        do { try store.setApproval(approved, entry: entry, part: part, settings: settings); error = nil }
+        catch { self.error = error.localizedDescription }
+      }))
+  }
+
+  private func saveToken(_ value: String) {
+    do { try settings.setObserverToken(value); observer = ""; error = nil }
+    catch { self.error = error.localizedDescription }
+  }
+
+  private func run(_ operation: @escaping () async throws -> Void) {
+    busy = true
+    error = nil
+    Task { @MainActor in
+      defer { busy = false }
+      do { try await operation() }
+      catch { self.error = error.localizedDescription }
     }
   }
 }

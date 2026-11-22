@@ -28,8 +28,8 @@ struct VoiceAgentTypedCatalogTests {
     try settings.importCertificate(certificate)
     try settings.setToken(token)
 
-    for rendering in [false, true] {
-      let request = rendering ? "scope-renderer" : "scope-start"
+    for request in ["scope-start", "scope-renderer", "scope-sweep"] {
+      let rendering = request != "scope-start"
       settings.workMinutes = rendering ? 180 : 60
       let app = AppModel()
       var context: VoiceAgentContext?
@@ -44,6 +44,17 @@ struct VoiceAgentTypedCatalogTests {
         app.prepareDatasetRenderer(key: app.activeDatasetRenderKey, metadata: metadata, requestID: opening)
         _ = app.markRenderedDataset(key: app.activeDatasetRenderKey, requestID: opening)
         app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
+        if request == "scope-sweep" {
+          let file = try BORGVRFileData(filename: dataset)
+          _ = app.volumeBrush.open(file, datasetURL: fixture.appending(path: "test-volume.data"))
+          let deadline = ContinuousClock.now + .seconds(5)
+          while app.volumeBrush.isOpeningState && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+          }
+          guard !app.volumeBrush.isOpeningState, app.volumeBrush.supportsIntensityPreview else {
+            throw Failure.failed("Preview volume was not prepared")
+          }
+        }
         context = .init(datasetID: entry.uniqueId, openingID: opening, editStateID: nil)
       }
       let session = ScreenBorgVRSession.screen(appModel: app,
@@ -68,23 +79,52 @@ struct VoiceAgentTypedCatalogTests {
       }
       try JSONSerialization.data(withJSONObject: expected).write(to: fixture.appending(path: request + ".json"))
       let expertise = source + "\n[tests.connection]\ngoal = \"Fixture only\"\nsteps = [\"\(request.uppercased())\"]\n"
-      let controller = VoiceAgentController(settings: settings, expertKnowledgeSource: expertise)
+      let bundleURL = URL(fileURLWithPath: CommandLine.arguments[3]).deletingLastPathComponent().appending(path: "knowledge-bundle.json")
+      let bundle = request == "scope-sweep"
+        ? try JSONSerialization.jsonObject(with: Data(contentsOf: bundleURL)) as? [String: Any] : nil
+      let controller = VoiceAgentController(settings: settings, expertKnowledgeSource: expertise, bundledKnowledge: bundle)
       controller.configure(bridge: bridge)
       let before = session.currentSnapshot().transform
+      let beforeTF = try? service.transferFunction(channel: 0).validatedSamples()
       await controller.submit(request)
       let clock = ContinuousClock()
       let deadline = clock.now.advanced(by: .seconds(20))
       while controller.busy && clock.now < deadline {
         try await Task.sleep(for: .milliseconds(25))
       }
-      guard controller.errorText == nil, controller.messages.last?.text == "Catalog and rules received." else {
+      let final = request == "scope-sweep" ? "Sweep completed without changing the view." : "Catalog and rules received."
+      guard controller.errorText == nil, controller.messages.last?.text == final else {
         throw Failure.failed("\(request): \(controller.errorText ?? "No response")")
       }
-      guard !rendering || session.currentSnapshot().transform != before else {
+      guard request != "scope-renderer" || session.currentSnapshot().transform != before else {
         throw Failure.failed("The new server did not execute the typed rotation")
+      }
+      if request == "scope-sweep" {
+        let afterTF = try service.transferFunction(channel: 0).validatedSamples()
+        guard controller.messages.contains(where: { $0.text == "Ich vergleiche die Intensitätsbereiche." }),
+              beforeTF == afterTF, session.currentSnapshot().transform == before else {
+          throw Failure.failed("Sweep did not announce itself or changed the visualization")
+        }
+        app.volumeBrush.close()
       }
       controller.cancel()
     }
-    print("Native typed catalog and per-connection knowledge reached the model over TLS/WSS; 270 state reads and a rotation completed.")
+    let observer = try String(contentsOf: fixture.appending(path: "observer-token.txt"), encoding: .utf8)
+    try settings.setObserverToken(observer)
+    defer { try? settings.setObserverToken("") }
+    let learner = VoiceAgentLearnerStore(directory: fixture.appending(path: "client-learner"))
+    _ = try await learner.fetch(settings)
+    guard let entry = learner.entries(settings).first, entry.guidance != nil, entry.program != nil,
+          let hypotheses = learner.cached(settings)?["hypotheses"] as? [[String: Any]], hypotheses.count == 1,
+          learner.offer(settings, bundled: nil) == nil else {
+      throw Failure.failed("The native client did not cache an inactive hypothesis with both knowledge parts")
+    }
+    try learner.setApproval(true, entry: entry, part: .guidance, settings: settings)
+    guard let allowed = learner.offer(settings, bundled: nil)?["entries"] as? [[String: Any]],
+          allowed.count == 1, allowed[0]["guidance"] != nil, allowed[0]["procedure"] == nil else {
+      throw Failure.failed("The native client did not keep the two knowledge approvals independent")
+    }
+    print("Native TLS/WSS catalog, 270 state reads, rotation, and read-only native intensity sweep passed.")
+    print("Native learner checkpoint download and independent local approvals passed.")
   }
 }

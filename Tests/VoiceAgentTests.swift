@@ -31,6 +31,13 @@ struct VoiceAgentTests {
     }
     try rejects { try VoiceAgentEndpoint.validateToken("short") }
     try rejects { try VoiceAgentEndpoint.validateToken(String(repeating: "a", count: 64) + "\r\nInjected") }
+    let projection = VoiceAgentVolumePreview(width: 2, height: 1, depth: 2, samples: [0.1, 0.6, 0.8, 0.55])
+    try expect(try previewRGBA(projection.render(low: 0, high: 0.2, rainbow: false)) == [26, 26, 26, 255, 0, 0, 0, 0],
+               "An isolated opacity band leaked another band")
+    try expect(try previewRGBA(projection.render(low: 0.5, high: 0.7, rainbow: false)) == [0, 0, 0, 0, 153, 153, 153, 255],
+               "Only the first sample inside the band should color a projection ray")
+    let colored = try previewRGBA(projection.render(low: 0.5, high: 0.7, rainbow: true))
+    try expect(colored[7] == 255 && colored[4] != colored[6], "The rainbow palette did not color the visible pixel")
     var ledger = VoiceAgentCallLedger()
     try expect(try ledger.begin(id: "call", signature: "original") == nil, "First call already cached")
     try expect(try ledger.begin(id: "call", signature: "original")?.reply == nil, "Pending replay has a result")
@@ -60,6 +67,17 @@ struct VoiceAgentTests {
     try expect(!system.accepts(untrusted!, host: "localhost"), "Untrusted self-signed certificate accepted")
 
     let metadata = try BORGVRMetaData(url: URL(fileURLWithPath: CommandLine.arguments[1]))
+    let scanTimer = ContinuousClock()
+    let scanStart = scanTimer.now
+    let preview = try VoiceAgentVolumePreview.read(BORGVRFileData(filename: CommandLine.arguments[1]), channel: 0)
+    let loadTime = scanStart.duration(to: scanTimer.now)
+    try expect(preview.samples.max() ?? 0 > 0 && preview.samples.min() != preview.samples.max(), "Dataset preview is blank")
+    let imagesStart = scanTimer.now
+    for i in 0..<5 {
+      let png = try preview.render(low: Double(i) / 5, high: Double(i + 1) / 5, rainbow: false)
+      try expect(CGImageSourceCreateWithData(png as CFData, nil) != nil, "Dataset preview did not encode as PNG")
+    }
+    print("Isolated intensity preview: load=\(loadTime), five previews=\(imagesStart.duration(to: scanTimer.now))")
     let app = AppModel(), parameters = RenderingParameters(), appSettings = AppSettings()
     let entry = AppModel.DatasetEntry(identifier: CommandLine.arguments[1], description: "Synthetic agent test",
       source: .local, uniqueId: metadata.uniqueID)
@@ -232,7 +250,7 @@ struct VoiceAgentTests {
       throw Failure.failed("Stale agent context was dispatched")
     } catch is VoiceAgentError {}
     try expect(session.currentSnapshot().transform == before, "Context check happened after mutation")
-    let definitions = router.toolDefinitions + VoiceAgentPolicy.importCatalog
+    let definitions = router.toolDefinitions + VoiceAgentPolicy.importCatalog + [VoiceAgentPolicy.intensityPreviewTool]
     let catalog = VoiceAgentPolicy.catalog(definitions, vision: false, transferFunctions: true, images: true)
     let applicationCatalog = VoiceAgentPolicy.catalog(definitions, vision: false,
       transferFunctions: true, images: true, datasetReady: false)
@@ -408,6 +426,19 @@ struct VoiceAgentTests {
     app.closeDataset(destination: .datasetSelection)
     try await testImportWorkflow(fixture: fixture, service: service, model: app)
     print("Native assistant tests passed: TLS trust, local policy, screenshots, demonstrations, import and fusion")
+  }
+
+  static func previewRGBA(_ data: Data) throws -> [UInt8] {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw Failure.failed("Invalid preview PNG") }
+    var pixels = [UInt8](repeating: 0, count: 8)
+    try pixels.withUnsafeMutableBytes { pointer in
+      guard let canvas = CGContext(data: pointer.baseAddress, width: 2, height: 1, bitsPerComponent: 8, bytesPerRow: 8,
+                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+      else { throw Failure.failed("Could not decode preview") }
+      canvas.draw(image, in: CGRect(x: 0, y: 0, width: 2, height: 1))
+    }
+    return pixels
   }
 
   private static func testImportWorkflow(fixture: URL, service: BorgVRScreenCommandService, model: AppModel) async throws {

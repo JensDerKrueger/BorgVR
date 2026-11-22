@@ -50,6 +50,7 @@ class Turn:
     changed: bool = False
     uncertain: bool = False
     dispatched: int = 0
+    model_requests: int = 0
     opened: bool = False
     active_edit_state: str | None = None
     created_edits: set[str] = field(default_factory=set)
@@ -133,7 +134,8 @@ async def perform(turn, port):
             messages.append({"role": "user", "content": "The user changed the view. Re-read state and continue "
                              "the original task without replaying completed actions."})
         calls_available = port.max_calls is None or turn.dispatched < port.max_calls
-        tools = [tool.as_model_function() for tool in port.tools.values()] if calls_available else []
+        model_tools = port.model_tools
+        tools = [tool.as_model_function() for tool in model_tools.values()] if calls_available else []
         current_messages = retain_images(messages)
         try:
             response = await port.infer(current_messages, tools, revision)
@@ -154,7 +156,7 @@ async def perform(turn, port):
             port.log_tool(turn, "rejected", reason="invalid_or_repeated_call")
             raise ModelFailure("invalid_or_repeated_call", phase="tool_dispatch")
         turn.attempts.add(response.id)
-        tool = port.tools.get(response.name)
+        tool = model_tools.get(response.name)
         arguments = None
         try:
             arguments = decode(response.arguments, RESULT_BYTES)
@@ -194,7 +196,7 @@ async def perform(turn, port):
                     "note": notes.get(reason, "Use a JSON object matching the advertised closed schema.")}
             image = None
         else:
-            data, image = await port.dispatch(turn, response.name, arguments, revision)
+            data, image = await port.dispatch_model_tool(turn, response.name, arguments, revision)
             ok = not (isinstance(data, dict) and (data.get("not_applied") or data.get("ok") is False or data.get("error")))
             if ok:
                 consecutive_rejections = 0

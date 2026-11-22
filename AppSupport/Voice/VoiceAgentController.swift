@@ -20,6 +20,7 @@ final class VoiceAgentController: ObservableObject {
   enum ConnectionState { case disconnected, connecting, ready }
   let settings: VoiceAgentSettings
   private let expertKnowledgeSource: String?
+  private let bundledKnowledge: [String: Any]?
   private var sendsTypedTools = false
   let speech = VoiceAgentSpeech()
   let demonstrations = WorkflowDemonstrationRecorder()
@@ -66,6 +67,7 @@ final class VoiceAgentController: ObservableObject {
   private var volumeBrickContext: VoiceAgentContext?
   private let diagnosticLog = Logger(subsystem: "de.uni-due.BorgVR", category: "VoiceAgent")
   private var catalog: [[String: Any]] = []
+  private var sendsKnowledgeBundles = false
   private var ledger = VoiceAgentCallLedger()
   private var commandHistory = VoiceAgentCommandHistory<VoiceAgentContext?>()
   private var historyOwner: (address: String, revision: UUID)?
@@ -136,11 +138,13 @@ final class VoiceAgentController: ObservableObject {
   private var lastActivity = Date()
 
   init(settings: VoiceAgentSettings? = nil, conversationStore: VoiceAgentConversationStore = .init(),
-       expertKnowledgeSource: String? = VoiceAgentExpertKnowledge.bundled) {
+       expertKnowledgeSource: String? = VoiceAgentExpertKnowledge.bundled,
+       bundledKnowledge: [String: Any]? = VoiceAgentExpertKnowledge.procedureBundle) {
     let settings = settings ?? VoiceAgentSettings()
     self.settings = settings
     self.conversationStore = conversationStore
     self.expertKnowledgeSource = expertKnowledgeSource
+    self.bundledKnowledge = bundledKnowledge
     archiveOwner = settings.archiveOwnerID
     savingConversation = settings.savesConversation
     if savingConversation {
@@ -375,7 +379,8 @@ final class VoiceAgentController: ObservableObject {
       transferFunctions: bridge.hasTransferFunctions, images: settings.sharesImages, datasetReady: hasDataset)
     let available = !hasDataset && bridge.applicationDatasetContext != nil
       ? tools.filter { $0["name"] as? String != "open_dataset" } : tools
-    return VoiceAgentPolicy.wireCatalog(available, typed: sendsTypedTools)
+    let compatible = sendsKnowledgeBundles ? available : available.filter { $0["name"] as? String != "capture_tf_preview" }
+    return VoiceAgentPolicy.wireCatalog(compatible, typed: sendsTypedTools)
   }
 
   private var wireDatasetID: Any { context?.datasetID as Any? ?? NSNull() }
@@ -562,6 +567,9 @@ final class VoiceAgentController: ObservableObject {
     self.session = session
     var request = URLRequest(url: endpoint.socket)
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    if settings.sharesLearningTrace, let observer = settings.observerToken() {
+      request.setValue(observer, forHTTPHeaderField: "X-BorgVR-Observer")
+    }
     request.timeoutInterval = 15
     let socket = session.webSocketTask(with: request)
     socket.delegate = transport
@@ -576,6 +584,7 @@ final class VoiceAgentController: ObservableObject {
     let features = await VoiceAgentExpertKnowledge.serverFeatures(endpoint: endpoint, session: session, transport: transport)
     guard generation == id, bridge.context == captured else { throw CancellationError() }
     sendsTypedTools = features.typedTools
+    sendsKnowledgeBundles = features.typedTools && features.knowledgeBundles
     catalog = availableTools()
     let requestedSeconds = (features.timeOnlyTurns ? settings.workMinutes : min(settings.workMinutes, 120)) * 60
     var executionLimits = ["timeout_seconds": requestedSeconds]
@@ -587,6 +596,9 @@ final class VoiceAgentController: ObservableObject {
                                "execution_limits": executionLimits]
     if features.expertKnowledge, let expertKnowledge = expertKnowledgeSource {
       hello["expert_knowledge_toml"] = expertKnowledge
+    }
+    if sendsKnowledgeBundles, let bundle = VoiceAgentLearnerStore().offer(settings, bundled: bundledKnowledge) {
+      hello["expert_knowledge_bundle"] = bundle
     }
     try await send(hello)
     let ready = try decode(await socket.receive())
@@ -1273,8 +1285,8 @@ final class VoiceAgentController: ObservableObject {
         self.openingPreviousContext = nil
         self.datasetChange = nil
         if self.collaborationEnabled { payload["view_revision"] = expectedRevision ?? 0 }
-        if name == "capture_screenshot" {
-          guard let contents = result["content"] as? [[String: Any]],
+        if name == "capture_screenshot" || name == "capture_tf_preview" {
+          guard self.settings.sharesImages, let contents = result["content"] as? [[String: Any]],
                 let encoded = contents.first?["data"] as? String,
                 let png = Data(base64Encoded: encoded) else { throw VoiceAgentError.imageTooLarge }
           let image = try Self.agentImage(png)
@@ -1293,7 +1305,7 @@ final class VoiceAgentController: ObservableObject {
         }
         let reply = try VoiceAgentPolicy.encoded(payload)
         try self.ledger.finish(id: callID, reply: reply)
-        if !notApplied, let output = payload["result"] as? [String: Any] {
+        if !notApplied, name != "capture_tf_preview", let output = payload["result"] as? [String: Any] {
           // A confirmed local result still exists if sending its reply loses the socket.
           // Image bytes are on a separate wire field and are deliberately never retained.
           self.commandHistory.append(scope: self.context, tool: name, arguments: arguments, result: output)

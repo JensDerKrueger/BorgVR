@@ -28,5 +28,24 @@ Set `BORGVR_NEXT_LEARNER_URL`, `BORGVR_NEXT_LEARNER_MODEL` and
 `BORGVR_NEXT_LEARNER_TOKEN_FILE` for the worker. The observer credential is
 distinct from the chat bearer token. A consenting protocol client uses
 `X-BorgVR-Observer`; the hypotheses endpoint requires both credentials.
-The native app does not yet enroll observer profiles or move their state
-between servers.
+
+## Use a profile in BorgVR
+
+In the assistant settings, open **Learner state** and enter the observer
+token from `provision`. It is stored in the Keychain for the current server
+and certificate. **Share assistant interactions with the learner** is an
+explicit opt-in to sending interaction traces; it does not send screenshot
+pixels or microphone recordings to the learner. The worker continues to
+process queued traces after the app disconnects.
+
+Use **Fetch learner state** to keep a local checkpoint. Review guidance
+and procedures separately. Newly generated drafts are not used in a live
+session until their corresponding part is approved in BorgVR. Procedures
+must still pass the agent's checks and use the live app's allowed capabilities.
+
+To move servers, fetch and export the checkpoint, configure the destination
+server and an empty observer profile, then select **Import learner state on
+this server**. The export can be made from the locally cached checkpoint
+without the source server. The file contains private evidence, not server
+access tokens. The destination does not overwrite existing work or activate
+transferred drafts automatically.

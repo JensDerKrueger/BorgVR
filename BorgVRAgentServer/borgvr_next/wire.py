@@ -124,6 +124,7 @@ class Hello(Message):
     execution_limits: Limits | None = None
     knowledge: Annotated[list[Annotated[str, Field(min_length=1, max_length=500)]], Field(max_length=16)] = []
     expert_knowledge_toml: Annotated[str, Field(min_length=1, max_length=65536)] | None = None
+    expert_knowledge_bundle: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def validate_capabilities(self):

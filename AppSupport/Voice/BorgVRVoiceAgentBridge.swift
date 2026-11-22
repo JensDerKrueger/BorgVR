@@ -85,7 +85,10 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   var rendererReady: Bool { service.applicationState().rendererReady && readinessProvider() }
   var datasetID: String? { service.applicationState().dataset?.id }
   var hasTransferFunctions: Bool { service.transferFunctionCount > 0 }
-  var toolDefinitions: [[String: Any]] { router.toolDefinitions + (beginImport == nil ? [] : VoiceAgentPolicy.importCatalog) }
+  var toolDefinitions: [[String: Any]] {
+    router.toolDefinitions + (beginImport == nil ? [] : VoiceAgentPolicy.importCatalog)
+      + ((service.volumeEditing as? VolumeBrushModel)?.supportsIntensityPreview == true ? [VoiceAgentPolicy.intensityPreviewTool] : [])
+  }
   var importUpdates: AnyPublisher<VoiceAgentImportStatus?, Never> { $importStatus.eraseToAnyPublisher() }
 
   func cancelImport(id: UUID) {
@@ -175,6 +178,15 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   func executeTool(name: String, arguments: [String: Any], validateContext: @escaping () throws -> Void) async throws -> [String: Any] {
     try validateContext()
     switch name {
+      case "capture_tf_preview":
+        guard let brush = service.volumeEditing as? VolumeBrushModel,
+              let channel = arguments["channel"] as? Int, let low = arguments["low"] as? Double,
+              let high = arguments["high"] as? Double, let palette = arguments["palette"] as? String else {
+          throw BorgVRMCPCommandError.screenshotUnavailable
+        }
+        let png = try await brush.captureIntensityPreview(channel: channel, low: low, high: high, rainbow: palette == "rainbow")
+        try validateContext()
+        return ["content": [["type": "image", "mimeType": "image/png", "data": png.base64EncodedString()]]]
       case "get_import_status":
         if let seconds = arguments["wait_seconds"] as? Double, seconds > 0,
            let job = importStatus, job.active {

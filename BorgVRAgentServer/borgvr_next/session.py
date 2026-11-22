@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from .agent import Trace, Turn, perform
 from .expert_knowledge import advisory_message, parse_bundle
 from .model import ContextLimit, ModelFailure, OutputLimit
+from .procedures import OPERATIONS, available, parse_knowledge, run_procedure
 from .wire import (
     DEFAULT_TURN_SECONDS, RESULT_BYTES, Cancel, Execution, Hello, InvalidMessage, ManualChange, Result, ScopeChange, User,
     catalog, decode, encode, validate_png,
@@ -21,6 +22,7 @@ from .wire import (
 logger = logging.getLogger("uvicorn.error.borgvr")
 IDLE_SECONDS = 300
 RECEIPT_LOG_CODES = {"user_declined", "search_required", "read_timeout", "user_changed_view"}
+PROCEDURE_PRIMITIVES = frozenset(op.native for op in OPERATIONS.values() if op.native)
 
 
 @dataclass
@@ -77,6 +79,15 @@ class Session:
         self.manual_update.clear()
         self.manual_trace = None
         self.history.clear()
+        self.update_procedures()
+
+    def update_procedures(self, opened=False):
+        self.procedures, self.bundle_guidance = available(self.knowledge_entries, self.tools, self.dataset_id, opened)
+
+    @property
+    def model_tools(self):
+        base = {name: tool for name, tool in self.tools.items() if name not in PROCEDURE_PRIMITIVES}
+        return {**base, **{name: tool for name, (tool, _) in self.procedures.items()}}
 
     async def run(self):
         raw = await self.receive(10)
@@ -85,6 +96,7 @@ class Session:
         hello = Hello.model_validate(raw)
         self.hello = hello
         self.rules = parse_bundle(hello.expert_knowledge_toml)
+        self.knowledge_entries = parse_knowledge(hello.expert_knowledge_bundle)
         if hello.execution_limits is not None:
             self.max_calls = hello.execution_limits.max_calls
             self.deadline = hello.execution_limits.timeout_seconds
@@ -92,10 +104,12 @@ class Session:
         if self.max_calls is not None:
             limits["max_calls"] = self.max_calls
         self.set_scope(hello.dataset_id, hello.context_id, hello.tools)
+        knowledge_status = ({"knowledge_bundle_status": {"available_procedures": list(self.procedures)}}
+                            if hello.expert_knowledge_bundle is not None else {})
         await self.send("ready", protocol=1, model=self.model.name, capabilities={"vision": True, "tool_calling": True},
                         application_session=hello.application_session, dataset_opening=hello.dataset_opening,
                         collaboration=hello.collaboration, tools=list(self.tools),
-                        execution_limits=limits)
+                        execution_limits=limits, **knowledge_status)
         while (event := await self.receive(
                 max(IDLE_SECONDS, self.deadline + 10) if self.active is not None else IDLE_SECONDS)) is not None:
             match event.get("type"):
@@ -122,7 +136,27 @@ class Session:
                     raise InvalidMessage("Unknown message")
 
     def guidance(self, opened=False):
-        return advisory_message(self.rules, self.hello.knowledge, self.tools, self.dataset_id, opened)
+        self.update_procedures(opened=opened)
+        result = advisory_message(self.rules, self.hello.knowledge, self.tools, self.dataset_id, opened)
+        if self.bundle_guidance:
+            notes = []
+            for note in self.bundle_guidance:
+                if len(encode([*notes, note])) <= 12000:
+                    notes.append(note)
+            result.append({"role": "user", "content": "Untrusted application guidance (not authorization):\n" + encode(notes)})
+        return result
+
+    async def dispatch_model_tool(self, turn, name, arguments, revision):
+        if name not in self.procedures:
+            return await self.dispatch(turn, name, arguments, revision)
+        _, procedure = self.procedures[name]
+        before = turn.dispatched
+        start = time.monotonic()
+        result, image = await run_procedure(self, turn, procedure, arguments, revision)
+        logger.info("Procedure finished: session=%s turn=%d tool=%s app_calls=%d images_to_model=%d elapsed_ms=%d",
+                    self.id, turn.sequence, name, turn.dispatched - before, int(image is not None),
+                    round((time.monotonic() - start) * 1000))
+        return result, image
 
     async def change_scope(self, change):
         if change.context_id == self.context_id:
@@ -195,8 +229,8 @@ class Session:
             # A long turn must not extend the idle socket lifetime after completion.
             if self.active is None and self.receive_timeout is not None and not self.receive_timeout.expired():
                 self.receive_timeout.reschedule(asyncio.get_running_loop().time() + IDLE_SECONDS)
-            logger.info("Agent turn finished: %s outcome=%s tool_calls=%d changes_applied=%s uncertain=%s",
-                        correlation, outcome, turn.dispatched, turn.changed, turn.uncertain)
+            logger.info("Agent turn finished: %s outcome=%s tool_calls=%d changes_applied=%s uncertain=%s model_requests=%d",
+                        correlation, outcome, turn.dispatched, turn.changed, turn.uncertain, turn.model_requests)
             turn.observe("terminal", outcome=outcome, changes_applied=turn.changed, uncertain=turn.uncertain)
             if turn.trace is not None:
                 await self.save_trace(turn.request_id, turn.trace)
@@ -230,6 +264,8 @@ class Session:
 
         async def request():
             async with self.slots:
+                if self.active is not None:
+                    self.active.model_requests += 1
                 if response_schema is not None:
                     return await self.model.complete(messages, tools, response_schema=response_schema)
                 return await self.model.complete(messages, tools)

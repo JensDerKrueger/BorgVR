@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .evidence import Evidence
 from .model import ContextLimit, ModelFailure, VLLM
+from .procedures import OPERATIONS, draft_procedure
 from .wire import decode, encode
 
 logger = logging.getLogger("borgvr_next.learner")
@@ -30,6 +31,7 @@ class Hypothesis(BaseModel):
     recommendation: Annotated[str, Field(min_length=1, max_length=500)]
     support: Annotated[list[str], Field(min_length=1, max_length=24)]
     counterexamples: Annotated[list[str], Field(max_length=24)]
+    procedure: dict | None = None
 
 
 class Hypotheses(BaseModel):
@@ -68,15 +70,22 @@ async def assess(model, events):
     return value
 
 
-async def generalize(model, rows):
+async def generalize(model, rows, previous=()):
     observed = {row["id"]: row for row in rows}
     value = await ask(model, (
         "Propose generalizable visualization strategies or user preferences from independent assessed "
         "BorgVR interactions. Separate preferences from correctness corrections. State the situation "
         "under which to use the strategy. Cite observed episode IDs supporting and contradicting every "
         "proposal. Never treat inconclusive evidence or changed goals as positive examples. "
-        "A single case is only a hypothesis. If no hypothesis is justified, return an empty list."
-    ), [{"id": row["id"], "verdict": row["verdict"]} for row in rows], Hypotheses)
+        "A single case is only a hypothesis. If no hypothesis is justified, return an empty list. "
+        "For a well-supported mechanical workflow you may also propose a procedure, but no executable source. "
+        "Use language borgvr-flow-v1, a closed input_schema, an output_schema, limits (max_calls, timeout_seconds), "
+        "and program {steps, yield}. A call step has kind, operation, version=1, args and as. Values are "
+        "{literal: JSON} or {ref: input.field or an earlier binding}. A for_each step has items, item, limit, body "
+        "and as; an if has test, then, else and as. Blocks yield values. Only use this operation catalog: " +
+        encode({name: op.arguments for name, op in OPERATIONS.items()})
+    ), {"observations": [{"id": row["id"], "verdict": row["verdict"]} for row in rows],
+        "previous_hypotheses": list(previous)[:8]}, Hypotheses)
     result = []
     for item in value.hypotheses:
         supports, counters = set(item.support), set(item.counterexamples)
@@ -85,7 +94,11 @@ async def generalize(model, rows):
         if any(observed[key]["verdict"]["label"] not in {"aligned", "corrected", "preference"} for key in supports):
             continue
         independent = len({observed[key]["session"] for key in supports})
-        result.append({**item.model_dump(), "status": "candidate" if independent >= 3 and not counters else "pending"})
+        report = {**item.model_dump(exclude={"procedure"}), "status": "candidate" if independent >= 3 and not counters else "pending"}
+        procedure = draft_procedure(item.procedure)
+        if procedure is not None:
+            report["procedure"] = procedure
+        result.append(report)
     return result
 
 
@@ -102,7 +115,7 @@ async def process_one(store, model):
     if job is None:
         return episode is not None
     try:
-        hypotheses = await generalize(model, job["rows"])
+        hypotheses = await generalize(model, job["rows"], job.get("previous", ()))
     except (ContextLimit, ModelFailure, ValidationError, ValueError) as error:
         logger.warning("Learner induction deferred: %s", type(error).__name__)
         return True

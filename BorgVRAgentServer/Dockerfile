@@ -8,6 +8,7 @@ LABEL org.opencontainers.image.source="https://github.com/JensDerKrueger/BorgVR"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY borgvr_next ./borgvr_next
+COPY schemas ./schemas
 COPY client.py model_config.py LICENSE ./
 RUN chmod -R a+rX borgvr_next && chmod a+r client.py model_config.py LICENSE requirements.txt
 USER 10001:10001

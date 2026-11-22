@@ -1,0 +1,76 @@
+{
+  "kind": "knowledge_bundle",
+  "version": 1,
+  "entries": [
+    {
+      "id": "intensity.sweep",
+      "revision": 1,
+      "source": "bundled",
+      "situation": "The user wants to know where structures appear in the normalized intensity range, or the useful intensity ranges of a scalar channel are unknown.",
+      "goal": "Find and inspect visually distinct intensity intervals without changing the user's transfer function or view.",
+      "contexts": ["dataset_ready"],
+      "keywords": ["intensity", "histogram", "sweep", "visible structures"],
+      "procedure": {
+        "revision": 1,
+        "review": "approved",
+        "language": "borgvr-flow-v1",
+        "announcement_hint": "Explain that you are comparing small previews for different intensity ranges and will leave the current view unchanged.",
+        "input_schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "channel": {"type": "integer", "minimum": 0, "maximum": 3, "default": 0},
+            "initial_bands": {"type": "integer", "minimum": 2, "maximum": 8, "default": 5},
+            "difference_threshold": {"type": "number", "minimum": 0.01, "maximum": 1, "default": 0.2,
+              "description": "Fraction of all image pixels whose visibility changes between adjacent bands. Lower this for small details."},
+            "palette": {"type": "string", "enum": ["grayscale", "rainbow"], "default": "grayscale"}
+          }
+        },
+        "output_schema": {
+          "type": "object",
+          "required": ["intervals", "rendered_previews", "stop_reason"],
+          "properties": {
+            "intervals": {"type": "array"},
+            "rendered_previews": {"type": "integer"},
+            "stop_reason": {"type": "string"}
+          }
+        },
+        "limits": {"max_calls": 128, "timeout_seconds": 100},
+        "program": {
+          "steps": [
+            {"kind": "call", "operation": "compute.equal_bands", "version": 1,
+              "args": {"count": {"ref": "input.initial_bands"}}, "as": "initial_bands"},
+            {"kind": "call", "operation": "compute.band_state", "version": 1,
+              "args": {"leaves": {"literal": []}}, "as": "seed"},
+            {"kind": "iterate", "initial": {"ref": "seed"}, "state": "state", "limit": 6,
+              "until": {"ref": "state.done"}, "as": "result",
+              "body": {
+                "steps": [
+                  {"kind": "call", "operation": "compute.plan_refinement", "version": 1,
+                    "args": {"state": {"ref": "state"}, "initial": {"ref": "initial_bands"}, "threshold": {"ref": "input.difference_threshold"}},
+                    "as": "plan"},
+                  {"kind": "for_each", "items": {"ref": "plan.children"}, "item": "band", "limit": 32, "as": "observations",
+                    "body": {
+                      "steps": [
+                        {"kind": "call", "operation": "app.render_tf_preview", "version": 1,
+                          "args": {"channel": {"ref": "input.channel"}, "low": {"ref": "band.low"},
+                            "high": {"ref": "band.high"}, "palette": {"ref": "input.palette"}}, "as": "image"},
+                        {"kind": "call", "operation": "compute.observe_band", "version": 1,
+                          "args": {"band": {"ref": "band"}, "image": {"ref": "image"}}, "as": "observed"}
+                      ],
+                      "yield": {"ref": "observed"}
+                    }},
+                  {"kind": "call", "operation": "compute.update_bands", "version": 1,
+                    "args": {"plan": {"ref": "plan"}, "children": {"ref": "observations"}}, "as": "next"}
+                ],
+                "yield": {"ref": "next"}
+              }},
+            {"kind": "call", "operation": "compute.report_bands", "version": 1,
+              "args": {"state": {"ref": "result"}, "threshold": {"ref": "input.difference_threshold"}}, "as": "report"}
+          ],
+          "yield": {"ref": "report"}
+        }
+      }
+    }
+  ]
+}

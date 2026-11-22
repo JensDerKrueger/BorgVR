@@ -51,6 +51,7 @@ class Capture:
 
 
 def model_catalog(offered, received):
+    offered = [entry for entry in offered if entry["name"] != "capture_tf_preview"]
     assert [entry["name"] for entry in offered] == [entry["function"]["name"] for entry in received]
     for original, value in zip(offered, received, strict=True):
         function = value["function"]
@@ -97,14 +98,10 @@ def test_swift_catalog_and_expert_knowledge_reach_model(swift_catalogs, variant)
         rules = {rule["id"]: rule for rule in resolved["rules"]}
         assert "SESSION_ONLY_TEST_RULE" in reference["content"]
         assert ("inspection.preview" in rules) == (variant not in {"start_menu", "no_images"})
-        assert ("transfer_function.explore_range" in rules) == (variant not in {"start_menu", "no_images", "rgba"})
+        if "inspection.preview" in rules:
+            screenshot = next(tool["function"] for tool in received if tool["function"]["name"] == "capture_screenshot")
+            assert "max_width" in screenshot["parameters"]["properties"]
         assert ("transfer_function.component" in rules) == (variant not in {"start_menu", "rgba"})
-        noise_rule = rules.get("transfer_function.suppress_low_value_noise")
-        assert (noise_rule is not None) == (variant not in {"start_menu", "rgba"})
-        if noise_rule is not None:
-            guidance = " ".join(noise_rule["steps"])
-            assert "only alpha (component 3)" in guidance and "zero-opacity control points" in guidance
-            assert "no universal cutoff" in guidance and "preserving faint structures" in guidance
         assert ("rendering.natural_lighting" in rules) == (variant not in {"start_menu", "rgba"})
         if "rendering.natural_lighting" in rules:
             mode = next(tool["function"] for tool in received if tool["function"]["name"] == "set_render_mode")

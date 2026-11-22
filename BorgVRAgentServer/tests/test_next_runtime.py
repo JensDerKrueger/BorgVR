@@ -477,7 +477,7 @@ class Evaluator:
         return json.dumps({"hypotheses": [{
             "situation": "The prior rotation obscures the relevant structure.",
             "recommendation": "Use a complementary inspection angle before concluding.",
-            "support": [entry["id"] for entry in evidence], "counterexamples": [],
+            "support": [entry["id"] for entry in evidence["observations"]], "counterexamples": [],
         }]})
 
 

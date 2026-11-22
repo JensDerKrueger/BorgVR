@@ -5,7 +5,7 @@ Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nach
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
 Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets`, `open_dataset` und die kontextgebundene Befehlshistorie verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
 
-Erfasst: **77 Funktionsgruppen**, **64 MCP-Werkzeuge**, **47 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **105 unterschiedliche GSC-Namen**.
+Erfasst: **78 Funktionsgruppen**, **64 MCP-Werkzeuge**, **48 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **105 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
@@ -54,6 +54,7 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 | Darstellung | [Darstellungsgruppen gezielt zurücksetzen](#render-reset) | dataset | vorhanden | ja | ja* |
 | Darstellung | [Renderabschluss abwarten und Screenshot aufnehmen](#render-wait_capture) | dataset | vorhanden | ja | teilweise* |
 | Darstellung | [Interaktionsmodus und TF-Malwerkzeug auswählen](#render-interaction) | dataset | vorhanden | nein | nein |
+| Transferfunktionen | [Skalare Intensitätsbereiche isoliert abbilden](#tf-intensity_preview) | dataset | lokale Funktion | nein | ja* |
 | Transferfunktionen | [Mehrkanal-TF lesen und durch RGBA-Einträge oder Stützstellen ändern](#tf-samples) | dataset | vorhanden | ja | ja* |
 | Transferfunktionen | [Aktiven TF-Kanal und bearbeitete RGBA-Komponenten auswählen](#tf-channel) | dataset | vorhanden | nein | nein |
 | Transferfunktionen | [TF-Katalog durchsuchen, TF laden und speichern](#tf-files) | dataset | teilweise | ja | nein |
@@ -615,6 +616,20 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 - Lücke: Kein allgemeiner Modus-/Eingabewerkzeug-Getter/-Setter. Ein Agentenauftrag darf nicht ungefragt die manuelle Bedienung umstellen.
 - Nächster Schritt: Semantische Eingabekonfiguration mit lokaler Zustandsabfrage ergänzen; Aktionen selbst nicht von UI-Moduswahl abhängig machen.
 - Quellen: [AppSupport/Application/BorgVRSession.swift](../AppSupport/Application/BorgVRSession.swift), [iOSApp/RenderView.swift](../iOSApp/RenderView.swift), [VisionApp/PrivateApplicationView.swift](../VisionApp/PrivateApplicationView.swift)
+- Vorhandene Testquellen: kein spezifischer Test zugeordnet
+
+<a id="tf-intensity_preview"></a>
+### Skalare Intensitätsbereiche isoliert abbilden
+
+- Kennung: `tf.intensity_preview`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Bildübertragung nur bei erlaubter Bildfreigabe.
+- Register: kein spezifischer Command/UI-Registereintrag
+- MCP: fehlt
+- Native Agentenwerkzeuge: `capture_tf_preview`
+- Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
+- Zustandsabfrage: Grobe Z-Projektion eines einzelnen normierten Intensitätsbandes; keine Änderung der Ansichts-TF.
+- Lücke: Feste Ansicht aus der niedrigsten Volumenauflösung, keine exakte Live-Ansicht.
+- Nächster Schritt: Laufzeit und Treffer auf repräsentativen Datensätzen messen.
+- Quellen: [AppSupport/Voice/VoiceAgentVolumePreview.swift](../AppSupport/Voice/VoiceAgentVolumePreview.swift), [AppSupport/Voice/knowledge-bundle.json](../AppSupport/Voice/knowledge-bundle.json), [BorgVRAgentServer/borgvr_next/preview_compute.py](../BorgVRAgentServer/borgvr_next/preview_compute.py)
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
 <a id="tf-samples"></a>
