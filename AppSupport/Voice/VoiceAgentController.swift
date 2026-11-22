@@ -82,7 +82,8 @@ final class VoiceAgentController: ObservableObject {
   private var turns = 0
   private var calls = 0
   private var events = 0
-  private var maximumCalls: Int? = 24
+  private static let legacyCallLimit = 256
+  private var legacyCallBudget: Int?
   private var workTimeout: Double = 180
   private var queuedPrompt: String?
   private var pendingCallID: String?
@@ -578,7 +579,7 @@ final class VoiceAgentController: ObservableObject {
     catalog = availableTools()
     let requestedSeconds = (features.timeOnlyTurns ? settings.workMinutes : min(settings.workMinutes, 120)) * 60
     var executionLimits = ["timeout_seconds": requestedSeconds]
-    if !features.timeOnlyTurns { executionLimits["max_calls"] = settings.maximumCalls }
+    if !features.timeOnlyTurns { executionLimits["max_calls"] = Self.legacyCallLimit }
     var hello: [String: Any] = ["type": "hello", "protocol": 1, "dataset_id": wireDatasetID, "application_session": true,
                                "dataset_opening": true,
                                "context_id": contextID, "tools": catalog,
@@ -608,16 +609,16 @@ final class VoiceAgentController: ObservableObject {
       else { throw VoiceAgentError.protocolViolation }
       if features.timeOnlyTurns {
         guard limits["max_calls"] == nil else { throw VoiceAgentError.protocolViolation }
-        maximumCalls = nil
+        legacyCallBudget = nil
       } else {
-        guard let calls = limits["max_calls"] as? Int, (24...settings.maximumCalls).contains(calls)
+        guard let calls = limits["max_calls"] as? Int, (24...Self.legacyCallLimit).contains(calls)
         else { throw VoiceAgentError.protocolViolation }
-        maximumCalls = calls
+        legacyCallBudget = calls
       }
       workTimeout = seconds
     } else {
       guard !features.timeOnlyTurns else { throw VoiceAgentError.protocolViolation }
-      maximumCalls = 24
+      legacyCallBudget = 24
       workTimeout = 180
     }
     catalog = catalog.filter { accepted.contains($0["name"] as? String ?? "") }
@@ -914,9 +915,9 @@ final class VoiceAgentController: ObservableObject {
       status = voiceAgentText(busy ? "Working…" : "Ready")
       return
     }
-    if let maximumCalls {
+    if let legacyCallBudget {
       events += 1
-      guard events <= maximumCalls * 4 + 128 else { throw VoiceAgentError.protocolViolation }
+      guard events <= legacyCallBudget * 4 + 128 else { throw VoiceAgentError.protocolViolation }
     }
     if type == "tool_call", interrupting, pendingCallID == nil {
       resumeQueuedPromptIfSafe()
@@ -1072,8 +1073,8 @@ final class VoiceAgentController: ObservableObject {
       return
     }
     guard pendingCallID == nil else { throw VoiceAgentError.protocolViolation }
-    if let maximumCalls {
-      guard calls < maximumCalls else { throw VoiceAgentError.protocolViolation }
+    if let legacyCallBudget {
+      guard calls < legacyCallBudget else { throw VoiceAgentError.protocolViolation }
       calls += 1
     }
     let expectedRevision = event["view_revision"] as? Int

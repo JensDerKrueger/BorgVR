@@ -6,16 +6,17 @@ For an explicit research run, enable the assistant, open a dataset and expand
 **Workflow research (debug)** inside the assistant window. Choose a goal from
 the recording menu, work with the native controls, then finish and optionally rate
 the outcome. Export the demonstration from the same menu. A
-finished demonstration is held in memory until exported, queued, discarded,
-or the app exits.
+finished demonstration is held in memory until exported, discarded, or the app
+exits. The current BorgVR app has no upload or profile settings for this prototype;
+these debug controls export files locally.
 
 Standard exports (v1) contain the goal, consecutive manual command domains
 (adjacent repeats are collapsed), outcome, completion status, and an episode ID.
 Choose **Demonstrate with before and after view settings** to add a v2 pair:
 normalized dataset-local clipping bounds and the view rotation at the start and
 finish. The pair is omitted if a snapshot is unavailable, the demonstration is
-interrupted, or another source changes the recorded state. The export and
-upload actions indicate when settings are included. Neither version contains
+interrupted, or another source changes the recorded state. The export action
+indicates when settings are included. Neither version contains
 microphone input, images, dataset IDs, file paths or a raw command log.
 Starting a chat request or changing datasets ends the demonstration as
 interrupted; the learner also excludes unfinished, limit-truncated and
@@ -143,17 +144,9 @@ python -m borgvr_agent.workflow_store --database /var/lib/borgvr-workflow/workfl
 ```
 
 A new token is shown only at creation. Treat it as a secret and transfer it
-privately. It is distinct from the chat token. In a BorgVR debug build, set the
-HTTPS address and certificate, then expand **Workflow research (debug)** in the
-assistant settings, enter the new token under **Workflow profile**, and link.
-Linking enables the separate **Send demonstration for analysis** action for
-demonstrations started under this profile. No recording or upload is started
-by linking, and manually exported files are not uploaded. A failed send
-leaves the entry on disk; retry explicitly in settings. The app never retags
-the queue when a different profile is linked. A draft that has not yet been
-queued or exported is discarded when its linked profile changes. If a server collection was
-cleared, relink the same token to see the new collection; old entries can be
-deleted locally but will not be sent into it.
+privately. It is distinct from the chat token. The profile API below belongs to
+the earlier research prototype; it is not used by the current BorgVR client or
+the [new agent runtime](NEXT_RUNTIME.md).
 
 The server keeps a bounded corpus and the latest durable analysis job for
 each profile. It can finish the descriptive analysis after BorgVR quits

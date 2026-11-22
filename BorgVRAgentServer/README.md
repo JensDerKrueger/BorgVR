@@ -564,13 +564,10 @@ not replace segmentation or voxel analysis.
 
 ### Longer tasks and interruption
 
-New apps default to **30 minutes and 256 BorgVR calls per request**. Under
-**Settings > AI Assistant**, adjust work time (1 to 120 minutes) and call budget (24 to 1024).
-These are execution safeguards, not model billing limits. The app requests limits during
-the handshake; the current agent confirms at most 120 minutes and 1024 BorgVR calls.
-Internal evidence notes/progress have extra capacity. Wrap-up starts only near the
-negotiated limit. Legacy clients without negotiation retain three minutes and 24 calls.
-New apps require an updated agent supporting the optional Hello `execution_limits` field.
+Under **Settings > AI Assistant**, set the maximum work time per request
+from 5 to 180 minutes (default 60). With the [new runtime](NEXT_RUNTIME.md),
+the work time bounds the full request, with no per-request BorgVR call count.
+Individual model responses still have a separate 180-second deadline.
 
 Text input and microphone remain available while a request runs. **Sending a new message
 interrupts the current task**: any already dispatched BorgVR command is allowed to finish,

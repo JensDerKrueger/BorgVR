@@ -314,6 +314,7 @@ struct VoiceAgentTests {
     let defaults = UserDefaults(suiteName: suite)!
     let account = "voice-agent-test-\(UUID())"
     defer { defaults.removePersistentDomain(forName: suite); try? KeychainSecretStore.delete(account: account) }
+    defaults.set(512, forKey: "voiceAgent.maximumCalls")
     let settings = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
     func isolatedConversationStore(_ name: String) -> VoiceAgentConversationStore {
       .init(file: fixture.appendingPathComponent("conversation-\(name)/conversation.sealed"),
@@ -321,20 +322,18 @@ struct VoiceAgentTests {
     }
     let conversationStore = isolatedConversationStore("main")
     defer { try? conversationStore.remove() }
-    try expect(settings.workMinutes == 60 && settings.maximumCalls == 256, "Long-run defaults missing")
+    try expect(settings.workMinutes == 60 && defaults.object(forKey: "voiceAgent.maximumCalls") == nil,
+               "Default work time or stale call-budget migration failed")
     try expect(!settings.savesConversation && settings.confirmsVolumeEdits,
                "Conversation must be opt-in and edits must ask by default")
     settings.workMinutes = 75
-    settings.maximumCalls = 512
     let persisted = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
-    try expect(persisted.workMinutes == 75 && persisted.maximumCalls == 512, "Execution settings not persisted")
+    try expect(persisted.workMinutes == 75, "Execution settings not persisted")
     settings.workMinutes = 999
-    settings.maximumCalls = -1
-    try expect(settings.workMinutes == 180 && settings.maximumCalls == 24, "Execution settings not bounded")
+    try expect(settings.workMinutes == 180, "Execution settings not bounded")
     settings.workMinutes = 1
     try expect(settings.workMinutes == 5, "Work time must not be shorter than five minutes")
     settings.workMinutes = 180
-    settings.maximumCalls = 256
     try expect(settings.speechRateMultiplier == 1, "Default speech rate changed")
     let initialIdentity = settings.identity
     try settings.rememberRule("  Prefer a clear side view.  ")

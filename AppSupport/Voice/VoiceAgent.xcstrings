@@ -889,13 +889,6 @@
         "de": { "stringUnit": { "state": "translated", "value": "Maximale Arbeitsdauer (Minuten)" } }
       }
     },
-    "Maximum BorgVR calls": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Maximum BorgVR calls (older servers)" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Maximale BorgVR-Aufrufe (ältere Server)" } }
-      }
-    },
     "Interrupting…": {
       "extractionState": "manual",
       "localizations": {

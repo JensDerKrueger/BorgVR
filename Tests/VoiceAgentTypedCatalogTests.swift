@@ -24,7 +24,6 @@ struct VoiceAgentTypedCatalogTests {
     settings.enabled = true
     settings.speaks = false
     settings.sharesImages = true
-    settings.maximumCalls = 24
     settings.address = "https://127.0.0.1:\(port)"
     try settings.importCertificate(certificate)
     try settings.setToken(token)
@@ -82,6 +81,6 @@ struct VoiceAgentTypedCatalogTests {
       }
       controller.cancel()
     }
-    print("Native typed catalog and per-connection knowledge reached the model over TLS/WSS; 60 calls completed.")
+    print("Native typed catalog and per-connection knowledge reached the model over TLS/WSS; 270 calls completed.")
   }
 }

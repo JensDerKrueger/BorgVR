@@ -13,7 +13,6 @@ struct VoiceAgentConnectionIdentity: Equatable {
   let enabled: Bool
   let images: Bool
   let workMinutes: Int
-  let maximumCalls: Int
 }
 
 struct VoiceAgentRule: Codable, Identifiable, Equatable {
@@ -54,13 +53,6 @@ final class VoiceAgentSettings: ObservableObject {
       defaults.set(value, forKey: "voiceAgent.workMinutes")
     }
   }
-  @Published var maximumCalls: Int {
-    didSet {
-      let value = min(max(maximumCalls, 24), 1024)
-      if maximumCalls != value { maximumCalls = value }
-      defaults.set(value, forKey: "voiceAgent.maximumCalls")
-    }
-  }
   @Published private(set) var certificate: Data
   @Published private(set) var knowledgeRules: [VoiceAgentRule]
   @Published private(set) var hasToken: Bool
@@ -68,8 +60,7 @@ final class VoiceAgentSettings: ObservableObject {
   private(set) var archiveOwnerID: UUID
 
   var identity: VoiceAgentConnectionIdentity {
-    .init(address: address, revision: revision, enabled: enabled, images: sharesImages,
-          workMinutes: workMinutes, maximumCalls: maximumCalls)
+    .init(address: address, revision: revision, enabled: enabled, images: sharesImages, workMinutes: workMinutes)
   }
 
   init(defaults: UserDefaults = .standard, tokenAccount: String = "voice-agent-token") {
@@ -87,7 +78,7 @@ final class VoiceAgentSettings: ObservableObject {
     defaults.set(archiveOwnerID.uuidString, forKey: "voiceAgent.archiveOwner")
     onDeviceOnly = defaults.object(forKey: "voiceAgent.onDeviceOnly") as? Bool ?? true
     workMinutes = Self.normalizedWorkMinutes(defaults.object(forKey: "voiceAgent.workMinutes") as? Int ?? Self.defaultWorkMinutes)
-    maximumCalls = min(max(defaults.object(forKey: "voiceAgent.maximumCalls") as? Int ?? 256, 24), 1024)
+    defaults.removeObject(forKey: "voiceAgent.maximumCalls")
     if let data = defaults.data(forKey: "voiceAgent.knowledge"), data.count <= 64 * 1024,
        let rules = try? JSONDecoder().decode([VoiceAgentRule].self, from: data) {
       knowledgeRules = Array(rules.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.text.count <= 500 }.prefix(16))

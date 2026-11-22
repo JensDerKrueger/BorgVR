@@ -40,7 +40,7 @@ class Model:
         assert ("inspection.preview" in guidance[0]) == (request == "scope-renderer")
         if request == "scope-renderer":
             reads = sum(message["role"] == "tool" for message in messages)
-            if reads < 60:
+            if reads < 270:
                 return Call(f"state-{reads}", "get_application_state", "{}")
         return "Catalog and rules received."
 

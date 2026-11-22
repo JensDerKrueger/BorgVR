@@ -57,7 +57,6 @@ private struct WorkflowDemonstrationDocument: FileDocument {
 private struct WorkflowDemonstrationMenu: View {
   @ObservedObject var agent: VoiceAgentController
   @ObservedObject private var recorder: WorkflowDemonstrationRecorder
-  @ObservedObject private var upload: WorkflowUpload
   @State private var document: WorkflowDemonstrationDocument?
   @State private var exportID: UUID?
   @State private var exporting = false
@@ -68,7 +67,6 @@ private struct WorkflowDemonstrationMenu: View {
   init(agent: VoiceAgentController) {
     self.agent = agent
     _recorder = ObservedObject(wrappedValue: agent.demonstrations)
-    _upload = ObservedObject(wrappedValue: agent.workflowUpload)
   }
 
   var body: some View {
@@ -80,15 +78,6 @@ private struct WorkflowDemonstrationMenu: View {
         Button(voiceAgentText("Finish: goal reached"), systemImage: "checkmark") { Task { await agent.finishDemonstration(outcome: .reached) } }
         Button(voiceAgentText("Finish: goal not reached"), systemImage: "xmark") { Task { await agent.finishDemonstration(outcome: .notReached) } }
       } else if let episode = recorder.completed {
-        if recorder.screenshotExport == nil,
-           let owner = recorder.destination, upload.destination(for: agent.settings) == owner,
-           episode.end == .finished {
-          Button(voiceAgentText(episode.evidence == nil ? "Send demonstration for analysis" :
-                                 "Send demonstration with view settings"), systemImage: "paperplane") {
-            Task { await agent.queueDemonstration(episode) }
-          }
-          .disabled(upload.busy)
-        }
         Button(voiceAgentText(episode.evidence == nil ? "Export demonstration" :
                                "Export demonstration with view settings"), systemImage: "square.and.arrow.up") {
           export(episode, id: episode.id)
@@ -167,110 +156,6 @@ private struct WorkflowDemonstrationMenu: View {
       exportID = id
       exporting = true
     } catch { exportFailed = true }
-  }
-}
-
-private struct WorkflowProfileSettingsView: View {
-  @ObservedObject var upload: WorkflowUpload
-  @ObservedObject var settings: VoiceAgentSettings
-  @State private var token = ""
-  @State private var confirmsDelete = false
-  @State private var stateDocument: WorkflowDemonstrationDocument?
-  @State private var exportingState = false
-  @State private var importingState = false
-  @State private var importOwner: WorkflowDestination?
-
-  var body: some View {
-    let linked = upload.destination(for: settings) != nil
-    VStack(alignment: .leading, spacing: 8) {
-      Text(voiceAgentText("Workflow profile")).font(.headline)
-      HStack {
-        SecureField(voiceAgentText("Workflow device token"), text: $token).textFieldStyle(.roundedBorder)
-        Button {
-          let input = token
-          token = ""
-          Task { await upload.link(input, settings: settings) }
-        } label: { Image(systemName: "link") }
-        .buttonStyle(.bordered)
-        .help(voiceAgentText("Link workflow profile"))
-        .accessibilityLabel(voiceAgentText("Link workflow profile"))
-        .disabled(upload.busy || token.isEmpty)
-        if linked {
-          Button { upload.unlink() } label: { Image(systemName: "link.badge.minus") }
-            .buttonStyle(.bordered)
-            .help(voiceAgentText("Unlink workflow profile"))
-            .accessibilityLabel(voiceAgentText("Unlink workflow profile"))
-            .disabled(upload.busy)
-        }
-      }
-      if linked {
-        Text(voiceAgentText("Workflow profile linked")).foregroundStyle(.secondary)
-        Button(voiceAgentText("Fetch workflow report"), systemImage: "chart.bar.xaxis") {
-          Task { await upload.refreshReport(settings: settings) }
-        }.buttonStyle(.bordered).disabled(upload.busy)
-        HStack {
-          Button(voiceAgentText("Export workflow state"), systemImage: "square.and.arrow.up") {
-            Task {
-              if let data = await upload.exportState(settings: settings) {
-                stateDocument = WorkflowDemonstrationDocument(data: data)
-                exportingState = true
-              }
-            }
-          }
-          Button(voiceAgentText("Import workflow state"), systemImage: "square.and.arrow.down") {
-            importOwner = upload.destination(for: settings)
-            importingState = importOwner != nil
-          }
-        }.buttonStyle(.bordered).disabled(upload.busy)
-        if let analysis = upload.analysis {
-          switch analysis.status {
-            case .empty: Text(voiceAgentText("No demonstrations analyzed yet"))
-            case .queued: Text(voiceAgentText("Analysis queued"))
-            case .ready:
-              if let report = analysis.report {
-                Text(String(format: voiceAgentText("Demonstrations analyzed: %lld"), Int64(report.episodes)))
-                ForEach(Array(report.patterns.enumerated()), id: \.offset) { _, pattern in
-                  let steps = pattern.openingSequence.map { voiceAgentText($0.title) }.joined(separator: " → ")
-                  Text("\(voiceAgentText(pattern.goal.title)): \(steps) (\(pattern.support)/\(pattern.total))")
-                    .font(.caption).foregroundStyle(.secondary)
-                }
-              }
-          }
-        }
-        if upload.pendingCount + upload.staleCount > 0 {
-          HStack {
-            Text(String(format: voiceAgentText("Queued demonstrations: %lld"), Int64(upload.pendingCount + upload.staleCount)))
-            Spacer()
-            Button { Task { await upload.sync(settings: settings) } } label: { Image(systemName: "arrow.clockwise") }
-              .help(voiceAgentText("Retry demonstration uploads"))
-              .accessibilityLabel(voiceAgentText("Retry demonstration uploads"))
-              .disabled(upload.pendingCount == 0 || upload.busy)
-            Button(role: .destructive) { confirmsDelete = true } label: { Image(systemName: "trash") }
-              .help(voiceAgentText("Delete queued demonstrations"))
-              .accessibilityLabel(voiceAgentText("Delete queued demonstrations"))
-              .disabled(upload.busy)
-          }
-          .buttonStyle(.bordered)
-          if upload.staleCount > 0 {
-            Text(voiceAgentText("Some demonstrations belong to an older collection and will not be uploaded."))
-              .font(.caption).foregroundStyle(.secondary)
-          }
-        }
-      }
-      if upload.busy { ProgressView().controlSize(.small) }
-      if let error = upload.errorText { Text(error).font(.caption).foregroundStyle(.red) }
-    }
-    .confirmationDialog(voiceAgentText("Remove this profile's queued demonstrations?"), isPresented: $confirmsDelete) {
-      Button(voiceAgentText("Delete queued demonstrations"), role: .destructive) { upload.clearPending(settings: settings) }
-    }
-    .fileExporter(isPresented: $exportingState, document: stateDocument, contentType: .json,
-                  defaultFilename: "BorgVR-Workflow") { _ in stateDocument = nil }
-    .fileImporter(isPresented: $importingState, allowedContentTypes: [.json]) { selection in
-      let owner = importOwner
-      importOwner = nil
-      guard let owner, case .success(let url) = selection else { return }
-      Task { await upload.importState(url, capturedFor: owner, settings: settings) }
-    }
   }
 }
 
@@ -736,11 +621,6 @@ struct VoiceAgentSettingsView: View {
       } else {
         Text(voiceAgentText("System certificate trust")).font(.caption).foregroundStyle(.secondary)
       }
-      #if DEBUG
-      DisclosureGroup(voiceAgentText("Workflow research (debug)")) {
-        WorkflowProfileSettingsView(upload: agent.workflowUpload, settings: settings)
-      }
-      #endif
       Toggle(voiceAgentText("Share render images"), isOn: $settings.sharesImages)
       Toggle(voiceAgentText("Save and restore the assistant conversation"), isOn: $settings.savesConversation)
       if let error = agent.conversationStorageError {
@@ -753,13 +633,6 @@ struct VoiceAgentSettingsView: View {
           Text(voiceAgentText("Maximum work time (minutes)"))
           Spacer()
           Text(settings.workMinutes, format: .number).monospacedDigit()
-        }
-      }
-      Stepper(value: $settings.maximumCalls, in: 24...1024, step: 16) {
-        HStack {
-          Text(voiceAgentText("Maximum BorgVR calls"))
-          Spacer()
-          Text(settings.maximumCalls, format: .number).monospacedDigit()
         }
       }
       VStack(alignment: .leading, spacing: 8) {

@@ -591,15 +591,10 @@ kann der Agent nicht visuell zählen. Dies ersetzt keine Segmentierung oder Volu
 
 ### Längere Aufträge und Unterbrechen
 
-Neue Apps erlauben standardmäßig **30 Minuten und 256 BorgVR-Aufrufe pro Auftrag**.
-Unter **Einstellungen > KI-Assistent** lassen sich Arbeitsdauer (1 bis 120 Minuten) und
-Aufrufbudget (24 bis 1024) ändern. Es sind technische Arbeitsgrenzen, keine Kosten- oder
-Abrechnungslimits des Modells. Die App meldet ihre Grenzen beim Verbindungsaufbau; der
-aktuelle Agentenserver bestätigt höchstens 120 Minuten und 1024 BorgVR-Aufrufe.
-Interne Bildbefunde und Zwischenmeldungen haben zusätzliche Kapazität. Eine Abschlussphase
-beginnt erst nahe der ausgehandelten Grenze. Alte Clients ohne diese Aushandlung bleiben
-aus Sicherheitsgründen bei drei Minuten und 24 BorgVR-Aufrufen. Neue Apps benötigen einen
-aktuellen Agentenserver, der das optionale `execution_limits`-Feld im Hello unterstützt.
+Unter **Einstellungen > KI-Assistent** lässt sich die maximale Arbeitszeit pro Auftrag
+von 5 bis 180 Minuten einstellen (Standard: 60). Beim [neuen Agenten](NEXT_RUNTIME.md)
+gilt diese Frist für den gesamten Auftrag, ohne feste Anzahl an BorgVR-Aufrufen.
+Für einzelne Modellantworten gilt weiterhin eine eigene Frist von 180 Sekunden.
 
 Während eines Auftrags bleiben Texteingabe und Mikrofon nutzbar. Eine **neue Nachricht
 unterbricht den bisherigen Auftrag**: Die App wartet noch auf einen bereits ausgeführten
