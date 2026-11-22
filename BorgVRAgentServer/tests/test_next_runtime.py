@@ -307,28 +307,29 @@ def test_failed_schema_correction_is_not_retried_or_dispatched(caplog, correctio
     assert f"reason={reason}" in caplog.text
 
 
-def test_opening_requires_catalog_receipt_and_replaces_tool_scope():
+def test_opening_requires_catalog_receipt_and_replaces_tool_scope(caplog):
+    caplog.set_level("INFO", logger="uvicorn.error.borgvr")
     model = Steps(Call("start", "get_application_state", "{}"),
-                  Call("guess", "open_dataset", '{"id":"invented"}'),
+                  Call("guess", "open_dataset", '{"id":"PRIVATE_GUESSED_ARGUMENT"}'),
                   Call("search", "search_datasets", "{}"),
-                  Call("target", "open_dataset", '{"id":"sample"}'),
+                  Call("target", "open_dataset", '{"id":"PRIVATE_DATASET_ID"}'),
                   Call("opened", "get_application_state", "{}"), "Dataset opened.")
     with TestClient(create_app(token=TOKEN, model=model)) as client:
         with client.websocket_connect("/v1/session", headers=AUTH) as ws:
             ws.send_json(hello(application_session=True, dataset_opening=True, dataset_id=None,
                                tools=[TOOLS[0], tool("search_datasets"), tool("open_dataset", {"id": {"type": "string"}})]))
             assert ws.receive_json()["dataset_opening"]
-            turn(ws, text="Find and open the sample dataset.")
+            turn(ws, name="PRIVATE_REQUEST_ID", text="Find and open PRIVATE_PROMPT.")
             state = ws.receive_json()
             assert state["dataset_id"] is None
             ws.send_json(receipt(state, {"rendererReady": False}))
             search = ws.receive_json()
             assert search["name"] == "search_datasets"
-            ws.send_json(receipt(search, {"matches": [{"id": "sample"}]}))
+            ws.send_json(receipt(search, {"matches": [{"id": "PRIVATE_DATASET_ID", "description": "PRIVATE_DATASET_NAME"}]}))
             call = ws.receive_json()
-            assert call["name"] == "open_dataset" and call["arguments"] == {"id": "sample"}
-            ws.send_json({**receipt(call, {"dataset": {"id": "sample"}, "rendererReady": True}),
-                          "dataset_transition": {"dataset_id": "sample", "context_id": "new-scope", "tools": TOOLS}})
+            assert call["name"] == "open_dataset" and call["arguments"] == {"id": "PRIVATE_DATASET_ID"}
+            ws.send_json({**receipt(call, {"dataset": {"id": "PRIVATE_DATASET_ID"}, "rendererReady": True}),
+                          "dataset_transition": {"dataset_id": "PRIVATE_DATASET_ID", "context_id": "new-scope", "tools": TOOLS}})
             event = ws.receive_json()
             assert event["type"] == "context_updated" and event["context_id"] == "new-scope"
             current = ws.receive_json()
@@ -336,6 +337,50 @@ def test_opening_requires_catalog_receipt_and_replaces_tool_scope():
             ws.send_json(receipt(current, {"rendererReady": True}))
             assert ws.receive_json()["text"] == "Dataset opened."
             assert ws.receive_json()["type"] == "completed"
+    opening_logs = [record.getMessage() for record in caplog.records if "tool=open_dataset" in record.getMessage()]
+    correlation = f"session={call['session_id']} turn=1"
+    assert opening_logs == [
+        f"Agent tool: {correlation} event=rejected tool=open_dataset call=- reason=search_required",
+        f"Agent tool: {correlation} event=dispatched tool=open_dataset call={call['call_id']} reason=-",
+        f"Agent tool: {correlation} event=receipt tool=open_dataset call={call['call_id']} reason=confirmed",
+    ]
+    assert f"Agent turn finished: {correlation} outcome=completed tool_calls=4 changes_applied=True" in caplog.text
+    assert "PRIVATE_" not in caplog.text and "Dataset opened." not in caplog.text
+
+
+@pytest.mark.parametrize("values, status", [
+    ({"error": "PRIVATE_CLIENT_ERROR"}, "client_error"),
+    ({"result": {"not_applied": True, "code": "PRIVATE_CLIENT_CODE", "note": "PRIVATE_NOTE"}}, "not_applied"),
+    ({"result": {"not_applied": True, "code": "user_declined"}}, "user_declined"),
+    ({"result": None}, "unconfirmed"),
+])
+def test_receipt_diagnostics_do_not_log_native_error_contents(caplog, values, status):
+    caplog.set_level("INFO", logger="uvicorn.error.borgvr")
+    model = Steps(Call("model-id", "get_application_state", "{}"), "Finished.")
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello())
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws)
+            call = ws.receive_json()
+            ws.send_json({**receipt(call, {}), **values})
+            assert ws.receive_json()["text"] == "Finished."
+            assert ws.receive_json()["type"] == "completed"
+    assert f"event=receipt tool=get_application_state call={call['call_id']} reason={status}" in caplog.text
+    assert "PRIVATE_" not in caplog.text
+
+
+def test_completed_text_without_tools_does_not_log_confirmed_changes(caplog):
+    caplog.set_level("INFO", logger="uvicorn.error.borgvr")
+    with TestClient(create_app(token=TOKEN, model=Steps("PRIVATE_ASSISTANT_CLAIM"))) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello())
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws, text="PRIVATE_PROMPT")
+            assert ws.receive_json()["type"] == "assistant_message"
+            assert ws.receive_json()["type"] == "completed"
+    assert "outcome=completed tool_calls=0 changes_applied=False uncertain=False" in caplog.text
+    assert "Agent tool:" not in caplog.text and "PRIVATE_" not in caplog.text
 
 
 @pytest.mark.parametrize("followup", [False, True])

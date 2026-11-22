@@ -8,6 +8,8 @@ import sqlite3
 import time
 from uuid import UUID, uuid4
 
+from pydantic import ValidationError
+
 from .agent import Trace, Turn, perform
 from .expert_knowledge import advisory_message, parse_bundle
 from .model import ContextLimit, ModelFailure, OutputLimit
@@ -18,11 +20,13 @@ from .wire import (
 
 logger = logging.getLogger("uvicorn.error.borgvr")
 IDLE_SECONDS = 300
+RECEIPT_LOG_CODES = {"user_declined", "search_required", "read_timeout", "user_changed_view"}
 
 
 @dataclass
 class Pending:
     id: str
+    name: str
     execution: Execution
     result: asyncio.Future
 
@@ -98,7 +102,13 @@ class Session:
                 case "user_message":
                     await self.start(User.model_validate(event))
                 case "tool_result":
-                    self.accept_result(Result.model_validate(event))
+                    try:
+                        self.accept_result(Result.model_validate(event))
+                    except (InvalidMessage, ValidationError):
+                        if self.pending is not None and self.active is not None:
+                            self.log_tool(self.active, "receipt", self.pending.name,
+                                          reason="invalid_receipt", call_id=self.pending.id)
+                        raise
                 case "user_change":
                     await self.accept_manual(ManualChange.model_validate(event))
                 case "cancel":
@@ -136,12 +146,14 @@ class Session:
             await self.send("error", request_id=message.request_id, code="busy", message="An active request is running.")
             return
         self.seen.add(message.request_id)
-        turn = Turn(message.request_id, message.text, Trace() if self.profile else None)
+        turn = Turn(message.request_id, message.text, Trace() if self.profile else None, sequence=len(self.seen))
         self.active = turn
         self.task = asyncio.create_task(self.execute(turn))
 
     async def execute(self, turn):
         outcome = "cancelled"
+        correlation = f"session={self.id} turn={turn.sequence}"
+        logger.info("Agent turn started: %s", correlation)
         try:
             await self.send("started", request_id=turn.request_id)
             async with asyncio.timeout(self.deadline):
@@ -161,17 +173,17 @@ class Session:
             outcome = "failed"
             self.reconnect |= turn.uncertain
             if isinstance(error, ContextLimit):
-                logger.warning("Agent turn failed: phase=%s reason=%s bytes=%s input_tokens=%s window=%s tool_calls=%d",
-                               "prepare_request" if error.size is not None else "tokenize",
+                logger.warning("Agent turn failed: %s phase=%s reason=%s bytes=%s input_tokens=%s window=%s tool_calls=%d",
+                               correlation, "prepare_request" if error.size is not None else "tokenize",
                                error.reason, error.size, error.input_tokens, error.window, turn.dispatched)
             elif isinstance(error, OutputLimit):
-                logger.warning("Agent turn failed: phase=generation reason=%s output_limit=%d output_tokens=%s tool_calls=%d",
-                               error.code, error.limit, error.completion_tokens, turn.dispatched)
+                logger.warning("Agent turn failed: %s phase=generation reason=%s output_limit=%d output_tokens=%s tool_calls=%d",
+                               correlation, error.code, error.limit, error.completion_tokens, turn.dispatched)
             elif isinstance(error, ModelFailure):
-                logger.warning("Agent turn failed: phase=%s reason=%s http_status=%s tool_calls=%d",
-                               error.phase, error.code, error.status or "-", turn.dispatched)
+                logger.warning("Agent turn failed: %s phase=%s reason=%s http_status=%s tool_calls=%d",
+                               correlation, error.phase, error.code, error.status or "-", turn.dispatched)
             else:
-                logger.warning("Agent turn failed: reason=%s tool_calls=%d", type(error).__name__, turn.dispatched)
+                logger.warning("Agent turn failed: %s reason=%s tool_calls=%d", correlation, type(error).__name__, turn.dispatched)
             with suppress(Exception):
                 await self.send("error", request_id=turn.request_id,
                                 code="context_limit" if isinstance(error, ContextLimit) else "run_failed",
@@ -183,6 +195,8 @@ class Session:
             # A long turn must not extend the idle socket lifetime after completion.
             if self.active is None and self.receive_timeout is not None and not self.receive_timeout.expired():
                 self.receive_timeout.reschedule(asyncio.get_running_loop().time() + IDLE_SECONDS)
+            logger.info("Agent turn finished: %s outcome=%s tool_calls=%d changes_applied=%s uncertain=%s",
+                        correlation, outcome, turn.dispatched, turn.changed, turn.uncertain)
             turn.observe("terminal", outcome=outcome, changes_applied=turn.changed, uncertain=turn.uncertain)
             if turn.trace is not None:
                 await self.save_trace(turn.request_id, turn.trace)
@@ -233,34 +247,47 @@ class Session:
                     task.cancel()
             await asyncio.gather(generating, intervening, return_exceptions=True)
 
+    def log_tool(self, turn, event, name=None, *, reason=None, call_id=None):
+        # Only server-generated IDs, advertised names and fixed categories belong here.
+        level = logging.WARNING if event == "rejected" else logging.INFO
+        logger.log(level, "Agent tool: session=%s turn=%d event=%s tool=%s call=%s reason=%s",
+                   self.id, turn.sequence, event, name or "-", call_id or "-", reason or "-")
+
+    def reject_tool(self, turn, name, reason):
+        self.log_tool(turn, "rejected", name, reason=reason)
+        return {"ok": False, "not_applied": True, "code": reason}, None
+
     async def dispatch(self, turn, name, arguments, revision):
         if revision != self.revision or not self.manual_idle.is_set():
-            return {"ok": False, "not_applied": True, "code": "user_changed_view"}, None
+            return self.reject_tool(turn, name, "user_changed_view")
         effect = self.tools[name].execution
         if effect.approval_group in turn.declined:
-            return {"ok": False, "not_applied": True, "code": "user_declined"}, None
+            return self.reject_tool(turn, name, "user_declined")
         if effect.transition == "open":
             target = arguments.get("id")
             if not isinstance(target, str) or turn.opened or self.catalog_ids.get(target, 0) <= time.monotonic():
-                return {"ok": False, "not_applied": True, "code": "search_required"}, None
+                return self.reject_tool(turn, name, "search_required")
         if effect.transition == "create_edit":
             signature = encode(dict(sorted({"duplicate": False, **arguments}.items())))
             if signature in turn.created_edits:
-                return {"ok": False, "not_applied": True, "code": "already_created_in_request"}, None
-        pending = Pending(uuid4().hex, effect, asyncio.get_running_loop().create_future())
+                return self.reject_tool(turn, name, "already_created_in_request")
+        pending = Pending(uuid4().hex, name, effect, asyncio.get_running_loop().create_future())
         self.pending = pending
         envelope = {"request_id": turn.request_id, "call_id": pending.id, "name": name, "arguments": arguments,
                     "context_id": self.context_id, "dataset_id": self.dataset_id}
         if self.hello.collaboration:
             envelope["view_revision"] = revision
-        turn.dispatched += 1
         try:
             await self.send("tool_call", **envelope)
+            turn.dispatched += 1
+            self.log_tool(turn, "dispatched", name, call_id=pending.id)
             async with asyncio.timeout(effect.timeout_seconds):
                 result = await pending.result
             if result.error is not None:
+                self.log_tool(turn, "receipt", name, reason="client_error", call_id=pending.id)
                 return {"ok": False, "error": result.error}, None
             if self.hello.collaboration and not effect.changes_state and result.view_revision != revision:
+                self.log_tool(turn, "receipt", name, reason="stale_observation", call_id=pending.id)
                 return {"ok": False, "not_applied": True, "code": "stale_observation"}, None
             if effect.transition is not None and not (
                     isinstance(result.result, dict) and result.result.get("not_applied") is True):
@@ -268,6 +295,7 @@ class Session:
                     await self.apply_transition(turn, effect.transition, arguments, result)
                 except InvalidMessage:
                     turn.uncertain = True
+                    self.log_tool(turn, "receipt", name, reason="invalid_transition", call_id=pending.id)
                     raise
             if effect.role == "catalog_search" and isinstance(result.result, dict):
                 rows = result.result.get("matches")
@@ -280,8 +308,11 @@ class Session:
                     while len(self.catalog_ids) > 512:
                         del self.catalog_ids[next(iter(self.catalog_ids))]
             image = result.image_png_base64 if revision == self.revision else None
+            self.log_tool(turn, "receipt", name, reason=receipt_status(result.result), call_id=pending.id)
             return result.result, image
-        except (TimeoutError, asyncio.CancelledError):
+        except (TimeoutError, asyncio.CancelledError) as error:
+            self.log_tool(turn, "interrupted", name, call_id=pending.id,
+                          reason="timeout" if isinstance(error, TimeoutError) else "cancelled")
             turn.uncertain |= effect.changes_state
             with suppress(Exception):
                 await self.send("tool_cancel", request_id=turn.request_id, call_id=pending.id)
@@ -366,3 +397,14 @@ class Session:
             trace = Trace()
             trace.add("manual_change", **detail)
             await self.save_trace("manual-" + uuid4().hex, trace)
+
+
+def receipt_status(result):
+    if not isinstance(result, dict):
+        return "unconfirmed"
+    if result.get("not_applied"):
+        code = result.get("code")
+        return code if isinstance(code, str) and code in RECEIPT_LOG_CODES else "not_applied"
+    if result.get("ok") is False or result.get("error"):
+        return "client_error"
+    return "confirmed"

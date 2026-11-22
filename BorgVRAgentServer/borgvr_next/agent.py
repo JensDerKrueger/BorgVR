@@ -46,6 +46,7 @@ class Turn:
     request_id: str
     text: str
     trace: Trace | None
+    sequence: int
     changed: bool = False
     uncertain: bool = False
     dispatched: int = 0
@@ -150,6 +151,7 @@ async def perform(turn, port):
             turn.observe("answer", text=response)
             return response
         if not isinstance(response, Call) or response.id in turn.attempts:
+            port.log_tool(turn, "rejected", reason="invalid_or_repeated_call")
             raise ModelFailure("invalid_or_repeated_call", phase="tool_dispatch")
         turn.attempts.add(response.id)
         tool = port.tools.get(response.name)
@@ -166,18 +168,17 @@ async def perform(turn, port):
         needs_state = tool is not None and tool.execution.changes_state and not state_read
         if reason is not None and tool is not None and calls_available and not needs_state and (
                 tool.execution.approval_group not in turn.declined):
-            logger.warning("Tool request not dispatched: tool=%s reason=%s", tool.name, reason)
+            port.log_tool(turn, "rejected", tool.name, reason=reason)
             arguments = await correct_arguments(port, current_messages, response, tool, reason, revision)
             if arguments is None:
                 continue
-            logger.info("Tool arguments corrected: tool=%s", tool.name)
+            port.log_tool(turn, "corrected", tool.name)
             response = Call(response.id, response.name, encode(arguments))
             reason = None
         messages.append(response.as_message())
         if reason is not None or needs_state:
             reason = reason or "state_required"
-            logger.warning("Tool request not dispatched: tool=%s reason=%s",
-                           tool.name if tool is not None else "-", reason)
+            port.log_tool(turn, "rejected", tool.name if tool is not None else None, reason=reason)
             consecutive_rejections += 1
             if consecutive_rejections > 1:
                 raise ModelFailure("tool_correction_exhausted", phase="tool_validation")

@@ -68,6 +68,12 @@ cannot change, and a refusal or invalid correction dispatches nothing.
 Corrected arguments are validated against the original schema and still
 require normal state, revision and approval checks.
 
+Operational logs distinguish rejected, dispatched and acknowledged calls.
+They use server-generated session and call IDs, a server turn number,
+advertised tool names and fixed categories. They do not print prompts,
+model text, argument values, dataset identifiers or client result contents.
+The turn summary distinguishes a completed answer from confirmed changes.
+
 A state read is required before a mutation. Opening a dataset requires a
 recent catalog search result. Successful scope-transition receipts include
 `dataset_transition` (new `dataset_id`, `context_id` and `tools`).
