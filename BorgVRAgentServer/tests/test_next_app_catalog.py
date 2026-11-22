@@ -11,6 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from borgvr_next.app import create_app
 from borgvr_next.model import Call
+from borgvr_next.wire import Tool
 from test_next_runtime import AUTH, TOKEN, hello, receipt, tool, turn
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -58,7 +59,8 @@ def model_catalog(offered, received):
         assert json.loads(metadata.splitlines()[0]) == original["execution"]
         native_schema = original["inputSchema"]
         parameters = function["parameters"]
-        if function.get("strict"):
+        assert "strict" not in function
+        if Tool.model_validate(original).takes_no_arguments:
             assert parameters == {**native_schema, "required": [], "properties": {}}
         else:
             assert parameters == native_schema

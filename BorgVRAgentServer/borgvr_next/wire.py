@@ -95,7 +95,8 @@ class Tool(Message):
         description = self.description + "\nApp-declared execution: " + effect
         function = {"name": self.name, "description": description, "parameters": self.inputSchema}
         if self.takes_no_arguments:
-            function.update(strict=True, parameters={**self.inputSchema, "properties": {}, "required": []},
+            # Provider strict mode can stall empty-argument calls. The agent validates them locally.
+            function.update(parameters={**self.inputSchema, "properties": {}, "required": []},
                             description=description + "\nThis tool takes no arguments. Call it with exactly {}.")
         return {"type": "function", "function": function}
 

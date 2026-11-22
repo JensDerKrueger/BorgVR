@@ -249,7 +249,10 @@ def test_empty_tool_schema_is_explicit_and_rejection_never_logs_argument_values(
     class Model(Steps):
         async def complete(self, messages, tools):
             definition = tools[0]["function"]
-            assert definition["strict"] is True and definition["parameters"]["required"] == []
+            assert "strict" not in definition
+            assert definition["parameters"] == {
+                "type": "object", "properties": {}, "required": [], "additionalProperties": False,
+            }
             assert "exactly {}" in definition["description"]
             if messages[-1]["role"] == "tool":
                 data = json.loads(messages[-1]["content"])
