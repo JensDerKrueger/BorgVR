@@ -90,7 +90,7 @@ async def perform(turn, port):
                 {"role": "user", "content": turn.text}]
     turn.observe("goal", text=turn.text)
     state_read = False
-    corrections = 0
+    consecutive_rejections = 0
     revision = port.revision
     context = port.context_id
     historical = len(port.history)
@@ -140,8 +140,8 @@ async def perform(turn, port):
                       else "schema_mismatch")
             logger.warning("Tool request not dispatched: tool=%s reason=%s",
                            tool.name if tool is not None else "-", reason)
-            corrections += 1
-            if corrections > 1:
+            consecutive_rejections += 1
+            if consecutive_rejections > 1:
                 raise ModelFailure("tool_correction_exhausted", phase="tool_validation")
             state_tools = [item.name for item in port.tools.values() if item.execution.role == "application_state"]
             state_instruction = ("Call " + " or ".join(state_tools) + " to read current state before retrying this change."
@@ -157,6 +157,8 @@ async def perform(turn, port):
         else:
             data, image = await port.dispatch(turn, response.name, arguments, revision)
             ok = not (isinstance(data, dict) and (data.get("not_applied") or data.get("ok") is False or data.get("error")))
+            if ok:
+                consecutive_rejections = 0
             if tool.execution.changes_state and ok and isinstance(data, dict):
                 turn.changed = True
                 confirmed.append(confirmed_change(tool, arguments, data, context))

@@ -105,6 +105,22 @@ def test_protocol_v1_state_gate_and_receipt():
             assert ws.receive_json()["type"] == "completed"
 
 
+def test_unsuccessful_state_read_does_not_reset_tool_correction():
+    model = Steps(Call("premature", "rotate_view", '{"degrees":15}'),
+                  Call("read", "get_application_state", "{}"),
+                  Call("still-premature", "rotate_view", '{"degrees":15}'))
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello())
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws)
+            state = ws.receive_json()
+            assert state["name"] == "get_application_state"
+            ws.send_json(receipt(state, {"ok": False, "not_applied": True, "code": "read_timeout"}))
+            error = ws.receive_json()
+            assert error["type"] == "error" and error["code"] == "run_failed" and not error["changes_applied"]
+
+
 @pytest.mark.parametrize("cancel", [False, True])
 def test_time_only_turn_continues_past_old_limits_and_can_be_cancelled(cancel):
     class Model(Steps):
@@ -296,6 +312,7 @@ def test_scope_handoff_keeps_confirmed_receipt_and_only_unfinished_work(followup
     opened = {"dataset": {"id": "sample", "description": "Fixture Volume"}, "rendererReady": True}
     goal = "Open Fixture Volume and rotate it by 15 degrees." if followup else "Open Fixture Volume."
     calls = [
+        Call("premature-open", "open_dataset", '{"id":"sample"}'),
         Call("state", "get_application_state", "{}"),
         Call("search", "search_datasets", "{}"),
         Call("open", "open_dataset", '{"id":"sample"}'),
@@ -322,7 +339,7 @@ def test_scope_handoff_keeps_confirmed_receipt_and_only_unfinished_work(followup
                 assert messages[-2] == {"role": "user", "content": goal}
                 assert not any(message["role"] == "tool" or "tool_calls" in message for message in messages)
                 self.saw_handoff = True
-            if messages[-1]["role"] == "tool" and messages[-1]["tool_call_id"] == "premature":
+            if messages[-1]["role"] == "tool" and messages[-1]["tool_call_id"] in {"premature-open", "premature"}:
                 correction = json.loads(messages[-1]["content"])
                 assert correction["code"] == "state_required" and "get_application_state" in correction["note"]
             return await super().complete(messages, tools)
