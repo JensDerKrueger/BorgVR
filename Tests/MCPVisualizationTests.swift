@@ -304,6 +304,13 @@ struct MCPVisualizationTests {
       try expect(abs(Int(zigzagSamples[index][3]) - expected) <= 1, "Wrong multi-segment alpha at sample \(index)")
       try expect(zigzagSamples[index].prefix(3) == rampTF.samples[index].prefix(3), "Alpha change altered a color")
     }
+    for mode in ["transfer_function", "transfer_function_lighting", "transfer_function"] {
+      let result = try await tool("set_render_mode", ["mode": mode])
+      try expect(result["isError"] as? Bool != true && service.applicationState().renderMode == mode,
+        "Could not compare the transfer function in mode \(mode)")
+      try expect(try service.transferFunction(channel: 0).samples == zigzagSamples,
+        "Switching lighting changed independently shaped RGB and alpha curves")
+    }
     try service.setTransferFunction(rampTF)
 
     let recording = try await tool("start_command_recording")

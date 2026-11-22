@@ -44,28 +44,53 @@ steps = [
   "Request a larger image or a closer view before precise picking if the feature boundary is unclear.",
 ]
 
+[rendering.natural_lighting]
+situation = "The user wants a more realistic view or clearer structures, or is evaluating a transfer function."
+goal = "Use lighting as a visual comparison to judge realism and how clearly structures are shown."
+contexts = ["dataset_ready"]
+keywords = ["realistic appearance", "natural shading", "lighting", "structural detail", "independent color and opacity"]
+requires_parameters = { set_render_mode = ["mode"] }
+steps = [
+  "Lighting can make an object look more realistic and make surfaces, depth, and structural details easier to see. It is useful for inspecting structures as well as for improving appearance.",
+  "Include a lit preview when evaluating a transfer function, especially when RGB and alpha curves vary independently rather than following the same shape. Use set_render_mode to compare transfer_function and transfer_function_lighting with the same transfer function, view, and clipping.",
+  "If image sharing is available, wait for each view to render before comparing previews. Choose the mode that best serves the goal, respect an explicitly requested mode, and do not claim to have verified a visual improvement without a preview.",
+]
+
+[transfer_function.component]
+situation = "The user wants a new appearance or a change to the color or opacity of a scalar volume."
+goal = "Build or adjust a transfer function with sparse control points instead of generating a full RGBA table."
+contexts = ["dataset_ready"]
+keywords = ["transfer function", "realistic colors", "opacity window", "color ramp", "control points"]
+requires_tools = ["set_transfer_function_component"]
+steps = [
+  "Use set_transfer_function_component once per affected component, even when all four components need to change. Component 3 is opacity. Preserve components that the task does not require changing.",
+  "Start with a few normalized [position, value] pairs at meaningful changes in slope; do not sample every position. Both coordinates are in [0,1]. Positions must strictly increase.",
+  "BorgVR interpolates linearly and extends the endpoint values. For an opacity window, add explicit zero-valued points outside the visible range.",
+  "Consider set_transfer_function only if the intended edit really needs more than about 50 control points across the affected components and fewer points cannot adequately represent it. This is a guideline, not a tool limit. A new overall appearance is not a reason to send a full RGBA table.",
+]
+
+[transfer_function.suppress_low_value_noise]
+situation = "A measured scalar volume shows a haze or speckle from low-intensity background values."
+goal = "Reduce visible noise without hiding meaningful faint structures or modifying the voxel data."
+contexts = ["dataset_ready"]
+keywords = ["noise", "background haze", "speckle", "low intensities", "opacity cutoff"]
+requires_tools = ["get_transfer_function", "set_transfer_function_component"]
+steps = [
+  "Read the current transfer function and edit only alpha (component 3). Put zero-opacity control points at the low end and at a small trial cutoff. Ramp back into the existing opacity curve above it. Leave RGB unchanged.",
+  "There is no universal cutoff. Compare the same view after each small change when previews are available. Keep the lowest cutoff that noticeably reduces the haze while preserving faint structures; lower it again if useful detail disappears.",
+  "Do not assume all low values are noise. This hides values in the rendering; it does not denoise or erase the source data. Without visual evidence, do not claim that the cutoff worked.",
+]
+
 [transfer_function.explore_range]
 situation = "An interesting structure is hard to separate in a scalar volume with unknown intensity ranges."
 goal = "Explore unknown scalar values using a narrow Gaussian transfer function and adjust opacity to highlight a structure."
 contexts = ["dataset_ready"]
 keywords = ["transfer function", "CT windowing", "intensity range", "Gaussian opacity", "tissue contrast"]
-requires_tools = ["get_transfer_function", "set_transfer_function", "capture_screenshot"]
+requires_tools = ["get_transfer_function", "set_transfer_function_component", "capture_screenshot"]
 steps = [
-  "Read the current transfer function and its channel. Use a narrow opacity bump and keep other values transparent.",
+  "Read the current transfer function and its channel. Use a few control points in component 3 to approximate a narrow opacity bump and keep other values transparent.",
   "Sweep the bump through a few well-spaced ranges, checking a screenshot at each useful step. Narrow the sweep around a promising response.",
   "Do not infer physical units from normalized sample positions. Restore or retain the original presentation as the task requires.",
-]
-
-[transfer_function.component]
-situation = "Only one color component or the opacity curve needs to change in a scalar volume."
-goal = "Adjust a transfer-function component without copying or overwriting the other components."
-contexts = ["dataset_ready"]
-keywords = ["transfer function", "opacity window", "color ramp", "control points"]
-requires_tools = ["set_transfer_function_component"]
-steps = [
-  "Use the component setter for targeted RGB or opacity changes. Use component 3 for opacity. Leave other components unchanged unless the goal calls for changing them.",
-  "Describe the curve with normalized [position, value] pairs, adding points only where the slope changes. Both coordinates are in [0,1]. Positions must strictly increase.",
-  "BorgVR interpolates linearly and extends the endpoint values. For an opacity window, add explicit zero-valued points outside the visible range.",
 ]
 
 [spatial.picking]

@@ -92,10 +92,28 @@ def test_swift_catalog_and_expert_knowledge_reach_model(swift_catalogs, variant)
         reference = next(message for message in messages if message["content"].startswith("Untrusted application guidance"))
         assert reference["role"] == "user" and messages[0]["role"] == "system"
         resolved = json.loads(reference["content"].splitlines()[-1])
-        rule_ids = {rule["id"] for rule in resolved["rules"]}
+        rules = {rule["id"]: rule for rule in resolved["rules"]}
         assert "SESSION_ONLY_TEST_RULE" in reference["content"]
-        assert ("inspection.preview" in rule_ids) == (variant not in {"start_menu", "no_images"})
-        assert ("transfer_function.explore_range" in rule_ids) == (variant not in {"start_menu", "no_images", "rgba"})
+        assert ("inspection.preview" in rules) == (variant not in {"start_menu", "no_images"})
+        assert ("transfer_function.explore_range" in rules) == (variant not in {"start_menu", "no_images", "rgba"})
+        assert ("transfer_function.component" in rules) == (variant not in {"start_menu", "rgba"})
+        noise_rule = rules.get("transfer_function.suppress_low_value_noise")
+        assert (noise_rule is not None) == (variant not in {"start_menu", "rgba"})
+        if noise_rule is not None:
+            guidance = " ".join(noise_rule["steps"])
+            assert "only alpha (component 3)" in guidance and "zero-opacity control points" in guidance
+            assert "no universal cutoff" in guidance and "preserving faint structures" in guidance
+        assert ("rendering.natural_lighting" in rules) == (variant not in {"start_menu", "rgba"})
+        if "rendering.natural_lighting" in rules:
+            mode = next(tool["function"] for tool in received if tool["function"]["name"] == "set_render_mode")
+            assert {"transfer_function", "transfer_function_lighting"} <= set(mode["parameters"]["properties"]["mode"]["enum"])
+            guidance = " ".join(rules["rendering.natural_lighting"]["steps"])
+            assert "compare transfer_function and transfer_function_lighting with the same transfer function" in guidance
+            assert "RGB and alpha curves vary independently" in guidance
+        if "transfer_function.component" in rules:
+            guidance = " ".join(rules["transfer_function.component"]["steps"])
+            assert "set_transfer_function_component once per affected component" in guidance
+            assert "set_transfer_function only if" in guidance and "more than about 50 control points" in guidance
         ask(client, offered, dataset=None if variant == "start_menu" else "volume")
         assert "SESSION_ONLY_TEST_RULE" not in str(model.requests[-1][0])
         model_catalog(offered, model.requests[-1][1])
