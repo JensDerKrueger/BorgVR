@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from borgvr_next.model import ModelFailure
-from diagnose_model import DiagnosticModel
+from diagnose_model import DiagnosticModel, active_runtime_source
 
 
 def test_synthetic_diagnostic_reports_http_error_without_exposing_token(capsys):
@@ -22,7 +22,7 @@ def test_synthetic_diagnostic_reports_http_error_without_exposing_token(capsys):
     async def check():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
             model = DiagnosticModel(http, "http://fixture.invalid/v1", "synthetic-secret", "fixture", max_output_tokens=128,
-                                    thinking_mode="on", reasoning_parser="mistral")
+                                    thinking_mode="on")
             with pytest.raises(ModelFailure) as failure:
                 await model.complete([{"role": "user", "content": "Synthetic test."}], [])
             assert failure.value.status == 400 and failure.value.phase == "generation"
@@ -44,7 +44,7 @@ def test_diagnostic_never_prints_successful_model_content(capsys):
     assert "not-for-log" not in capsys.readouterr().out
 
 
-def test_diagnostic_runs_with_pre_mistral_agent_constructor(monkeypatch, tmp_path, capsys):
+def test_diagnostic_runs_with_older_agent_constructor(monkeypatch, tmp_path, capsys):
     import borgvr_next.model as runtime
     class LegacyVLLM:
         def __init__(self, http, base_url, token, name, context=65536, *, max_output_tokens=None,
@@ -63,9 +63,25 @@ def test_diagnostic_runs_with_pre_mistral_agent_constructor(monkeypatch, tmp_pat
         httpx.Response(400, json={"error": "Synthetic rejected option"})))
     monkeypatch.setattr(diagnostic.httpx, "AsyncClient", lambda **kwargs: client)
     result = asyncio.run(diagnostic.diagnose({"BORGVR_VLLM_TOKEN_FILE": str(token),
-        "BORGVR_VLLM_URL": "http://fixture.invalid/v1", "BORGVR_MODEL": "fixture",
-        "BORGVR_REASONING_PARSER": "mistral"}))
+        "BORGVR_VLLM_URL": "http://fixture.invalid/v1", "BORGVR_MODEL": "fixture"}))
     assert result is False
     output = capsys.readouterr().out
-    assert "agent_runtime_outdated" in output and "Synthetic rejected option" in output
+    assert "Synthetic rejected option" in output
     assert "synthetic-secret" not in output
+
+
+@pytest.mark.parametrize("phase,release", [("ready", "a" * 32), ("starting", "a" * 32), ("ready", "../../etc")])
+def test_diagnostic_selects_only_ready_development_source(tmp_path, phase, release):
+    control, releases = tmp_path / "control", tmp_path / "releases"
+    control.mkdir()
+    source = releases / ("a" * 32)
+    (source / "borgvr_next").mkdir(parents=True)
+    (source / "borgvr_next/model.py").write_text("# active model\n")
+    record = {"request": "b" * 32, "release": release, "phase": phase}
+    for name in ("request.json", "status.json"):
+        (control / name).write_text(json.dumps(record))
+    if phase == "ready" and release == "a" * 32:
+        assert active_runtime_source(control, releases) == source
+    else:
+        with pytest.raises(ValueError):
+            active_runtime_source(control, releases)

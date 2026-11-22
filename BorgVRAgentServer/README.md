@@ -318,7 +318,7 @@ stays unchanged. Vision and tool calling are mandatory, not optional text-only f
 sudo ./setup.sh install --backend cuda --profile qwen35-4b
 ```
 
-Profiles `qwen36-35b`, `qwen35-4b`, `qwen38-27b` and `mistral-small4-nvfp4` use separate fixed checkpoint revisions
+Profiles `qwen36-35b`, `qwen35-4b` and `qwen38-27b` use separate fixed checkpoint revisions
 and initial parser/resource settings. For a new AMD installation use, for example,
 `sudo ./setup.sh install --backend rocm --profile qwen35-4b`. CUDA and ROCm images are pinned
 independently. These presets do not guarantee every model fits or has kernels for every GPU.
@@ -334,7 +334,7 @@ Run in the server directory:
 The script requests administrator access through `sudo` if needed. It displays numbered
 model profiles, marks the currently configured model and asks for a number; `0` cancels.
 The `custom` profile is excluded. GPU selection and tensor parallelism remain unchanged;
-profiles only change model settings. Keep ai2 configured for both GPUs with TP=2.
+profiles only change model settings.
 
 The switcher backs up configuration, checks the GPU, restarts services and tests image
 input and tool calling. Active assistant requests are interrupted. On failure it restores
@@ -343,41 +343,6 @@ reported explicitly. Neither the agent nor vLLM image is replaced, built or pull
 Active development mode, the actual deployed agent source and restricted SSH access are
 retained: no `dev disable --remove` or `dev enable` is needed. Missing model weights are
 downloaded by vLLM at startup. Reconnect BorgVR after success. No automatic `git pull` is run.
-
-### Test Mistral Small 4 NVFP4 on two Blackwell GPUs
-
-`mistral-small4-nvfp4` selects the [official image-capable checkpoint](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603-NVFP4),
-pinned to `45331841b631f4e281df8e959ea3cc9beb84298a`, with `mistral` tool/reasoning parsers,
-`compressed-tensors` quantization and `TRITON_MLA` attention. Initial limits are 16,384
-context tokens, one concurrent request, a 90% GPU memory budget and eager execution.
-Reasoning is enabled (`reasoning_effort=high`, temperature 0.7); `--thinking off` selects
-`reasoning_effort=none`. No Qwen-specific thinking parameters are sent.
-This profile targets NVIDIA CUDA/Blackwell, not ROCm. Two 48 GB cards are a plausible test
-configuration, not a verified memory or kernel compatibility guarantee. The checkpoint is
-about 71 GB; installation checks require 200 GiB of free Docker storage for this profile.
-Check available space before switching models. Existing model caches are kept.
-
-With development mode active on ai2, use this order. First ensure the latest agent source
-has been committed and pushed. `git pull --ff-only` brings it into the checkout; stop on
-local conflicts and do not reset changes. Preserve any uncommitted source deployed only
-through `dev push` before removing development mode.
-
-```sh
-cd ~/BorgVR/BorgVRAgentServer
-git pull --ff-only
-sudo ./setup.sh dev disable --remove
-sudo ./setup.sh model mistral-small4-nvfp4 --gpu all --tensor-parallel-size 2
-sudo ./setup.sh dev enable --ssh-key-file ~/borgvr-ai1-dev.pub
-sudo ./setup.sh test
-```
-
-Stop and inspect the output if any command fails. During the switch the configured image
-may temporarily run the agent; `dev enable` then restores current source from the checkout
-and recreates the restricted SSH access. Host, port, certificates, tokens and GPU workarounds
-are preserved. Reconnect BorgVR afterwards without changing connection settings.
-`setup.sh test` exercises the actual model, including image input and tool calling, not
-just container health. To switch back, repeat the sequence with
-`model qwen38-27b --gpu all --tensor-parallel-size 2`.
 
 ### Switch other existing model profiles
 
@@ -388,14 +353,11 @@ using a synthetic request:
 sudo docker compose exec -T agent python - < diagnose_model.py
 ```
 
-The diagnostic uses current model/thinking settings, caps output at 128 tokens and prints
+With development mode active, the diagnostic uses the running release rather than the
+older base image code. It uses current model/thinking settings, caps output at 128 tokens and prints
 the HTTP status and bounded error body. It does not read BorgVR conversations, datasets or
 screenshots, change configuration or print credentials. HTTP acceptance is not a substitute
 for the image/tool compatibility test.
-`agent_runtime_outdated` means the container still runs the older agent without Mistral
-request support. `git pull` alone does not update a running container. Load current agent
-source through development mode or build a current agent image; no model download needs
-to be repeated.
 
 Switch an existing deployment while keeping credentials and caches:
 

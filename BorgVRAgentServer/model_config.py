@@ -27,15 +27,6 @@ PROFILES = {
         "VISION_ENABLED": "true", "CONTEXT_LENGTH": "16384", "MAX_SEQS": "2",
         "MIN_FREE_GIB": "160",
     },
-    "mistral-small4-nvfp4": {
-        "MODEL": "mistralai/Mistral-Small-4-119B-2603-NVFP4",
-        "MODEL_REVISION": "45331841b631f4e281df8e959ea3cc9beb84298a",
-        "TOOL_PARSER": "mistral", "REASONING_PARSER": "mistral", "THINKING_MODE": "on",
-        "VISION_ENABLED": "true", "CONTEXT_LENGTH": "16384", "MAX_SEQS": "1",
-        "MIN_FREE_GIB": "200", "QUANTIZATION": "compressed-tensors",
-        "ATTENTION_BACKEND": "TRITON_MLA", "ENFORCE_EAGER": "true",
-        "GPU_MEMORY_FRACTION": "0.90",
-    },
     "custom": {
         "MODEL": "", "MODEL_REVISION": "", "TOOL_PARSER": "",
         "REASONING_PARSER": "none", "THINKING_MODE": "default", "VISION_ENABLED": "true",

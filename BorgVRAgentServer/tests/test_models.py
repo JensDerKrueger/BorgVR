@@ -33,19 +33,7 @@ def test_custom_model_has_no_qwen_request_or_parser_assumptions():
     assert "hermes" in config.arguments()
 
 
-def test_mistral_nvfp4_profile_has_vision_parsers_and_conservative_runtime():
-    config = ModelConfig.from_env(profile_values("mistral-small4-nvfp4"))
-    assert config.model == "mistralai/Mistral-Small-4-119B-2603-NVFP4"
-    assert config.tool_parser == config.reasoning_parser == "mistral"
-    assert config.thinking == "on" and config.vision
-    assert config.context == 16384 and config.sequences == 1 and config.eager
-    args = config.arguments()
-    assert args[args.index("--quantization") + 1] == "compressed-tensors"
-    assert args[args.index("--attention-backend") + 1] == "TRITON_MLA"
-    assert "--enforce-eager" in args and "qwen3" not in args
-
-
-def test_mistral_switch_and_return_reset_model_options_but_keep_hardware_and_endpoint(tmp_path):
+def test_switch_from_custom_settings_resets_model_options_but_keeps_hardware_and_endpoint(tmp_path):
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
     parser.add_argument("--agent-image")
@@ -53,24 +41,19 @@ def test_mistral_switch_and_return_reset_model_options_but_keep_hardware_and_end
     original = configure.read_configuration(tmp_path)
     original.update(BORGVR_TENSOR_PARALLEL_SIZE="2", BORGVR_NCCL_P2P_DISABLE="true",
                     BORGVR_DISABLE_CUSTOM_ALL_REDUCE="true")
-    args = parser.parse_args(["--profile", "mistral-small4-nvfp4"])
-    mistral = {**original, **configure.inference_values(args, original)}
-    assert ModelConfig.from_env(mistral).attention_backend == "TRITON_MLA"
+    args = parser.parse_args(["--profile", "custom", "--model", "Other/Vision-Instruct", "--model-revision", "main",
+                              "--tool-parser", "hermes", "--attention-backend", "FLASH_ATTN",
+                              "--quantization", "awq", "--enforce-eager", "true"])
+    custom = {**original, **configure.inference_values(args, original)}
+    arguments = ModelConfig.from_env(custom).arguments()
+    assert arguments[arguments.index("--attention-backend") + 1] == "FLASH_ATTN"
     for key in ("BORGVR_GPU", "BORGVR_TENSOR_PARALLEL_SIZE", "BORGVR_NCCL_P2P_DISABLE",
                 "BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "BORGVR_BIND_ADDRESS", "BORGVR_PORT", "BORGVR_AGENT_IMAGE"):
-        assert mistral[key] == original[key]
+        assert custom[key] == original[key]
     args = parser.parse_args(["--profile", "qwen38-27b"])
-    qwen = ModelConfig.from_env({**mistral, **configure.inference_values(args, mistral)})
+    qwen = ModelConfig.from_env({**custom, **configure.inference_values(args, custom)})
     assert qwen.quantization == qwen.attention_backend == "auto"
     assert not qwen.eager and qwen.thinking == "off" and qwen.tensor_parallel_size == 2
-
-
-def test_mistral_nvfp4_rejects_rocm_before_writing_configuration():
-    parser = argparse.ArgumentParser()
-    configure.add_model_options(parser)
-    args = parser.parse_args(["--profile", "mistral-small4-nvfp4", "--backend", "rocm"])
-    with pytest.raises(ValueError, match="NVIDIA CUDA/Blackwell"):
-        configure.inference_values(args)
 
 
 @pytest.mark.parametrize("key,value", [("VISION_ENABLED", "false"), ("GPU_MEMORY_FRACTION", "nan"),

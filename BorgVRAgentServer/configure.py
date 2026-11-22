@@ -137,8 +137,6 @@ def gpu_groups(root):
 
 def validate_model_gpu(values):
     config = ModelConfig.from_env(values)
-    if config.model == PROFILES["mistral-small4-nvfp4"]["MODEL"] and values.get("BORGVR_BACKEND", "cuda") != "cuda":
-        raise ValueError("The Mistral Small 4 NVFP4 profile targets NVIDIA CUDA/Blackwell, not ROCm")
     if config.nccl_p2p_disable and values.get("BORGVR_BACKEND", "cuda") != "cuda":
         raise ValueError("--nccl-p2p-disable true requires --backend cuda")
     if config.tensor_parallel_size > 1 and (values.get("BORGVR_BACKEND", "cuda") != "cuda" or values.get("BORGVR_GPU", "0") != "all"):

@@ -112,7 +112,7 @@ async def talk(url, token, context, text, capabilities=False):
                         if name == "capture_screenshot":
                             png = io.BytesIO()
                             mode, color = ("RGBA", (255, 0, 0, 255)) if arguments.get("include_alpha") else ("RGB", (255, 0, 0))
-                            Image.new(mode, (64, 64), color).save(png, format="PNG")
+                            Image.new(mode, (512, 512), color).save(png, format="PNG")
                             result["image_png_base64"] = base64.b64encode(png.getvalue()).decode()
                         await socket.send(json.dumps(result))
                     case "error" | "tool_call":

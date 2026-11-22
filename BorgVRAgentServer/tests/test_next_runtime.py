@@ -1,10 +1,13 @@
 """Black-box tests for the independent implementation."""
 
 import asyncio
+import base64
+import io
 import json
 
 from fastapi.testclient import TestClient
 import httpx
+from PIL import Image
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
@@ -83,6 +86,31 @@ def receipt(call, data):
 def turn(ws, name="turn", text="Rotate the view."):
     ws.send_json({"type": "user_message", "request_id": name, "text": text})
     assert ws.receive_json()["type"] == "started"
+
+
+def test_tool_image_is_explicitly_labeled_as_observation_not_new_user_request():
+    png = io.BytesIO()
+    Image.new("RGB", (64, 64), (255, 0, 0)).save(png, format="PNG")
+    image = base64.b64encode(png.getvalue()).decode()
+    class Model(Steps):
+        async def complete(self, messages, tools):
+            if isinstance(messages[-1].get("content"), list):
+                content = messages[-1]["content"]
+                assert messages[-2]["role"] == "tool"
+                assert content[0]["type"] == "text" and "not a new user request" in content[0]["text"]
+                assert content[1] == {"type": "image_url", "image_url": {"url": "data:image/png;base64," + image}}
+            return await super().complete(messages, tools)
+    model = Model(Call("image-call", "capture_screenshot", "{}"), "The image is red.")
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello(tools=[tool("capture_screenshot")]))
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws, text="Describe the image.")
+            event = ws.receive_json()
+            assert event["name"] == "capture_screenshot"
+            ws.send_json({**receipt(event, {"width": 64, "height": 64}), "image_png_base64": image})
+            assert ws.receive_json()["type"] == "assistant_message"
+            assert ws.receive_json()["type"] == "completed"
 
 
 def test_state_preflight_uses_catalog_role_without_another_model_call():
@@ -642,7 +670,8 @@ def test_induction_after_restart_and_stale_worker_cannot_publish(tmp_path):
     (65536, 32768, 500, None, 31756, 180),
     (8192, 65536, 500, None, 7180, 180),
     (8192, 65536, 500, 4096, 4096, 60),
-    (8192, 65536, 7616, 4096, 64, 60),
+    (8192, 65536, 7616, 64, 64, 60),
+    (16384, 16384, 13824, None, 2048, 180),
 ])
 def test_vllm_uses_same_payload_and_bounds_generation_by_available_context(configured, reported, count, cap, expected, seconds):
     observed = []
@@ -675,29 +704,42 @@ def test_vllm_uses_same_payload_and_bounds_generation_by_available_context(confi
     asyncio.run(check())
 
 
-@pytest.mark.parametrize("parser,mode,expected", [
-    ("mistral", "on", {"reasoning_effort": "high", "chat_template_kwargs": {"reasoning_effort": "high"}}),
-    ("mistral", "off", {"reasoning_effort": "none", "chat_template_kwargs": {"reasoning_effort": "none"}}),
-    ("mistral", "default", {}),
-    ("qwen3", "off", {"chat_template_kwargs": {"enable_thinking": False}}),
-    ("qwen3", "on", {"chat_template_kwargs": {"enable_thinking": True}}),
+@pytest.mark.parametrize("mode,expected", [
+    ("off", {"enable_thinking": False}),
+    ("on", {"enable_thinking": True}),
+    ("default", None),
 ])
-def test_model_specific_thinking_controls_match_tokenization_and_generation(parser, mode, expected):
+def test_thinking_controls_match_tokenization_and_generation(mode, expected):
     observed = []
     def handler(request):
         body = json.loads(request.content)
         observed.append(body)
-        assert {key: body[key] for key in ("reasoning_effort", "chat_template_kwargs") if key in body} == expected
+        assert body.get("chat_template_kwargs") == expected
+        assert ("chat_template_kwargs" in body) == (expected is not None)
         if request.url.path == "/tokenize":
             return httpx.Response(200, json={"count": 42, "max_model_len": 16384})
-        assert body["temperature"] == (0.7 if parser == "mistral" and mode == "on" else 0.0)
+        assert body["temperature"] == 0.0
         return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": "Done."}}]})
     async def check():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             model = VLLM(client, "http://fixture.invalid/v1", "synthetic", "fixture",
-                         thinking_mode=mode, reasoning_parser=parser)
+                         thinking_mode=mode)
             assert await model.complete([{"role": "user", "content": "Synthetic question."}], []) == "Done."
         assert len(observed) == 2
+    asyncio.run(check())
+
+
+def test_tokenizer_http_error_is_reported_without_requesting_generation():
+    def handler(request):
+        assert request.url.path == "/tokenize"
+        return httpx.Response(400, json={"error": {"message": "Bad request"}})
+    async def check():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            model = VLLM(http, "http://fixture.invalid/v1", "synthetic", "fixture")
+            with pytest.raises(ModelFailure) as error:
+                await model.complete([{"role": "user", "content": "Synthetic test."}], [])
+            assert error.value.code == "http_error"
+            assert (error.value.phase, error.value.status) == ("tokenize", 400)
     asyncio.run(check())
 
 
@@ -718,17 +760,24 @@ def test_vllm_read_timeout_is_classified_before_generic_transport_errors():
     asyncio.run(check())
 
 
-def test_vllm_does_not_generate_when_context_is_full():
+@pytest.mark.parametrize("count,reason,available", [
+    (16384 - 512, "input_token_budget", 0),
+    (15779, "output_token_reserve", 93),
+    (13825, "output_token_reserve", 2047),
+])
+def test_vllm_does_not_generate_below_output_reserve(count, reason, available):
     def handler(request):
         assert request.url.path == "/tokenize"
-        return httpx.Response(200, json={"count": 7680, "max_model_len": 8192})
+        return httpx.Response(200, json={"count": count, "max_model_len": 16384})
 
     async def check():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             model = VLLM(client, "http://fixture.invalid/v1", "synthetic", "fixture")
             with pytest.raises(ContextLimit) as failure:
                 await model.complete([{"role": "user", "content": "Synthetic question."}], [])
-            assert (failure.value.input_tokens, failure.value.window) == (7680, 8192)
+            assert (failure.value.input_tokens, failure.value.window) == (count, 16384)
+            assert (failure.value.reason, failure.value.output_available, failure.value.output_reserve) == (
+                reason, available, 2048)
 
     asyncio.run(check())
 
@@ -846,6 +895,153 @@ def test_input_compaction_keeps_active_goal_and_confirmed_command_without_replay
             ws.send_json(receipt(call, {"rendererReady": True}))
             assert ws.receive_json()["text"] == "Rotation confirmed."
             assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("tight_context", [False, True])
+def test_input_compaction_samples_large_receipt_preserving_small_findings_and_latest_image(tight_context):
+    png = io.BytesIO()
+    Image.new("RGB", (16, 16), "red").save(png, format="PNG")
+    image = base64.b64encode(png.getvalue()).decode()
+    samples = [[index // 16] * 3 + [255 if index == 1583 else 0] for index in range(4096)]
+    findings = [{"interval": [0.2, 0.25], "noise_candidate": True, "preview": 1}]
+    series = {**tool("read_dense_series"), "execution": {"kind": "read"}}
+
+    class Model(Steps):
+        full_requests = 0
+        compacted_requests = 0
+
+        async def complete(self, messages, tools):
+            if messages[-1].get("tool_call_id") != "series":
+                return await super().complete(messages, tools)
+            assert messages[0]["role"] == "system"
+            assert any(message["content"] == "Rotate, then inspect the result." for message in messages)
+            mutations = [call for message in messages for call in message.get("tool_calls", [])
+                         if call["function"]["name"] == "rotate_view"]
+            assert [call["id"] for call in mutations] == ["mutation"]
+            assert [json.loads(message["content"]) for message in messages
+                    if message.get("tool_call_id") == "mutation"] == [{"ok": True}]
+            images = [item for message in messages if isinstance(message["content"], list)
+                      for item in message["content"] if item["type"] == "image_url"]
+            assert images == [{"type": "image_url", "image_url": {"url": "data:image/png;base64," + image}}]
+            receipt = json.loads(messages[-1]["content"])
+            assert receipt["bins"] == findings and receipt["channel"] == 0
+            values = receipt["samples"]
+            if isinstance(values, list):
+                assert values == samples
+                self.full_requests += 1
+                if tight_context:
+                    raise ContextLimit("input_token_budget", input_tokens=17188, window=16384)
+            else:
+                self.compacted_requests += 1
+                assert values["summary"] == "sampled_array" and values["total_items"] == len(samples)
+                retained = values["samples_by_original_index"]
+                assert retained[0] == [0, samples[0]] and retained[-1] == [4095, samples[-1]]
+                assert all(row == samples[index] for index, row in retained)
+                assert [1583, samples[1583]] in retained and len(retained) <= 25
+                assert len(messages[-1]["content"]) < 1024
+            return "Rotation and inspection complete."
+
+    model = Model(Call("mutation", "rotate_view", '{"degrees":15}'),
+                  Call("image", "capture_screenshot", "{}"), Call("series", series["name"], "{}"))
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello(tools=[*TOOLS, tool("capture_screenshot"), series]))
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws, text="Rotate, then inspect the result.")
+            state = ws.receive_json()
+            assert state["name"] == "get_application_state"
+            ws.send_json(receipt(state, {"rendererReady": True}))
+            change = ws.receive_json()
+            assert change["name"] == "rotate_view"
+            ws.send_json(receipt(change, {"ok": True}))
+            screenshot = ws.receive_json()
+            assert screenshot["name"] == "capture_screenshot"
+            ws.send_json({**receipt(screenshot, {"width": 16, "height": 16}), "image_png_base64": image})
+            reading = ws.receive_json()
+            assert reading["name"] == series["name"]
+            ws.send_json(receipt(reading, {"channel": 0, "samples": samples, "bins": findings}))
+            assert ws.receive_json()["text"] == "Rotation and inspection complete."
+            assert ws.receive_json()["type"] == "completed"
+    assert model.full_requests == 1 and model.compacted_requests == int(tight_context)
+
+
+@pytest.mark.parametrize("needs_older_details_removed", [False, True])
+def test_16k_recovers_from_93_output_tokens_after_screenshot_without_replaying_change(needs_older_details_removed):
+    png = io.BytesIO()
+    Image.new("RGBA", (1024, 512), (255, 0, 0, 240)).save(png, format="PNG")
+    image = base64.b64encode(png.getvalue()).decode()
+    original_receipt = {"ok": True, "detail": "render detail " * 80}
+    result = {"choices": [{"finish_reason": "stop", "message": {"content": "Done."}}]}
+    outgoing = iter(Call(identifier, name, arguments) for identifier, name, arguments in (
+        ("rotation", "rotate_view", '{"degrees":15}'),
+        ("current", "get_application_state", '{}'),
+        ("image", "capture_screenshot", '{}'),
+    ))
+    measured = []
+    generations_with_image = []
+
+    def backend(request):
+        body = json.loads(request.content)
+        messages = body["messages"]
+        assert messages[0]["role"] == "system"
+        picture = next((part["image_url"]["url"] for message in messages if isinstance(message["content"], list)
+                        for part in message["content"] if part["type"] == "image_url"), None)
+        if picture is None:
+            if request.url.path == "/tokenize":
+                return httpx.Response(200, json={"count": 12000, "max_model_len": 16384})
+            call = next(outgoing).as_message()["tool_calls"]
+            return httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": {"tool_calls": call}}]})
+
+        image_messages = [message for message in messages if isinstance(message["content"], list)]
+        assert len(image_messages) == 1
+        with Image.open(io.BytesIO(base64.b64decode(picture.split(",", 1)[1]))) as preview:
+            width, height = preview.size
+            assert width == height * 2 and preview.getpixel((0, 0)) == (255, 0, 0, 240)
+        previous = [json.loads(message["content"]) for message in messages if message.get("tool_call_id") == "rotation"]
+        assert len(previous) == 1 and previous[0]["ok"] is True
+        assert sum(call["id"] == "rotation" for message in messages for call in message.get("tool_calls", [])) == 1
+        assert any(message["content"] == "Rotate and check the view." for message in messages)
+        omitted = "summary" in previous[0]
+        if omitted:
+            assert previous == [{"summary": "older_result_details_omitted", "ok": True}]
+        else:
+            assert previous == [original_receipt]
+        count = 15779 if width == 1024 else 15000 if needs_older_details_removed and not omitted else 13824
+        if request.url.path == "/tokenize":
+            measured.append((width, count))
+            return httpx.Response(200, json={"count": count, "max_model_len": 16384})
+        assert width == 384 and omitted == needs_older_details_removed
+        assert body["max_tokens"] == 2048
+        generations_with_image.append(width)
+        return httpx.Response(200, json=result)
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(backend))
+    model = VLLM(http, "http://fixture.invalid/v1", "synthetic", "fixture", context=16384)
+    try:
+        with TestClient(create_app(token=TOKEN, model=model)) as client:
+            with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+                ws.send_json(hello(tools=[*TOOLS, tool("capture_screenshot")]))
+                assert ws.receive_json()["type"] == "ready"
+                turn(ws, text="Rotate and check the view.")
+                preflight = ws.receive_json()
+                assert preflight["name"] == "get_application_state"
+                ws.send_json(receipt(preflight, {"rendererReady": True}))
+                rotation = ws.receive_json()
+                assert rotation["name"] == "rotate_view"
+                ws.send_json(receipt(rotation, original_receipt))
+                state = ws.receive_json()
+                assert state["name"] == "get_application_state"
+                ws.send_json(receipt(state, {"rendererReady": True}))
+                snapshot = ws.receive_json()
+                assert snapshot["name"] == "capture_screenshot"
+                ws.send_json({**receipt(snapshot, {"width": 1024, "height": 512}), "image_png_base64": image})
+                assert ws.receive_json()["text"] == "Done."
+                assert ws.receive_json()["type"] == "completed"
+    finally:
+        asyncio.run(http.aclose())
+    expected_reductions = [(384, 15000)] if needs_older_details_removed else []
+    assert measured == [(1024, 15779), *expected_reductions, (384, 13824)]
+    assert generations_with_image == [384]
 
 
 @pytest.mark.parametrize("tool_name, advertised", [

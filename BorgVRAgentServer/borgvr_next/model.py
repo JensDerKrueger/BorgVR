@@ -10,13 +10,17 @@ from .output_diagnostics import summarize_output
 from .wire import FRAME_BYTES, decode, encode
 
 logger = logging.getLogger("uvicorn.error.borgvr")
+CONTEXT_PADDING = 512
+OUTPUT_RESERVE = 2048
 
 
 class ContextLimit(Exception):
-    def __init__(self, reason="input_context", *, size=None, input_tokens=None, window=None):
+    def __init__(self, reason="input_context", *, size=None, input_tokens=None, window=None,
+                 output_available=None, output_reserve=None):
         super().__init__(reason)
         self.reason, self.size = reason, size
         self.input_tokens, self.window = input_tokens, window
+        self.output_available, self.output_reserve = output_available, output_reserve
 
 
 class ModelFailure(Exception):
@@ -45,7 +49,7 @@ class Call:
 
 class VLLM:
     def __init__(self, http, base_url, token, name, context=65536, *, max_output_tokens=None, generation_timeout=180,
-                 thinking_mode="off", reasoning_parser=None):
+                 thinking_mode="off"):
         self.http = http
         self.url = base_url.rstrip("/")
         if not self.url.endswith("/v1"):
@@ -53,14 +57,13 @@ class VLLM:
         self.token = token
         self.name = name
         self.context = context
-        if context <= 512 or (max_output_tokens is not None and max_output_tokens < 1):
+        if context <= CONTEXT_PADDING or (max_output_tokens is not None and max_output_tokens < 1):
             raise ValueError("Invalid model budget")
         self.max_output_tokens = max_output_tokens
         self.generation_timeout = generation_timeout
         if thinking_mode not in {"off", "on", "default"}:
             raise ValueError("Invalid thinking mode")
         self.thinking_mode = thinking_mode
-        self.reasoning_parser = reasoning_parser
 
     async def exchange(self, method, url, *, phase, seconds, body=None):
         timeout = httpx.Timeout(seconds, connect=min(5, seconds), pool=min(5, seconds))
@@ -93,12 +96,7 @@ class VLLM:
     async def complete(self, messages, tools, *, response_schema=None):
         body = {"model": self.name, "messages": messages}
         if self.thinking_mode != "default":
-            if self.reasoning_parser == "mistral":
-                body["reasoning_effort"] = "high" if self.thinking_mode == "on" else "none"
-                # /tokenize consumes template kwargs, not necessarily generation options.
-                body["chat_template_kwargs"] = {"reasoning_effort": body["reasoning_effort"]}
-            else:
-                body["chat_template_kwargs"] = {"enable_thinking": self.thinking_mode == "on"}
+            body["chat_template_kwargs"] = {"enable_thinking": self.thinking_mode == "on"}
         if tools:
             body["tools"] = tools
         if response_schema is not None:
@@ -114,12 +112,15 @@ class VLLM:
         if type(count) is not int or count < 0 or type(window) is not int or window < 1:
             raise ModelFailure("invalid_token_count", phase="tokenize")
         window = min(window, self.context)
-        available = window - count - 512
-        if available <= 0:
-            raise ContextLimit("input_token_budget", input_tokens=count, window=window)
+        available = window - count - CONTEXT_PADDING
+        reserve = min(OUTPUT_RESERVE, self.max_output_tokens or OUTPUT_RESERVE,
+                      max(1, (window - CONTEXT_PADDING) // 4))
+        if available < reserve:
+            raise ContextLimit("input_token_budget" if available <= 0 else "output_token_reserve",
+                               input_tokens=count, window=window, output_available=max(0, available),
+                               output_reserve=reserve)
         limit = available if self.max_output_tokens is None else min(available, self.max_output_tokens)
-        temperature = 0.7 if self.reasoning_parser == "mistral" and self.thinking_mode == "on" else 0.0
-        body.update(temperature=temperature, parallel_tool_calls=False, max_tokens=limit)
+        body.update(temperature=0.0, parallel_tool_calls=False, max_tokens=limit)
         result = await self.exchange("POST", self.url + "/chat/completions", phase="generation",
                                      seconds=self.generation_timeout, body=body)
         return self.response(result, tools, limit, structured=response_schema is not None)

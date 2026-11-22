@@ -11,7 +11,7 @@ import switch_model as menu
 
 
 @pytest.mark.parametrize("answer,expected", [("0", None), ("1", "qwen36-35b"),
-    ("2", "qwen35-4b"), ("3", "qwen38-27b"), ("4", "mistral-small4-nvfp4")])
+    ("2", "qwen35-4b"), ("3", "qwen38-27b")])
 def test_numbered_menu(answer, expected):
     output = []
     assert menu.select_profile(PROFILES["qwen38-27b"]["MODEL"], ask=lambda _: answer, output=output.append) == expected
@@ -20,7 +20,7 @@ def test_numbered_menu(answer, expected):
 
 
 def test_invalid_menu_input_and_eof_have_no_side_effects():
-    answers = iter(["", "-1", "5", "$(id)", "1; exit", "١", "0"])
+    answers = iter(["", "-1", "4", "$(id)", "1; exit", "١", "0"])
     assert menu.select_profile(None, ask=lambda _: next(answers), output=lambda _: None) is None
     def eof(_):
         raise EOFError
@@ -50,9 +50,10 @@ def test_switch_retains_active_development_source_and_credentials(installed, mon
     before = {path: path.read_bytes() for path in protected}
     original = configure.read_configuration(root)
     calls = []
-    menu.switch(root, "mistral-small4-nvfp4", run=lambda path, command: calls.append(command))
+    menu.switch(root, "qwen35-4b", run=lambda path, command: calls.append(command))
     assert calls == ["doctor", "restart", "test"] and verified == [root]
     updated = configure.read_configuration(root)
+    assert updated["BORGVR_MODEL"] == PROFILES["qwen35-4b"]["MODEL"]
     for key in ("BORGVR_AGENT_IMAGE", "BORGVR_VLLM_IMAGE", "BORGVR_GPU", "BORGVR_TENSOR_PARALLEL_SIZE",
                 "BORGVR_NCCL_P2P_DISABLE", "BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "BORGVR_BIND_ADDRESS", "BORGVR_PORT"):
         assert updated[key] == original[key]
@@ -71,7 +72,7 @@ def test_failed_switch_restores_exact_configuration(installed, failing):
             failed = True
             raise subprocess.CalledProcessError(1, command)
     with pytest.raises(subprocess.CalledProcessError):
-        menu.switch(installed, "mistral-small4-nvfp4", run=run)
+        menu.switch(installed, "qwen35-4b", run=run)
     assert (installed / ".env").read_bytes() == original
     assert (installed / ".env").stat().st_mode & 0o777 == 0o600
     if failing == "doctor":
@@ -88,7 +89,7 @@ def test_keyboard_interrupt_attempts_to_restore_previous_model(installed):
         if len(calls) == 2:
             raise KeyboardInterrupt
     with pytest.raises(KeyboardInterrupt):
-        menu.switch(installed, "mistral-small4-nvfp4", run=run)
+        menu.switch(installed, "qwen35-4b", run=run)
     assert calls == ["doctor", "restart", "restart", "test"]
     assert (installed / ".env").read_bytes() == original
 
@@ -99,7 +100,7 @@ def test_failed_recovery_does_not_claim_model_is_running(installed, capsys):
         if command == "restart":
             raise subprocess.CalledProcessError(1, command)
     with pytest.raises(subprocess.CalledProcessError):
-        menu.switch(installed, "mistral-small4-nvfp4", run=run)
+        menu.switch(installed, "qwen35-4b", run=run)
     assert (installed / ".env").read_bytes() == original
     error = capsys.readouterr().err
     assert "Wiederanlauf ist fehlgeschlagen" in error
@@ -111,7 +112,7 @@ def test_interrupted_switch_recovers_without_erasing_new_external_changes(instal
         configure.write_configuration_changes(root, {"BORGVR_PORT": "9999"})
         raise KeyboardInterrupt
     with pytest.raises(KeyboardInterrupt):
-        menu.switch(installed, "mistral-small4-nvfp4", run=run)
+        menu.switch(installed, "qwen35-4b", run=run)
     assert configure.read_value("BORGVR_PORT", installed) == "9999"
 
 
@@ -122,7 +123,7 @@ def test_invalid_development_state_prevents_any_change(installed, monkeypatch):
         raise ValueError("different installation")
     monkeypatch.setattr(development, "overlay_file", reject)
     with pytest.raises(ValueError, match="different installation"):
-        menu.switch(installed, "mistral-small4-nvfp4")
+        menu.switch(installed, "qwen35-4b")
     assert (installed / ".env").read_bytes() == original
 
 

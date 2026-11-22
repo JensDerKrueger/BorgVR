@@ -75,6 +75,17 @@ advertised tool names and fixed categories. They do not print prompts,
 model text, argument values, dataset identifiers or client result contents.
 The turn summary distinguishes a completed answer from confirmed changes.
 
+The agent reserves 2,048 output tokens before generation on a 16k or
+larger model window, subject to any smaller configured output cap. On very
+small windows the reserve is limited to a quarter of the usable window.
+If the token count leaves less room, the agent retries after dropping
+older context and sampling large result arrays by original index. If
+necessary it also reduces preview resolution or elides older receipt
+details while keeping recorded outcome fields. Numeric samples are not
+full data. Tool call IDs and arguments are retained, and no app action is
+replayed. Only the model's copy is reduced, not the native receipt or
+screenshot. If the reserve still cannot be met, generation does not start.
+
 A state read is required before a mutation, including scope transitions.
 The harness reuses a confirmed read in the current turn, scope and view
 revision. Otherwise it calls a native tool with the `application_state`

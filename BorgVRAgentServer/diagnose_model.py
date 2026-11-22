@@ -1,13 +1,39 @@
 """Inspect a synthetic model request; never reads BorgVR conversations or datasets."""
 
 import asyncio
-import inspect
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 import httpx
+
+def active_runtime_source(control=Path("/run/borgvr-dev"), releases=Path("/opt/borgvr-dev/releases")):
+    if not control.exists():
+        return None
+    records = []
+    for name in ("request.json", "status.json"):
+        path = control / name
+        if path.is_symlink() or path.stat().st_size > 65536:
+            raise ValueError("Invalid development diagnostic state")
+        records.append(json.loads(path.read_text()))
+    request, status = records
+    if not isinstance(request, dict) or not isinstance(status, dict):
+        raise ValueError("Invalid development diagnostic state")
+    release = status.get("release", "")
+    if (status.get("phase") != "ready" or not isinstance(release, str) or not re.fullmatch(r"[a-f0-9]{32}", release)
+            or any(request.get(key) != status.get(key) for key in ("release", "request"))):
+        raise ValueError("Development agent is not ready; do not diagnose the older base image")
+    source = releases / release
+    if source.is_symlink() or not (source / "borgvr_next/model.py").is_file():
+        raise ValueError("Active development source is unavailable")
+    return source
+
+
+source = active_runtime_source()
+if source is not None:
+    sys.path.insert(0, str(source))
 
 from borgvr_next.model import ContextLimit, ModelFailure, VLLM
 
@@ -38,15 +64,10 @@ async def diagnose(env=None):
     token = Path(env["BORGVR_VLLM_TOKEN_FILE"]).read_text().strip()
     if not token:
         raise ValueError("Empty vLLM credential")
-    options = {"max_output_tokens": 128, "thinking_mode": env.get("BORGVR_THINKING_MODE", "off")}
-    if "reasoning_parser" in inspect.signature(VLLM.__init__).parameters:
-        options["reasoning_parser"] = env.get("BORGVR_REASONING_PARSER")
-    elif env.get("BORGVR_REASONING_PARSER") == "mistral":
-        print(json.dumps({"warning": "agent_runtime_outdated",
-                          "detail": "Installed agent lacks Mistral request support; inspecting its existing request format."}), flush=True)
     async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as http:
         model = DiagnosticModel(http, env["BORGVR_VLLM_URL"], token, env["BORGVR_MODEL"],
-            int(env.get("BORGVR_CONTEXT_LENGTH", "16384")), **options)
+            int(env.get("BORGVR_CONTEXT_LENGTH", "16384")), max_output_tokens=128,
+            thinking_mode=env.get("BORGVR_THINKING_MODE", "off"))
         try:
             await model.complete([{"role": "system", "content": "This is a synthetic server compatibility test."},
                                   {"role": "user", "content": "Reply with the word ready."}], [])

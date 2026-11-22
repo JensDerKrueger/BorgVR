@@ -231,9 +231,11 @@ class Session:
             outcome = "failed"
             self.reconnect |= turn.uncertain
             if isinstance(error, ContextLimit):
-                logger.warning("Agent turn failed: %s phase=%s reason=%s bytes=%s input_tokens=%s window=%s tool_calls=%d",
+                logger.warning("Agent turn failed: %s phase=%s reason=%s bytes=%s input_tokens=%s window=%s "
+                               "output_available=%s output_reserve=%s tool_calls=%d",
                                correlation, "prepare_request" if error.size is not None else "tokenize",
-                               error.reason, error.size, error.input_tokens, error.window, turn.dispatched)
+                               error.reason, error.size, error.input_tokens, error.window, error.output_available,
+                               error.output_reserve, turn.dispatched)
             elif isinstance(error, OutputLimit):
                 logger.warning("Agent turn failed: %s phase=generation reason=%s output_limit=%d output_tokens=%s tool_calls=%d",
                                correlation, error.code, error.limit, error.completion_tokens, turn.dispatched)

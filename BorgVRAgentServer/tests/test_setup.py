@@ -734,7 +734,7 @@ def test_model_switch_is_one_command_and_preserves_credentials(operations):
     token = (root / "runtime/secrets/agent_token").read_bytes()
     cert = (root / "runtime/tls/server.crt").read_bytes()
     for profile, model in (("qwen35-4b", "Qwen/Qwen3.5-4B"),
-                           ("mistral-small4-nvfp4", "mistralai/Mistral-Small-4-119B-2603-NVFP4"),
+                           ("qwen38-27b", "Qwen/Qwen3.8-27B"),
                            ("qwen36-35b", "Qwen/Qwen3.6-35B-A3B")):
         result, calls = run("model", profile)
         assert result.returncode == 0, result.stderr
