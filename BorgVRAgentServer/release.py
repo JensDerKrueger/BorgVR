@@ -16,7 +16,8 @@ BUNDLE = "borgvr-agent-deployment.tar.gz"
 LOCAL_IMAGE = "borgvr-agent:ci"
 DEPLOYMENT_FILES = (
     "compose.yaml", "compose.cuda.yaml", "compose.cuda-all.yaml", "compose.rocm.yaml", "configure.py", "model_config.py",
-    "setup.sh", "setup-host.sh", "gpu-host.sh", "uninstall.py", "firewall.py", "vllm_start.py",
+    "setup.sh", "setup-host.sh", "gpu-host.sh", "switch-model.sh", "switch_model.py",
+    "uninstall.py", "firewall.py", "vllm_start.py",
     "development.py", "NEXT_RUNTIME.md", "ARCHITECTURE.md", "WORKFLOW_LEARNER.md",
     "README.md", "README.de.md", "WINDOWS.md", "WINDOWS.de.md", "DEVELOPMENT.md", "DEVELOPMENT.de.md", "PROTOCOL.md", "LICENSE",
 )

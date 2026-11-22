@@ -323,6 +323,27 @@ and initial parser/resource settings. For a new AMD installation use, for exampl
 `sudo ./setup.sh install --backend rocm --profile qwen35-4b`. CUDA and ROCm images are pinned
 independently. These presets do not guarantee every model fits or has kernels for every GPU.
 
+### Switch models interactively
+
+Run in the server directory:
+
+```sh
+./switch-model.sh
+```
+
+The script requests administrator access through `sudo` if needed. It displays numbered
+model profiles, marks the currently configured model and asks for a number; `0` cancels.
+The `custom` profile is excluded. GPU selection and tensor parallelism remain unchanged;
+profiles only change model settings. Keep ai2 configured for both GPUs with TP=2.
+
+The switcher backs up configuration, checks the GPU, restarts services and tests image
+input and tool calling. Active assistant requests are interrupted. On failure it restores
+the previous configuration and attempts to restart the old model; recovery failures are
+reported explicitly. Neither the agent nor vLLM image is replaced, built or pulled.
+Active development mode, the actual deployed agent source and restricted SSH access are
+retained: no `dev disable --remove` or `dev enable` is needed. Missing model weights are
+downloaded by vLLM at startup. Reconnect BorgVR after success. No automatic `git pull` is run.
+
 ### Test Mistral Small 4 NVFP4 on two Blackwell GPUs
 
 `mistral-small4-nvfp4` selects the [official image-capable checkpoint](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603-NVFP4),

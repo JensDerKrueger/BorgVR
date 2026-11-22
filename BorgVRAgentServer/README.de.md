@@ -343,6 +343,30 @@ Für eine neue AMD-Installation etwa `sudo ./setup.sh install --backend rocm --p
 CUDA- und ROCm-Images sind unabhängig per Digest festgelegt. Keiner dieser Befehle garantiert,
 dass jedes Modell auf jeder Karte passt; Kernel-, Quantisierungs- und Speicheranforderungen gelten weiter.
 
+### Modelle interaktiv wechseln
+
+Im Server-Verzeichnis einfach starten:
+
+```sh
+./switch-model.sh
+```
+
+Das Script fragt bei Bedarf einmal über `sudo` nach Administratorrechten. Es zeigt die
+vorhandenen Modellprofile als nummerierte Liste, markiert das aktuell konfigurierte Modell
+und fragt nach der gewünschten Nummer. `0` bricht ab. `custom` wird nicht angeboten.
+GPU-Auswahl und Tensor-Parallelisierung bleiben wie bisher eingestellt; die Modellprofile
+ändern nur die Modellparameter. Auf ai2 daher zuerst beide GPUs mit TP=2 eingerichtet lassen.
+
+Der Wechsler sichert die Konfiguration, prüft die GPU, startet die Dienste neu und testet
+Bild- und Werkzeugaufrufe. Laufende KI-Aufträge werden unterbrochen. Bei Fehlern stellt er
+die bisherige Konfiguration wieder her und versucht, das alte Modell erneut zu starten.
+Ein erneuter Start kann fehlschlagen; das Script meldet dies ausdrücklich.
+Agenten- und vLLM-Image werden weder ersetzt noch neu gebaut oder heruntergeladen.
+Ein aktiver Entwicklungsmodus inklusive des tatsächlich übertragenen Agentencodes und
+SSH-Zugangs bleibt bestehen: kein `dev disable --remove` und kein `dev enable` nötig.
+Bei einem noch nicht vorhandenen Modell lädt vLLM die Gewichte beim Start. Nach Erfolg
+den Assistenten in BorgVR neu verbinden. Das Script führt kein automatisches `git pull` aus.
+
 ### Mistral Small 4 NVFP4 auf zwei Blackwell-Karten testen
 
 Das Profil `mistral-small4-nvfp4` verwendet den [offiziellen bildfähigen Checkpoint](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603-NVFP4)
