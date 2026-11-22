@@ -381,6 +381,18 @@ just container health. To switch back, repeat the sequence with
 
 ### Switch other existing model profiles
 
+If vLLM reports `ready` but the agent test fails with HTTP 400, inspect the response
+using a synthetic request:
+
+```sh
+sudo docker compose exec -T agent python - < diagnose_model.py
+```
+
+The diagnostic uses current model/thinking settings, caps output at 128 tokens and prints
+the HTTP status and bounded error body. It does not read BorgVR conversations, datasets or
+screenshots, change configuration or print credentials. HTTP acceptance is not a substitute
+for the image/tool compatibility test.
+
 Switch an existing deployment while keeping credentials and caches:
 
 ```

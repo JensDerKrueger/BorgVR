@@ -406,6 +406,18 @@ nicht nur den laufenden Container. Zum Zurückwechseln dieselbe Folge mit
 
 ### Andere bestehende Modellprofile wechseln
 
+Wenn vLLM zwar `ready` meldet, der Agententest aber mit HTTP 400 scheitert, den
+Fehlertext mit einer rein synthetischen Anfrage auslesen:
+
+```sh
+sudo docker compose exec -T agent python - < diagnose_model.py
+```
+
+Das Diagnosewerkzeug übernimmt die aktuellen Modell-/Thinking-Parameter, begrenzt die
+Ausgabe auf 128 Tokens und zeigt HTTP-Status sowie begrenzten Fehlertext. Es liest keine
+BorgVR-Gespräche, Datensätze oder Screenshots und verändert keine Konfiguration. Schlüssel
+werden nicht ausgegeben. Ein erfolgreicher HTTP-Aufruf ersetzt nicht den Bild-/Tool-Test.
+
 Bestehende Installation umstellen, ohne Schlüssel oder Modell-Cache zu löschen:
 
 ```
