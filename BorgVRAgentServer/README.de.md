@@ -417,6 +417,10 @@ Das Diagnosewerkzeug übernimmt die aktuellen Modell-/Thinking-Parameter, begren
 Ausgabe auf 128 Tokens und zeigt HTTP-Status sowie begrenzten Fehlertext. Es liest keine
 BorgVR-Gespräche, Datensätze oder Screenshots und verändert keine Konfiguration. Schlüssel
 werden nicht ausgegeben. Ein erfolgreicher HTTP-Aufruf ersetzt nicht den Bild-/Tool-Test.
+`agent_runtime_outdated` bedeutet, dass im Container noch der ältere Agent ohne Mistral-
+Request-Unterstützung läuft. `git pull` allein aktualisiert keinen laufenden Container.
+Aktuellen Agentencode per Entwicklungsmodus laden oder ein aktuelles Agenten-Image bauen;
+der Modell-Download muss dafür nicht wiederholt werden.
 
 Bestehende Installation umstellen, ohne Schlüssel oder Modell-Cache zu löschen:
 

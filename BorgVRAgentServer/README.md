@@ -392,6 +392,10 @@ The diagnostic uses current model/thinking settings, caps output at 128 tokens a
 the HTTP status and bounded error body. It does not read BorgVR conversations, datasets or
 screenshots, change configuration or print credentials. HTTP acceptance is not a substitute
 for the image/tool compatibility test.
+`agent_runtime_outdated` means the container still runs the older agent without Mistral
+request support. `git pull` alone does not update a running container. Load current agent
+source through development mode or build a current agent image; no model download needs
+to be repeated.
 
 Switch an existing deployment while keeping credentials and caches:
 

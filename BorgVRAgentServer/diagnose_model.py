@@ -1,6 +1,7 @@
 """Inspect a synthetic model request; never reads BorgVR conversations or datasets."""
 
 import asyncio
+import inspect
 import json
 import os
 from pathlib import Path
@@ -37,11 +38,15 @@ async def diagnose(env=None):
     token = Path(env["BORGVR_VLLM_TOKEN_FILE"]).read_text().strip()
     if not token:
         raise ValueError("Empty vLLM credential")
+    options = {"max_output_tokens": 128, "thinking_mode": env.get("BORGVR_THINKING_MODE", "off")}
+    if "reasoning_parser" in inspect.signature(VLLM.__init__).parameters:
+        options["reasoning_parser"] = env.get("BORGVR_REASONING_PARSER")
+    elif env.get("BORGVR_REASONING_PARSER") == "mistral":
+        print(json.dumps({"warning": "agent_runtime_outdated",
+                          "detail": "Installed agent lacks Mistral request support; inspecting its existing request format."}), flush=True)
     async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as http:
         model = DiagnosticModel(http, env["BORGVR_VLLM_URL"], token, env["BORGVR_MODEL"],
-            int(env.get("BORGVR_CONTEXT_LENGTH", "16384")), max_output_tokens=128,
-            thinking_mode=env.get("BORGVR_THINKING_MODE", "off"),
-            reasoning_parser=env.get("BORGVR_REASONING_PARSER"))
+            int(env.get("BORGVR_CONTEXT_LENGTH", "16384")), **options)
         try:
             await model.complete([{"role": "system", "content": "This is a synthetic server compatibility test."},
                                   {"role": "user", "content": "Reply with the word ready."}], [])
