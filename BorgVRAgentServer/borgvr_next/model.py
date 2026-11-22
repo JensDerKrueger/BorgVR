@@ -89,12 +89,16 @@ class VLLM:
         models = listing.get("data")
         return isinstance(models, list) and any(isinstance(item, dict) and item.get("id") == self.name for item in models)
 
-    async def complete(self, messages, tools):
+    async def complete(self, messages, tools, *, response_schema=None):
         body = {"model": self.name, "messages": messages}
         if self.thinking_mode != "default":
             body["chat_template_kwargs"] = {"enable_thinking": self.thinking_mode == "on"}
         if tools:
             body["tools"] = tools
+        if response_schema is not None:
+            body["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": "corrected_arguments", "schema": response_schema,
+            }}
         size = len(encode(body))
         if size > 8 * 1024 * 1024:
             raise ContextLimit("serialized_request_limit", size=size)
@@ -111,10 +115,10 @@ class VLLM:
         body.update(temperature=0.0, parallel_tool_calls=False, max_tokens=limit)
         result = await self.exchange("POST", self.url + "/chat/completions", phase="generation",
                                      seconds=self.generation_timeout, body=body)
-        return self.response(result, tools, limit)
+        return self.response(result, tools, limit, structured=response_schema is not None)
 
     @staticmethod
-    def response(result, tools, output_limit):
+    def response(result, tools, output_limit, *, structured=False):
         try:
             choice = result["choices"][0]
             if choice["finish_reason"] == "length":
@@ -127,6 +131,8 @@ class VLLM:
                             output_limit, used, shape["reasoning_tokens"], shape["reasoning_chars"], shape["text_chars"],
                             shape["tool_calls"], shape["tools"], shape["argument_chars"])
                 raise OutputLimit(output_limit, used)
+            if structured and choice["finish_reason"] != "stop":
+                raise ModelFailure("incomplete_argument_correction", phase="tool_validation")
             message = choice["message"]
             calls = message.get("tool_calls") or []
             if len(calls) == 1 and tools:
@@ -135,8 +141,9 @@ class VLLM:
                 fields = call["id"], function["name"], function["arguments"]
                 if all(isinstance(value, str) and value for value in fields) and len(fields[0]) <= 128:
                     return Call(*fields)
-            if not calls and isinstance(message.get("content"), str) and 0 < len(message["content"]) <= 32768:
-                return message["content"]
+            content = message.get("content")
+            if not calls and isinstance(content, str) and content and (structured or len(content) <= 32768):
+                return content
         except (KeyError, IndexError, TypeError, AttributeError) as error:
             raise ModelFailure("invalid_response_shape", phase="generation") from error
         raise ModelFailure("unsupported_response", phase="generation")

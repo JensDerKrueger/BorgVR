@@ -209,13 +209,15 @@ class Session:
         await self.send("collaboration_resumed", request_id=turn.request_id, view_revision=revision)
         return revision
 
-    async def infer(self, messages, tools, revision):
+    async def infer(self, messages, tools, revision, *, response_schema=None):
         if revision != self.revision or not self.manual_idle.is_set():
             return None
         self.manual_update.clear()
 
         async def request():
             async with self.slots:
+                if response_schema is not None:
+                    return await self.model.complete(messages, tools, response_schema=response_schema)
                 return await self.model.complete(messages, tools)
 
         generating = asyncio.create_task(request())

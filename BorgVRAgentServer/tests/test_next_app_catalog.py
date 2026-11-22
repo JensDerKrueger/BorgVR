@@ -157,17 +157,24 @@ def test_wrong_schema_rejects_entire_catalog_instead_of_silently_dropping_tools(
 
 def test_only_client_approval_is_authoritative_and_denied_group_cannot_be_retried():
     state = {**tool("read_snapshot"), "execution": {"kind": "read", "role": "application_state"}}
-    write = {**tool("first_mutation"), "execution": {"kind": "mutation", "approval_group": "local_dialog"}}
+    write = {**tool("first_mutation", {"amount": {"type": "number"}}),
+             "execution": {"kind": "mutation", "approval_group": "local_dialog"}}
+    write["inputSchema"]["required"] = ["amount"]
     alternate = {**tool("second_mutation"), "execution": write["execution"]}
 
     class Attempts(Capture):
-        async def complete(self, messages, tools):
+        async def complete(self, messages, tools, *, response_schema=None):
+            if response_schema is not None:
+                assert not tools
+                assert response_schema["properties"]["arguments"]["anyOf"][0] == write["inputSchema"]
+                assert messages[-2]["role"] == "tool"
+                return '{"arguments":{"amount":15}}'
             self.requests.append((messages, tools))
             match len(self.requests):
                 case 1:
                     return Call("state", state["name"], "{}")
                 case 2:
-                    return Call("ask", write["name"], "{}")
+                    return Call("ask", write["name"], '{"amount":"15"}')
                 case 3:
                     return Call("bypass", alternate["name"], "{}")
                 case _:
@@ -183,7 +190,7 @@ def test_only_client_approval_is_authoritative_and_denied_group_cannot_be_retrie
             assert query["name"] == state["name"]
             ws.send_json(receipt(query, {"ready": True}))
             attempted = ws.receive_json()
-            assert attempted["name"] == write["name"]
+            assert attempted["name"] == write["name"] and attempted["arguments"] == {"amount": 15}
             ws.send_json(receipt(attempted, {"ok": False, "not_applied": True, "code": "user_declined"}))
             assert ws.receive_json()["text"] == "The user declined."
             assert ws.receive_json()["type"] == "completed"

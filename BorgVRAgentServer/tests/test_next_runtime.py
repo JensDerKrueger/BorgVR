@@ -247,7 +247,13 @@ def test_repeated_model_call_never_dispatches_twice():
 
 def test_empty_tool_schema_is_explicit_and_rejection_never_logs_argument_values(caplog):
     class Model(Steps):
-        async def complete(self, messages, tools):
+        async def complete(self, messages, tools, *, response_schema=None):
+            if response_schema is not None:
+                assert not tools
+                assert response_schema["properties"]["arguments"]["anyOf"] == [TOOLS[0]["inputSchema"], {"type": "null"}]
+                assert all("tool_calls" not in message for message in messages)
+                assert json.loads(messages[-1]["content"].splitlines()[-1])["reason"] == "expected_empty_object"
+                return '{"arguments":{}}'
             definition = tools[0]["function"]
             assert "strict" not in definition
             assert definition["parameters"] == {
@@ -255,13 +261,11 @@ def test_empty_tool_schema_is_explicit_and_rejection_never_logs_argument_values(
             }
             assert "exactly {}" in definition["description"]
             if messages[-1]["role"] == "tool":
-                data = json.loads(messages[-1]["content"])
-                if data.get("not_applied"):
-                    assert data["code"] == "expected_empty_object" and "exactly {}" in data["note"]
+                assert messages[-2]["tool_calls"][0]["function"]["arguments"] == "{}"
+                assert "SYNTHETIC_PRIVATE_VALUE" not in str(messages)
             return await super().complete(messages, tools)
 
-    model = Model(Call("incorrect", "get_application_state", '{"reason":"SYNTHETIC_PRIVATE_VALUE"}'),
-                  Call("corrected", "get_application_state", "{}"), "State read.")
+    model = Model(Call("incorrect", "get_application_state", '{"reason":"SYNTHETIC_PRIVATE_VALUE"}'), "State read.")
     with TestClient(create_app(token=TOKEN, model=model)) as client:
         with client.websocket_connect("/v1/session", headers=AUTH) as ws:
             ws.send_json(hello(tools=[TOOLS[0]]))
@@ -274,6 +278,33 @@ def test_empty_tool_schema_is_explicit_and_rejection_never_logs_argument_values(
             assert ws.receive_json()["type"] == "completed"
     assert "reason=expected_empty_object" in caplog.text
     assert "SYNTHETIC_PRIVATE_VALUE" not in caplog.text
+
+
+@pytest.mark.parametrize("correction, reason", [
+    ('{"arguments":{"extra":1}}', "invalid_argument_correction"),
+    ('{"tool":"another_tool","arguments":{}}', "invalid_argument_correction"),
+    ('{"arguments":null}', "argument_correction_declined"),
+])
+def test_failed_schema_correction_is_not_retried_or_dispatched(caplog, correction, reason):
+    class Model(Steps):
+        replies = 0
+
+        async def complete(self, messages, tools, *, response_schema=None):
+            if response_schema is not None:
+                self.replies += 1
+                return correction
+            return await super().complete(messages, tools)
+
+    model = Model(Call("invalid", "get_application_state", "not JSON"))
+    with TestClient(create_app(token=TOKEN, model=model)) as client:
+        with client.websocket_connect("/v1/session", headers=AUTH) as ws:
+            ws.send_json(hello(tools=[TOOLS[0]]))
+            assert ws.receive_json()["type"] == "ready"
+            turn(ws)
+            error = ws.receive_json()
+            assert error["type"] == "error" and error["code"] == "run_failed" and not error["changes_applied"]
+    assert model.replies == 1
+    assert f"reason={reason}" in caplog.text
 
 
 def test_opening_requires_catalog_receipt_and_replaces_tool_scope():
@@ -533,6 +564,40 @@ def test_vllm_does_not_generate_when_context_is_full():
     asyncio.run(check())
 
 
+@pytest.mark.parametrize("finish_reason", ["stop", "length", "content_filter"])
+def test_vllm_sends_correction_schema_without_native_tools(finish_reason):
+    schema = {"type": "object", "properties": {"arguments": TOOLS[0]["inputSchema"]},
+              "required": ["arguments"], "additionalProperties": False}
+    requests = []
+
+    def handler(request):
+        requests.append(request.url.path)
+        body = json.loads(request.content)
+        assert "tools" not in body
+        assert body["response_format"] == {"type": "json_schema", "json_schema": {
+            "name": "corrected_arguments", "schema": schema,
+        }}
+        if request.url.path == "/tokenize":
+            return httpx.Response(200, json={"count": 500, "max_model_len": 8192})
+        assert body["max_tokens"] == 7180
+        return httpx.Response(200, json={"choices": [{"finish_reason": finish_reason,
+                                                     "message": {"content": '{"arguments":{}}'}}]})
+
+    async def check():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            model = VLLM(client, "http://fixture.invalid/v1", "synthetic", "fixture")
+            messages = [{"role": "user", "content": "Correct the arguments."}]
+            if finish_reason == "stop":
+                assert await model.complete(messages, [], response_schema=schema) == '{"arguments":{}}'
+            else:
+                with pytest.raises(ModelFailure) as failure:
+                    await model.complete(messages, [], response_schema=schema)
+                assert failure.value.code == ("output_token_limit" if finish_reason == "length" else "incomplete_argument_correction")
+        assert requests == ["/tokenize", "/v1/chat/completions"]
+
+    asyncio.run(check())
+
+
 @pytest.mark.parametrize("finish_reason", ["tool_calls", "length"])
 def test_long_generation_requests_full_budget_once_and_rejects_truncation(finish_reason):
     requests = []
@@ -572,7 +637,11 @@ def test_input_compaction_keeps_active_goal_and_confirmed_command_without_replay
         name = "fixture-model"
         requests = 0
 
-        async def complete(self, messages, tools):
+        async def complete(self, messages, tools, *, response_schema=None):
+            if response_schema is not None:
+                assert not any(message["content"] == "Historical prompt." for message in messages)
+                assert sum(message.get("tool_call_id") == "mutation" for message in messages) == 1
+                return '{"arguments":{}}'
             self.requests += 1
             if self.requests == 1:
                 return "Older answer."
@@ -588,6 +657,8 @@ def test_input_compaction_keeps_active_goal_and_confirmed_command_without_replay
                 assert old_prompt
                 raise ContextLimit("input_token_budget", input_tokens=65500, window=65536)
             assert not old_prompt
+            if self.requests == 5:
+                return Call("state-after-compaction", "get_application_state", '{"extra":1}')
             return "Rotation confirmed."
 
     with TestClient(create_app(token=TOKEN, model=TightContext())) as client:
@@ -602,6 +673,8 @@ def test_input_compaction_keeps_active_goal_and_confirmed_command_without_replay
             ws.send_json(receipt(call, {"rendererReady": True}))
             assert (call := ws.receive_json())["name"] == "rotate_view"
             ws.send_json(receipt(call, {"ok": True}))
+            assert (call := ws.receive_json())["name"] == "get_application_state" and call["arguments"] == {}
+            ws.send_json(receipt(call, {"rendererReady": True}))
             assert ws.receive_json()["text"] == "Rotation confirmed."
             assert ws.receive_json()["type"] == "completed"
 

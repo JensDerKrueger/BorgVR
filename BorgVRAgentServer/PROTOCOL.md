@@ -62,6 +62,12 @@ bounded to 256 KiB. Only the render-image role may return optional
 locally. The application validates arguments and requests any local
 confirmation; the model cannot authorize or override it.
 
+For a known, eligible tool with invalid arguments, the agent may request
+one JSON-schema correction before sending any call to the app. The tool
+cannot change, and a refusal or invalid correction dispatches nothing.
+Corrected arguments are validated against the original schema and still
+require normal state, revision and approval checks.
+
 A state read is required before a mutation. Opening a dataset requires a
 recent catalog search result. Successful scope-transition receipts include
 `dataset_transition` (new `dataset_id`, `context_id` and `tools`).
