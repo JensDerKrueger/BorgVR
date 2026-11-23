@@ -61,11 +61,8 @@ def read_inventory(root=ROOT):
     if mcp != handlers:
         raise ValueError(f"MCP definitions/dispatch differ: {sorted(mcp ^ handlers)}")
     voice_policy = read("AppSupport/Voice/VoiceAgentProtocol.swift")
-    agent = swift_set(voice_policy, "allowed") | swift_set(voice_policy, "typedOnlyTools")
+    agent = swift_set(voice_policy, "allowed") | swift_set(voice_policy, "additionalTools")
     local_client = agent - mcp
-    diagnostic = {item["name"] for item in json.loads(read("BorgVRAgentServer/diagnostic_catalog.json"))}
-    if agent != diagnostic:
-        raise ValueError("Native client catalog and test fixture differ")
     gsc = set(re.findall(r"^([A-Za-z][A-Za-z0-9_]*)\(", read("Scripts/borgvr.gsccommands"), re.M))
     archive = read("BORGVR-IO/BorgVRSettingsArchive.swift")
     recorded = swift_set(archive, "recordingKeys")
@@ -73,8 +70,10 @@ def read_inventory(root=ROOT):
     settings = {platform: registered_settings(read(file)) for platform, file in SETTINGS.items()}
     if recorded & local or not set.union(*settings.values()) <= recorded | local:
         raise ValueError("A registered setting has no unambiguous GSC recording policy")
-    bundle = json.loads(read("AppSupport/Voice/knowledge-bundle.json"))
-    internal = {"flow_" + row["id"].replace(".", "_").replace("-", "_") for row in bundle["entries"] if "procedure" in row}
+    bundle = json.loads(read("AppSupport/Voice/assistant-knowledge.json"))
+    core = read("AppSupport/Voice/BorgVRAssistantCore.swift")
+    internal = {row["id"] for row in bundle["workflows"]}
+    internal.update(re.findall(r'\["name": "([a-z_.]+)", "description":', core))
     return {"symbols": symbols, "mcp": mcp, "agent": agent, "local_client": local_client,
             "internal_agent": internal, "gsc": gsc,
             "settings": settings, "recorded_settings": recorded, "local_settings": local}
@@ -126,14 +125,14 @@ def render(catalog, inventory):
         "Generiert aus `capabilities.json` und den Quellcode-Registern mit `python3 audit_capabilities.py --write`.",
         "Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nachweis ausgeführter Tests.",
         "Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.",
-        "Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets`, `open_dataset` und die kontextgebundene Befehlshistorie verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.", "",
+        "Der Swift-Assistent ist auch im Startmenü nutzbar. Lokale Freigaben, Datensatz- und Rendererzustand begrenzen die tatsächlich verfügbaren Werkzeuge.", "",
         f"Erfasst: **{len(ops)} Funktionsgruppen**, **{len(inventory['mcp'])} MCP-Werkzeuge**, "
         f"**{len(inventory['agent'])} maximal erlaubte native Agentenwerkzeuge**, "
         f"**{len(inventory['symbols'])} Command-/UI-Registereinträge**, **{len(inventory['gsc'])} unterschiedliche GSC-Namen**.", "",
         "Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.",
         "GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;",
         "daraus folgt weder eine Agentenfreigabe noch eine benannte DSL-Funktion. Tool-Definitionen sind nicht automatisch UI-/Zustands-/Test-Vollständigkeit.", "",
-        "Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.", "",
+        "Der Assistenzkern verwendet den lokalen Werkzeugrouter. Das Modell schlägt strukturierte Entscheidungen vor; es führt keine BorgVR-Commands aus.", "",
         "## Übersicht", "", "| Bereich | Funktion | Kontext | Command-Pfad | MCP | Agent |", "|---|---|---|---|---|---|"]
     status = {"command": "vorhanden", "service": "Service/Abfrage", "partial": "teilweise", "ui": "nur UI", "local": "lokale Funktion", "internal": "intern"}
     for op in ops:
@@ -167,13 +166,13 @@ def render(catalog, inventory):
         "Neue Registereinträge müssen einer Funktionsgruppe zugeordnet werden. Neue freie UI-Aktionen ohne Register werden dadurch nicht automatisch erkannt.",
         "Die Quellenliste muss deshalb bei UI-Änderungen mitgepflegt werden. Ein UI-Button oder ein generischer `writeFiles`-Command ersetzt keinen fachlichen Import-/Exportauftrag.",
         "Betriebssystemdialoge und Hardwareberechtigungen bleiben lokale Vermittlung; die fachliche Aktion soll trotzdem über denselben Command-Service erreichbar werden.",
-        "Startarchitektur, fehlende Aufträge und Abnahmekriterien: [Umsetzungsplan](CAPABILITY_PLAN.md).", ""]
+        "Startarchitektur, fehlende Aufträge und Abnahmekriterien: [Architektur](../AppSupport/Voice/ARCHITECTURE.md).", ""]
     return "\n".join(lines)
 
 
 def main():
     if sys.version_info < (3, 10):
-        raise SystemExit("Use Python 3.10 or later (the agent development environment uses Python 3.12).")
+        raise SystemExit("Use Python 3.10 or later.")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true", help="Regenerate the checked-in report")
     args = parser.parse_args()

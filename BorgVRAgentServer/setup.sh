@@ -2,17 +2,8 @@
 set -euo pipefail
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$DIR/gpu-host.sh"
-if [[ "${1:-}" == dev ]]; then
-  shift
-  exec python3 "$DIR/development.py" "$@"
-fi
 COMMAND=install
-PREBUILT_AGENT=1
-LOCAL_AGENT_IMAGE=borgvr-agent:next
-AGENT_IMAGE_SET=0
-AGENT_IMAGE=""
 HAS_INIT_OPTIONS=0
-IMAGE_MODE=""
 INIT_ARGS=()
 UNINSTALL_ARGS=()
 MODEL_ARGS=()
@@ -24,13 +15,10 @@ usage() {
   printf '%s\n' \
     'Usage: sudo ./setup.sh [install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
     'Run setup-host.sh separately if Docker/GPU prerequisites are missing.' \
-    '  --prebuilt-agent    Use a built or published typed-v1 image; never build.' \
-    '  --build-agent       Build the current agent (default in a source checkout).' \
-    '  --agent-image REF   Agent image reference (install/init or explicit update).' \
     '  --host HOST         Certificate DNS name/IP (install/init; initially localhost).' \
     '  --bind IPV4         Listen address (install/init; initially 127.0.0.1).' \
-    '  --port PORT         HTTPS/WSS port (default 8766).' \
-    '  --open-firewall     Explicitly add the agent TCP-port exception in active UFW/firewalld.' \
+    '  --port PORT         HTTPS port (default 8766).' \
+    '  --open-firewall     Explicitly add the model TCP-port exception in active UFW/firewalld.' \
     '                      Applies to install/start/restart/update; never enables a firewall.' \
     '  --firewall-zone Z   firewalld zone (default: its default zone); needs --open-firewall.' \
     '  --gpu INDEX_OR_UUID  Select one GPU (default 0; AMD also accepts an index).' \
@@ -52,18 +40,14 @@ usage() {
     'Install recreates existing BorgVR containers without deleting images or model volumes.' \
     'Explicit install options update existing settings; omitted options and tokens are kept.' \
     'Model switch: sudo ./setup.sh model qwen35-4b (without a profile: list choices).' \
-    'An explicit update image is checked before changing .env; the old .env is backed up.' \
     'Uninstall previews by default; supports --yes, --remove-images, --remove-checkout, --files-only.' \
     'Changing --host may replace the TLS certificate; the old certificate is backed up.'
-  printf '%s\n' \
-    'Development: sudo ./setup.sh dev enable --ssh-key-file /path/to/dedicated-key.pub' \
-    '  ./setup.sh dev push|status|logs|restart --host HOST --key /path/to/private-key' \
-    '  sudo ./setup.sh dev disable --remove   Restore image, revoke SSH and remove development files/account.'
+
 }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up|_dev-agent-health) COMMAND="$1"; shift ;;
+    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
     --gpu|--tensor-parallel-size|--nccl-p2p-disable|--disable-custom-all-reduce|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--attention-backend|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
@@ -74,16 +58,9 @@ while (($#)); do
       [[ "$2" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$ ]] || die 'Invalid firewalld zone.'
       FIREWALL_ZONE="$2"; shift 2 ;;
     --install-host-deps) die 'Run sudo ./setup-host.sh separately; setup.sh never elevates privileges.' ;;
-    --prebuilt-agent|--build-agent)
-      [[ -z "$IMAGE_MODE" || "$IMAGE_MODE" == "$1" ]] || die 'Choose only one agent image mode.'
-      IMAGE_MODE="$1"
-      if [[ "$1" == --build-agent ]]; then PREBUILT_AGENT=0; else PREBUILT_AGENT=1; fi
-      shift ;;
-    --host|--bind|--port|--agent-image)
+    --host|--bind|--port)
       (($# >= 2)) || die "Missing value for $1"
-      if [[ "$1" == --agent-image ]]; then
-        AGENT_IMAGE_SET=1; AGENT_IMAGE="$2"
-      else HAS_INIT_OPTIONS=1; fi
+      HAS_INIT_OPTIONS=1
       INIT_ARGS+=("$1" "$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
@@ -93,10 +70,8 @@ while (($#)); do
   esac
 done
 if [[ -e "$DIR/runtime/agent-development.json" || -L "$DIR/runtime/agent-development.json" ]]; then
-  case "$COMMAND" in
-    install|configure|model|update)
-      die 'Disable development mode before changing the deployment/model/image: sudo ./setup.sh dev disable --remove; re-enable it from the current checkout after the switch.' ;;
-  esac
+  [[ "$COMMAND" == uninstall || "$COMMAND" == profiles ]] ||
+    die 'Retire the old development installation with its previous checkout (dev disable --remove) before migrating.'
 fi
 if [[ -n "$FIREWALL_ZONE" ]] && ((!OPEN_FIREWALL)); then
   die '--firewall-zone requires --open-firewall.'
@@ -105,16 +80,6 @@ if ((OPEN_FIREWALL)); then
   [[ "$COMMAND" == install || "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update ]] \
     || die '--open-firewall applies only to install/start/restart/update.'
   ((EUID == 0)) || die 'Run setup with sudo to use --open-firewall.'
-fi
-if [[ -n "$IMAGE_MODE" && "$COMMAND" != install ]]; then
-  die 'Agent image modes apply only to install.'
-fi
-if [[ "$COMMAND" == install && -z "$IMAGE_MODE" && "$AGENT_IMAGE_SET" == 0 && -f "$DIR/Dockerfile" ]]; then
-  PREBUILT_AGENT=0
-fi
-if ((!PREBUILT_AGENT && !AGENT_IMAGE_SET)); then
-  AGENT_IMAGE="$LOCAL_AGENT_IMAGE"
-  INIT_ARGS+=(--agent-image "$AGENT_IMAGE")
 fi
 if ((${#UNINSTALL_ARGS[@]})) && [[ "$COMMAND" != uninstall ]]; then
   die 'Deletion options apply only to uninstall.'
@@ -125,7 +90,7 @@ fi
 if [[ "$COMMAND" == configure ]]; then
   ((HAS_INIT_OPTIONS == 0)) || die 'Change host/bind/port with install, not configure.'
 elif [[ "$COMMAND" == update ]]; then
-  ((HAS_INIT_OPTIONS == 0)) || die 'Only --agent-image can be changed by update; edit other settings in .env.'
+  ((HAS_INIT_OPTIONS == 0)) || die 'Change host/bind/port with install, not update.'
 elif [[ "$COMMAND" != install && "$COMMAND" != init ]] && ((${#INIT_ARGS[@]})); then
   die 'Host/bind/port/GPU options apply only to install/init. Edit existing .env deliberately.'
 fi
@@ -136,48 +101,16 @@ choose_docker() {
     || die 'Cannot access the local Docker daemon. Run sudo ./setup.sh, and check that Docker is running.'
   "${DOCKER[@]}" compose version >/dev/null || die 'Docker Compose v2 plugin is required.'
 }
-require_current_agent() {
-  local image="$1" runtime
-  runtime="$("${DOCKER[@]}" image inspect --format '{{index .Config.Labels "org.borgvr.runtime"}}' "$image")" \
-    || die 'The configured agent image is not available. Install from source or supply a typed-v1 image.'
-  [[ "$runtime" == typed-v1 ]] \
-    || die 'The image is not the current typed-v1 agent. Build it from source or supply a current release image.'
-}
-build_agent() {
-  [[ -f "$DIR/Dockerfile" && "$1" != *@* ]] \
-    || die 'Building the agent requires the source checkout and a writable local image tag.'
-  "${DOCKER[@]}" build --pull --tag "$1" "$DIR"
-}
-prepare_install_agent() {
-  local image="${AGENT_IMAGE:-}"
-  if [[ -z "$image" && -f "$DIR/.env" ]]; then
-    image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
-  fi
-  image="${image:-$LOCAL_AGENT_IMAGE}"
-  if ((!PREBUILT_AGENT)); then
-    build_agent "$image"
-  elif ! "${DOCKER[@]}" image inspect "$image" >/dev/null 2>&1; then
-    [[ "$image" != "$LOCAL_AGENT_IMAGE" ]] \
-      || die 'Load a current image and pass --agent-image, or install from a source checkout.'
-    "${DOCKER[@]}" pull "$image"
-  fi
-  require_current_agent "$image"
-  export BORGVR_AGENT_IMAGE="$image"
-}
 compose() {
-  local extra=()
-  if [[ -e "$DIR/runtime/agent-development.json" || -L "$DIR/runtime/agent-development.json" ]]; then
-    extra=(-f "$(python3 "$DIR/development.py" compose-file)")
-  fi
   if [[ "$BACKEND" == rocm ]]; then
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-      -f "$DIR/compose.yaml" -f "$DIR/compose.rocm.yaml" -f <(python3 "$DIR/configure.py" gpu-groups) ${extra[@]+"${extra[@]}"} "$@"
+      -f "$DIR/compose.yaml" -f "$DIR/compose.rocm.yaml" -f <(python3 "$DIR/configure.py" gpu-groups) "$@"
   elif [[ "$(python3 "$DIR/configure.py" get BORGVR_GPU)" == all ]]; then
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda-all.yaml" ${extra[@]+"${extra[@]}"} "$@"
+      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda-all.yaml" "$@"
   else
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda.yaml" ${extra[@]+"${extra[@]}"} "$@"
+      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda.yaml" "$@"
   fi
 }
 check_gpu() {
@@ -225,9 +158,7 @@ check_service_secrets() {
   compose run --rm --no-deps --entrypoint python3 vllm -c \
     'from pathlib import Path; assert len(Path("/run/secrets/vllm_token").read_text().strip()) >= 32' \
     || die 'vLLM cannot read its internal token. Check the secret file group and permissions.'
-  compose run --rm --no-deps --entrypoint python agent -c \
-    'from pathlib import Path; [p.read_bytes() for p in map(Path, ("/run/secrets/agent_token", "/run/secrets/vllm_token", "/run/tls/server.crt", "/run/tls/server.key"))]' \
-    || die 'The agent cannot read its private tokens or TLS files. Check their ownership and permissions.'
+  compose run --rm --no-deps --entrypoint nginx model-gateway -t -c /etc/nginx/borgvr.conf
 }
 
 check_firewall() {
@@ -237,14 +168,12 @@ check_firewall() {
   python3 "$DIR/firewall.py" ${args[@]+"${args[@]}"}
 }
 start_services() {
-  compose up -d --no-build --pull never --wait --wait-timeout 3600 || return $?
+  compose up -d --remove-orphans --no-build --pull never --wait --wait-timeout 3600 || return $?
   check_firewall
 }
 test_server() {
-  compose exec -T agent python client.py --url https://127.0.0.1:8766 \
-    --ca /run/tls/server.crt --token-file /run/secrets/agent_token --smoke
-  compose exec -T agent python client.py --url https://127.0.0.1:8766 \
-    --ca /run/tls/server.crt --token-file /run/secrets/agent_token --capabilities
+  python3 "$DIR/check_model.py"
+
 }
 
 command -v python3 >/dev/null || die 'Python 3 is missing. Run sudo ./setup-host.sh.'
@@ -263,7 +192,6 @@ if [[ "$COMMAND" == model ]]; then
   COMMAND=update
 fi
 if [[ "$COMMAND" == configure ]]; then
-  if ((AGENT_IMAGE_SET)); then MODEL_ARGS+=(--agent-image "$AGENT_IMAGE"); fi
   exec python3 "$DIR/configure.py" configure ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
 fi
 if [[ "$COMMAND" == uninstall ]]; then
@@ -275,13 +203,12 @@ case "$COMMAND" in
   install)
     python3 "$DIR/configure.py" install --check ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
     choose_docker
-    prepare_install_agent
     if [[ -f "$DIR/.env" ]]; then
       BACKEND="$(python3 "$DIR/configure.py" get BORGVR_BACKEND)"
       [[ "$BACKEND" == cuda || "$BACKEND" == rocm ]] || die 'Backend must be cuda or rocm.'
       compose config --quiet
       printf '%s\n' 'Recreating BorgVR containers; model cache, images and access tokens are retained.'
-      compose down || die 'Could not remove existing BorgVR containers; configuration was not changed.'
+      compose down --remove-orphans || die 'Could not remove existing BorgVR containers; configuration was not changed.'
     fi
     python3 "$DIR/configure.py" install ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} ;;
 esac
@@ -292,16 +219,10 @@ fi
 BACKEND="$(python3 "$DIR/configure.py" get BORGVR_BACKEND)"
 [[ "$BACKEND" == cuda || "$BACKEND" == rocm ]] || die 'Backend must be cuda or rocm.'
 choose_docker
-if [[ "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update || "$COMMAND" == _dev-agent-up ]]; then
+if [[ "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update ]]; then
   python3 "$DIR/configure.py" prepare-secrets
 fi
 case "$COMMAND" in
-  _dev-agent-health)
-    container="$(compose ps --all --quiet agent)"
-    [[ "$container" =~ ^[a-f0-9]{12,64}$ ]] || die 'Expected exactly one BorgVR agent container.'
-    "${DOCKER[@]}" inspect --format '{{json .State.Health}}' "$container" ;;
-  _dev-agent-up)
-    compose up -d --no-deps --no-build --pull never --force-recreate --wait --wait-timeout 90 agent ;;
   install)
     # Probe the daemon's backing filesystem without reading privileged host directories.
     python_image="$(python3 "$DIR/configure.py" image python)"
@@ -312,6 +233,7 @@ case "$COMMAND" in
     min_free_gib="$(python3 "$DIR/configure.py" get BORGVR_MIN_FREE_GIB)"
     ((available_kib >= min_free_gib * 1024 * 1024)) || die "Keep at least $min_free_gib GiB free in Docker storage for this model profile (configurable)."
     check_gpu
+    compose pull model-gateway
     check_service_secrets
     start_services
     test_server
@@ -319,30 +241,14 @@ case "$COMMAND" in
       'Configure Settings > AI Assistant in the native BorgVR app; see README.md for client setup.' ;;
   doctor) check_gpu; check_firewall ;;
   start|restart)
-    agent_image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
-    require_current_agent "$agent_image"
-    export BORGVR_AGENT_IMAGE="$agent_image"
     check_service_secrets
     if [[ "$COMMAND" == restart ]]; then compose stop; fi
     start_services ;;
   update)
-    if ((AGENT_IMAGE_SET)); then
-      python3 "$DIR/configure.py" validate-image "$AGENT_IMAGE"
-      export BORGVR_AGENT_IMAGE="$AGENT_IMAGE"
-    fi
     compose config --quiet
-    agent_image="${AGENT_IMAGE:-$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)}"
-    if [[ "$agent_image" == "$LOCAL_AGENT_IMAGE" && -f "$DIR/Dockerfile" ]]; then
-      build_agent "$agent_image"
-    elif ((AGENT_IMAGE_SET)) || [[ "$agent_image" == */* || "$agent_image" == *@* ]]; then
-      "${DOCKER[@]}" pull "$agent_image"
-    fi
-    require_current_agent "$agent_image"
-    export BORGVR_AGENT_IMAGE="$agent_image"
-    compose pull vllm
+    compose pull
     if [[ "$(python3 "$DIR/configure.py" get BORGVR_TENSOR_PARALLEL_SIZE)" != 1 ]]; then check_gpu; fi
     check_service_secrets
-    if ((AGENT_IMAGE_SET)); then python3 "$DIR/configure.py" set-agent-image "$AGENT_IMAGE"; fi
     start_services || die 'Update did not become healthy. Inspect setup.sh logs; configuration backups are in runtime/env-before-update-*.'
     test_server
     printf '%s\n' 'Update completed; the actual model answered successfully.' ;;

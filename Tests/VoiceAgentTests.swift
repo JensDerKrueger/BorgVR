@@ -21,9 +21,9 @@ private func rejects(_ block: () throws -> Void) throws {
 @main
 struct VoiceAgentTests {
   static func main() async throws {
-    for address in ["https://ai1", "https://192.168.1.50:8766", "wss://localhost:8766/"] {
+    for address in ["https://ai1", "https://192.168.1.50:8766", "https://localhost:8766/v1"] {
       let endpoint = try VoiceAgentEndpoint(address)
-      try expect(endpoint.socket.scheme == "wss" && endpoint.socket.path == "/v1/session", "Invalid endpoint")
+      try expect(endpoint.origin.scheme == "https" && endpoint.origin.path.isEmpty, "Invalid endpoint")
     }
     for address in ["http://ai1", "https://user:token@ai1", "https://ai1/path", "https://ai1?token=x",
                     "https://ai1#fragment", "https://0.0.0.0", "https://ai1:0", "https://ai1:99999"] {
@@ -38,12 +38,6 @@ struct VoiceAgentTests {
                "Only the first sample inside the band should color a projection ray")
     let colored = try previewRGBA(projection.render(low: 0.5, high: 0.7, rainbow: true))
     try expect(colored[7] == 255 && colored[4] != colored[6], "The rainbow palette did not color the visible pixel")
-    var ledger = VoiceAgentCallLedger()
-    try expect(try ledger.begin(id: "call", signature: "original") == nil, "First call already cached")
-    try expect(try ledger.begin(id: "call", signature: "original")?.reply == nil, "Pending replay has a result")
-    try ledger.finish(id: "call", reply: "actual-result")
-    try expect(try ledger.begin(id: "call", signature: "original")?.reply == "actual-result", "Lost cached result")
-    try rejects { _ = try ledger.begin(id: "call", signature: "changed-arguments") }
 
     let fixture = URL(fileURLWithPath: CommandLine.arguments[2])
     let cert = try Data(contentsOf: fixture.appendingPathComponent("runtime/tls/server.crt"))
@@ -176,73 +170,6 @@ struct VoiceAgentTests {
                resolvedLifecycle.allSatisfy { $0.source == .mcp }, "Resolved action lost its lifecycle or source")
     try expect(!BorgVRCommandExecutionContext.executingAction && BorgVRCommandExecutionContext.source == .userInterface,
                "Async action leaked task-local context to its caller")
-    let recorder = WorkflowDemonstrationRecorder()
-    let demonstrationContext = VoiceAgentContext(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
-    let demonstrationObservation = bridge.demonstrationActions.sink { action in
-      recorder.record(action, context: demonstrationContext)
-    }
-    defer { demonstrationObservation.cancel() }
-    recorder.start(goal: .inspectValues, context: demonstrationContext)
-    _ = try await bridge.executeTool(name: "rotate_view", arguments: ["axis": [0, 1, 0], "degrees": 1], validateContext: {})
-    try session.perform(.setTransform(session.currentSnapshot().transform), source: .stateRestore)
-    try await session.performAction(.discardVolumeEdits, source: .mcp) { () async throws -> Void in await Task.yield() }
-    do {
-      try await session.performAction(.discardVolumeEdits, source: .userInterface) { () async throws -> Void in
-        await Task.yield()
-        throw Failure.failed("Rejected demonstration action")
-      }
-    } catch Failure.failed("Rejected demonstration action") {}
-    recorder.finish()
-    try expect(recorder.completed == nil, "Demonstration captured an agent, restore, MCP or failed command")
-    recorder.start(goal: .inspectValues, context: demonstrationContext)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 1), source: .mouse)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 2), source: .userInterface)
-    recorder.finish(outcome: .reached)
-    guard let demonstration = recorder.completed else { throw Failure.failed("Manual demonstration was not recorded") }
-    let record = try JSONSerialization.jsonObject(with: JSONEncoder().encode(demonstration)) as? [String: Any]
-    try expect(demonstration.actions == [.transform] && demonstration.goal == .inspectValues &&
-               demonstration.outcome == .reached && Set(record?.keys.map { $0 } ?? []) ==
-                 ["version", "id", "goal", "actions", "outcome", "end"],
-               "Demonstration did not coalesce steps or exported private fields")
-    recorder.discard()
-    guard let viewBefore = bridge.workflowViewEvidence() else {
-      throw Failure.failed("Ready renderer did not expose allowed view settings")
-    }
-    let evidenceObservation = bridge.demonstrationEvidenceInvalidations.sink { recorder.invalidateEvidence() }
-    defer { evidenceObservation.cancel() }
-    recorder.start(goal: .exposeRegion, context: demonstrationContext, before: viewBefore)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 5), source: .mouse)
-    guard let viewAfter = bridge.workflowViewEvidence() else { throw Failure.failed("Missing final view settings") }
-    recorder.finish(after: viewAfter)
-    guard let detailed = recorder.completed else { throw Failure.failed("Missing opt-in demonstration") }
-    let detailRecord = try JSONSerialization.jsonObject(with: JSONEncoder().encode(detailed)) as? [String: Any]
-    let pair = detailRecord?["evidence"] as? [String: [String: Any]]
-    try expect(detailed.version == 2 && detailed.evidence?.before == viewBefore &&
-               detailed.evidence?.after == viewAfter && viewBefore != viewAfter &&
-               Set(pair?.keys.map { $0 } ?? []) == ["before", "after"] &&
-               Set(pair?["before"]?.keys.map { $0 } ?? []) == ["clip_minimum", "clip_maximum", "rotation"],
-               "Opt-in demonstration did not contain exactly the permitted view settings")
-    recorder.discard()
-    recorder.start(goal: .exposeRegion, context: demonstrationContext, before: viewBefore)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 5), source: .mouse)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 10), source: .mcp)
-    recorder.finish(after: bridge.workflowViewEvidence())
-    try expect(recorder.completed?.version == 1 && recorder.completed?.evidence == nil,
-               "Foreign command was included in the evidence pair")
-    recorder.discard()
-    recorder.start(goal: .exposeRegion, context: demonstrationContext, before: viewBefore)
-    recorder.record(.clipping, context: demonstrationContext)
-    recorder.record(.volume, context: nil)
-    try expect(!recorder.active && recorder.completed?.end == .interrupted &&
-               recorder.completed?.actions == [.clipping] && recorder.completed?.evidence == nil,
-               "Capture crossed a dataset boundary")
-    recorder.discard()
-    recorder.start(goal: .exposeRegion, context: demonstrationContext)
-    for index in 0...WorkflowDemonstrationRecorder.maximumActions {
-      recorder.record(index.isMultiple(of: 2) ? .transform : .clipping, context: demonstrationContext)
-    }
-    try expect(!recorder.active && recorder.completed?.end == .limit &&
-               recorder.completed?.actions.count == WorkflowDemonstrationRecorder.maximumActions, "Capture was unbounded")
     let before = session.currentSnapshot().transform
     do {
       _ = try await router.callTool(name: "rotate_view", arguments: ["axis": [0, 1, 0], "degrees": 30],
@@ -257,17 +184,8 @@ struct VoiceAgentTests {
     let diagnosticTools = catalog + applicationCatalog.filter {
       VoiceAgentPolicy.conversionTools.contains($0["name"] as? String ?? "")
     }
-    let catalogURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-      .appendingPathComponent("BorgVRAgentServer/diagnostic_catalog.json")
-    if ProcessInfo.processInfo.environment["BORGVR_WRITE_AGENT_CATALOG"] == "1" {
-      try JSONSerialization.data(withJSONObject: diagnosticTools, options: [.sortedKeys, .prettyPrinted]).write(to: catalogURL)
-    }
-    let diagnosticCatalog = try JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL))
-    try expect(try JSONSerialization.data(withJSONObject: diagnosticTools, options: [.sortedKeys]) ==
-      JSONSerialization.data(withJSONObject: diagnosticCatalog, options: [.sortedKeys]),
-      "Server diagnostic catalog differs from the native tools")
     let names = Set(diagnosticTools.compactMap { $0["name"] as? String })
-    try expect(names == VoiceAgentPolicy.allowed.union(VoiceAgentPolicy.typedOnlyTools), "Safe tools differ from the actual MCP catalog")
+    try expect(names == VoiceAgentPolicy.allowed.union(VoiceAgentPolicy.additionalTools), "Safe tools differ from the actual MCP catalog")
     try expect(Set(applicationCatalog.compactMap { $0["name"] as? String }) == VoiceAgentPolicy.applicationTools,
                "Renderer commands exposed without a dataset")
     let screenshot = catalog.first { $0["name"] as? String == "capture_screenshot" }!["inputSchema"] as! [String: Any]
@@ -312,7 +230,7 @@ struct VoiceAgentTests {
     let destination = CGImageDestinationCreateWithData(png, UTType.png.identifier as CFString, 1, nil)!
     CGImageDestinationAddImage(destination, cg.makeImage()!, nil)
     try expect(CGImageDestinationFinalize(destination), "PNG fixture failed")
-    let resized = try VoiceAgentController.agentImage(png as Data)
+    let resized = try BorgVRAssistantCore.imageForModel(png as Data)
     try expect(resized.width <= 1024 && resized.height <= 1024 && resized.data.count <= 2097152, "Image bounds exceeded")
     let positionBuffer = BorgVRScreenshotPositions(depth: Data(count: 1600 * 1200 * 4), depthBytesPerRow: 1600 * 4,
       clipToVolume: matrix_identity_float4x4, columns: Array(repeating: 0.5, count: 1600),
@@ -320,7 +238,7 @@ struct VoiceAgentTests {
     app.renderScreenshotHandler = { id, url, _, maxWidth, completion in
       do {
         guard let url else { throw Failure.failed("No screenshot destination") }
-        let image = try maxWidth.map { try VoiceAgentController.agentImage(png as Data, sizes: [$0]).data }
+        let image = try maxWidth.map { try BorgVRAssistantCore.imageForModel(png as Data, sizes: [$0]).data }
         try (image ?? png as Data).write(to: url)
         app.screenshotCache.begin(id)
         app.screenshotCache.store(positionBuffer, id: id, renderedFrame: app.completedRenderFrameCount)
@@ -331,15 +249,13 @@ struct VoiceAgentTests {
     let defaults = UserDefaults(suiteName: suite)!
     let account = "voice-agent-test-\(UUID())"
     defer { defaults.removePersistentDomain(forName: suite); try? KeychainSecretStore.delete(account: account) }
-    defaults.set(512, forKey: "voiceAgent.maximumCalls")
     let settings = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
     func isolatedConversationStore(_ name: String) -> VoiceAgentConversationStore {
       .init(file: fixture.appendingPathComponent("conversation-\(name)/conversation.sealed"),
             keyAccount: "\(account)-conversation-\(name)")
     }
-    try expect(settings.workMinutes == 60 && defaults.object(forKey: "voiceAgent.maximumCalls") == nil,
-               "Default work time or stale call-budget migration failed")
-    try settings.setToken(String(contentsOf: fixture.appendingPathComponent("runtime/secrets/agent_token"), encoding: .utf8))
+    try expect(settings.workMinutes == 60, "Default work time changed")
+    try settings.setToken(String(contentsOf: fixture.appendingPathComponent("runtime/secrets/vllm_token"), encoding: .utf8))
     try expect(!String(describing: defaults.dictionaryRepresentation()).contains(try settings.token()), "Token leaked to preferences")
     try expect(!settings.savesConversation && settings.confirmsVolumeEdits,
                "Conversation must be opt-in and edits must ask by default")
@@ -352,15 +268,14 @@ struct VoiceAgentTests {
     try expect(settings.workMinutes == 5, "Work time must not be shorter than five minutes")
     settings.workMinutes = 180
     try expect(settings.speechRateMultiplier == 1, "Default speech rate changed")
+    let vllmToken = try settings.token()
+    settings.provider = .openAI
+    try expect(!settings.hasToken && !settings.sharesProviderImages, "OpenAI reused local credentials or render consent")
+    try settings.setToken(String(repeating: "o", count: 64))
+    settings.provider = .vllm
+    try expect(try settings.token() == vllmToken && settings.sharesProviderImages, "vLLM settings were overwritten")
+    defer { try? KeychainSecretStore.delete(account: account + "-openai") }
     let initialIdentity = settings.identity
-    try settings.rememberRule("  Prefer a clear side view.  ")
-    try settings.rememberRule("Prefer a clear side view.")
-    try expect(settings.knowledgeRules.count == 1 && settings.identity == initialIdentity, "Rule was duplicated or disconnected the agent")
-    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).knowledgeRules == settings.knowledgeRules,
-               "Confirmed rules were not saved locally")
-    try rejects { try settings.rememberRule(String(repeating: "x", count: 501)) }
-    settings.forgetRule(id: settings.knowledgeRules[0].id)
-    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).knowledgeRules.isEmpty, "Removed rule was still persisted")
     settings.speechRateMultiplier = 1.6
     try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).speechRateMultiplier == 1.6,
                "Speech rate was not persisted")
@@ -374,58 +289,16 @@ struct VoiceAgentTests {
                "Existing utterance rate changed")
     settings.enabled = true
     settings.speaks = false
-    let workflowAgent = VoiceAgentController(settings: settings, conversationStore: isolatedConversationStore("workflow"))
-    workflowAgent.configure(bridge: bridge)
-    var shotCount = 0
-    let screenshotHandler = app.renderScreenshotHandler
-    app.renderScreenshotHandler = { id, url, access, maxWidth, completion in
-      shotCount += 1
-      screenshotHandler?(id, url, access, maxWidth, completion)
-    }
-    workflowAgent.startDemonstration(goal: .exposeRegion, includeViewSettings: true)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 1), source: .mouse)
-    await workflowAgent.finishDemonstration()
-    try expect(shotCount == 0 && workflowAgent.demonstrations.screenshotExport == nil,
-               "A demonstration without image consent captured a screenshot")
-    workflowAgent.demonstrations.discard()
-
-    let frames = Task { @MainActor in
-      while !Task.isCancelled {
-        try? await Task.sleep(for: .milliseconds(20))
-        app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
-      }
-    }
-    defer { frames.cancel() }
-    await workflowAgent.startScreenshotDemonstration(goal: .exposeRegion)
-    try expect(workflowAgent.demonstrations.active && shotCount == 1, "The first consented render was not captured")
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 2), source: .mouse)
-    await workflowAgent.finishDemonstration(outcome: .reached)
-    guard let screenshotExport = workflowAgent.demonstrations.screenshotExport,
-          let numericExport = workflowAgent.demonstrations.completed else {
-      throw Failure.failed("Missing finished screenshot pair")
-    }
-    let paired = try JSONSerialization.jsonObject(with: JSONEncoder().encode(screenshotExport)) as? [String: Any]
-    let encodedShots = paired?["screenshots"] as? [String: String]
-    let plain = try JSONSerialization.jsonObject(with: JSONEncoder().encode(numericExport)) as? [String: Any]
-    try expect(shotCount == 2 && screenshotExport.screenshots.before.count <= 512 * 1024 &&
-               screenshotExport.screenshots.after.count <= 512 * 1024 &&
-               encodedShots?["before_png_base64"].flatMap { Data(base64Encoded: $0) } != nil &&
-               encodedShots?["after_png_base64"].flatMap { Data(base64Encoded: $0) } != nil &&
-               plain?["screenshots"] == nil, "Screenshot export was incomplete, oversized, or uploadable")
-    workflowAgent.demonstrations.discard()
-
-    await workflowAgent.startScreenshotDemonstration(goal: .exposeRegion)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 2), source: .mouse)
-    try session.perform(.rotate(axis: [0, 1, 0], degrees: 3), source: .mcp)
-    await workflowAgent.finishDemonstration()
-    try expect(shotCount == 3 && workflowAgent.demonstrations.screenshotExport == nil,
-               "A foreign change left exportable screenshots")
-    workflowAgent.demonstrations.discard()
-    frames.cancel()
-    app.renderScreenshotHandler = screenshotHandler
+    let store = isolatedConversationStore("core")
+    defer { try? store.remove() }
+    var archive = VoiceAgentCommandHistory<VoiceAgentContext?>()
+    archive.appendMessage(scope: bridge.context, user: true, text: "Keep a local record.")
+    try store.save(archive, owner: settings.archiveOwnerID)
+    try expect(try store.load(owner: settings.archiveOwnerID)?.transcript.first?.text == "Keep a local record.",
+               "Local opt-in conversation did not round-trip")
     app.closeDataset(destination: .datasetSelection)
     try await testImportWorkflow(fixture: fixture, service: service, model: app)
-    print("Native assistant tests passed: TLS trust, local policy, screenshots, demonstrations, import and fusion")
+    print("Native assistant tests passed: TLS trust, provider separation, local policy, screenshots, import and fusion")
   }
 
   static func previewRGBA(_ data: Data) throws -> [UInt8] {

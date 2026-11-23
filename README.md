@@ -30,12 +30,10 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
 - **BORGVRServerCPP**: cross-platform C++17 implementation of the dataset server protocol,
   including synchronization and the embedded WebGPU frontend.
 - **web**: responsive WebGPU renderer served directly by a BorgVR server.
-- **BorgVRAgentServer**: self-hosted AI agent and pinned vLLM deployment for a Linux
-  NVIDIA/CUDA or AMD/ROCm GPU server. Includes sudo setup and model-switch commands,
-  prebuilt agent images, TLS, model/image/tool tests, and
-  [English](BorgVRAgentServer/README.md) / [German](BorgVRAgentServer/README.de.md) setup guides.
-  Windows 11 with NVIDIA GPUs can use the [WSL 2 deployment guide](BorgVRAgentServer/WINDOWS.md).
-  Shared native speech/text integration is available on macOS, iOS and visionOS.
+- **Model serving**: optional self-hosted vLLM and an HTTPS proxy, with
+  [English](BorgVRAgentServer/README.md) / [German](BorgVRAgentServer/README.de.md) guides
+  and [Windows WSL 2 setup](BorgVRAgentServer/WINDOWS.md). The Swift assistant can also
+  call OpenAI directly without this deployment.
 - **html**: bilingual user guide, embedded macOS Help, support, and privacy pages.
   Start with the [manual](html/index.html) or the guide to
   [datasets, edit states, and SharePlay](html/datasets.html).
@@ -76,30 +74,17 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
 
 ### AI voice and text assistant
 
-The [capability inventory](BorgVRAgentServer/CAPABILITIES.md) maps native user workflows to
-Commands, MCP, GSC, agent tools and remaining gaps. The [implementation plan](BorgVRAgentServer/CAPABILITY_PLAN.md)
-describes the future app-wide assistant, including catalog search, import and fusion before
-opening a dataset; these features are not yet enabled. Run the source audit with Python
-3.10+: `cd BorgVRAgentServer` followed by `python3 audit_capabilities.py`.
-
-- Opt-in **Settings > AI Assistant** on macOS, iOS and visionOS: HTTPS server origin,
-  Keychain token, explicit certificate import, render-image sharing and local speech output.
-- A shared conversation view accepts text or one spoken request at a time. Recognition is
-  on-device by default, with optional Apple fallback; microphone audio never reaches the agent.
-- The outbound WSS client reuses the MCP tool catalog/router, without enabling a local MCP
-  listener. Only visualization/read tools are exposed, narrowed by platform and RGB/RGBA mode.
-  Screenshots contain only the render image, never camera/passthrough, and are capped at 1024px/2MiB.
-- Commands follow the existing session/Command/GSC recording path. Cancellation, dataset or
-  unrelated edit-state changes terminate the connection; stale/duplicate calls cannot repeat mutations.
-  No automatic reconnect or replay, file access, volume edits or arbitrary GSC execution.
-- Manual Command events pause agent planning and resume the same goal from the user's latest
-  view. Explicit feedback can lead to proposed preferences, saved per device only after approval.
-  One application bridge isolates the assistant from BorgVR's core; see
-  [architecture and removal boundaries](AppSupport/Voice/ARCHITECTURE.md).
-- Native test: build `macOSApp`, then run `sh Scripts/test-voice-agent.sh <Debug-products> <agent-test-venv-python>`.
-  This tests actual local TLS/WSS with a deterministic model, PNG delivery and GSC roundtrip;
-  real microphone and deployed-model validation still need the target devices/server.
-  See the [bilingual user guide](html/mcp.html#voice-agent).
+- Opt in under **Settings > AI Assistant** on macOS, iOS and visionOS. Choose a private
+  vLLM HTTPS endpoint or OpenAI and add the matching Keychain credential. OpenAI image
+  sharing is separately opt-in. Camera, passthrough and microphone audio never go to a model.
+- The Swift core interprets goals, requests observations, and uses local Commands and
+  confirmations to apply changes. Stop prevents further commands; it does not undo changes.
+- The optional knowledge package contains editable rules and bounded read-only workflows.
+  The first workflow is an intensity sweep with isolated previews and explicit application.
+  Learned routines and background observation are not implemented.
+- [Architecture and tests](AppSupport/Voice/ARCHITECTURE.md) ·
+  [Capability inventory](BorgVRAgentServer/CAPABILITIES.md). Run `sh Scripts/test-voice-agent.sh`;
+  add the macOS Debug products directory for local command and TLS integration tests.
 
 ### Dataset file format
 

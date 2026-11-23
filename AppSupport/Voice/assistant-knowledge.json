@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "state.before_guessing", "operations": [], "topics": [],
+      "text": "Use confirmed state or fresh observations to resolve an open question. Distinguish the requested visual effect from the command that produces it. If a concrete command is already specified, no unnecessary visual investigation is needed."
+    },
+    {
+      "id": "intensity.unknown", "operations": ["inspect.intensity_bands"],
+      "topics": ["intensity", "sweep", "noise", "rauschen", "transfer", "tf", "knochen", "bone", "haut", "skin", "realistisch", "realistic", "sichtbar", "opacity"],
+      "text": "When useful intensity ranges are unknown, compare isolated band previews. Coverage or an image difference is not a structure label. Use inspect.previews to actually see candidate IDs; select a seen candidate only if it answers the request, or design a combination from observed ranges. Unwanted noise should not be made visible; locate it rather than assuming it always occupies a fixed range. Inspect the combined live result. Do not require a sweep if current evidence already suffices."
+    },
+    {
+      "id": "intensity.component", "operations": ["set_transfer_function_component"],
+      "topics": ["transfer", "tf", "opacity", "opazitat", "farbe", "color", "rauschen", "noise"],
+      "text": "For small transfer-function changes, prefer component control points over writing a full RGBA table. RGB sets color; alpha sets visibility. Keep unrelated components intact unless the intended result requires changing them. A simple lighting comparison can improve perceived depth and natural appearance."
+    },
+    {
+      "id": "geometry.pose", "operations": ["rotate_view", "set_transform"],
+      "topics": ["rotation", "rotate", "dreh", "view", "ansicht", "profile", "profil", "unterseite", "underside"],
+      "text": "For a desired pose, first establish what is facing the viewer. Use trustworthy orientation or rendered evidence. Distinguish object, world and view axes and choose the smallest justified change. Verify with a new view instead of trying unrelated rotations."
+    },
+    {
+      "id": "geometry.position", "operations": ["pick_screenshot_positions"],
+      "topics": ["position", "marker", "center", "zentrier", "femur", "edit", "pixel"],
+      "text": "If the target is visible, use its pixel position and the position buffer belonging to the same screenshot to obtain dataset-local 3D coordinates. A miss or an ambiguous occluded point is not evidence of depth. Do not invent 3D coordinates from a screenshot."
+    },
+    {
+      "id": "view.obstruction", "operations": ["capture_screenshot", "set_clipping"],
+      "topics": ["inside", "inner", "interior", "verdeckt", "sichtbar", "clipping", "cutaway", "querschnitt"],
+      "text": "First determine whether the target is outside the field of view, occluded, or transparent. Zooming out, changing viewing direction, clipping along the view direction and altering opacity solve different problems. Prefer reversible changes to editing for a visualization request."
+    }
+  ],
+  "workflows": [
+    {
+      "id": "inspect.intensity_bands",
+      "description": "Investigate which normalized intensity bands show the wanted structure. Render isolated coarse previews, refine where adjacent bands differ, and return selectable IDs. This does not modify the live view.",
+      "steps": [
+        {"kind": "intensityScan", "scan": {"initialBands": 5, "maxPreviews": 17, "minWidth": 0.025, "differenceThreshold": 0.2, "palette": "grayscale"}}
+      ]
+    }
+  ]
+}

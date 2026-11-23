@@ -30,8 +30,8 @@ def test_checked_in_report_is_current_and_links_to_the_implementation_plan():
     catalog, inventory = current()
     report = audit.REPORT.read_text()
     assert report == audit.render(catalog, inventory)
-    assert (audit.ROOT / "BorgVRAgentServer/CAPABILITY_PLAN.md").is_file()
-    assert "CAPABILITY_PLAN.md" in report
+    assert (audit.ROOT / "AppSupport/Voice/ARCHITECTURE.md").is_file()
+    assert "ARCHITECTURE.md" in report
     assert all(f"`{name}`" in report for name in
                ("get_application_state", "search_datasets", "open_dataset", "get_command_history"))
 
@@ -106,12 +106,11 @@ def test_app_start_import_and_fusion_are_native_jobs_not_external_mcp_commands()
 
 
 def test_experimental_catalog_does_not_grant_runtime_tools_or_bypass_the_bridge():
-    sources = list((audit.ROOT / "BorgVRAgentServer/borgvr_next").glob("*.py"))
-    sources += list((audit.ROOT / "AppSupport/Voice").glob("*.swift"))
+    sources = list((audit.ROOT / "AppSupport/Voice").glob("*.swift"))
     for file in sources:
         text = file.read_text()
         assert "capabilities.json" not in text and "audit_capabilities" not in text
-    for file in ("VoiceAgentController.swift", "VoiceAgentApplicationBridge.swift"):
+    for file in ("BorgVRAssistantCore.swift", "VoiceAgentController.swift", "VoiceAgentApplicationBridge.swift"):
         text = (audit.ROOT / "AppSupport/Voice" / file).read_text()
         for concrete_type in ("ConverterView", "BorgVRVolumeConversionService", "AppModel", "BorgVRMCPToolRouter"):
             assert concrete_type not in text

@@ -37,130 +37,6 @@ struct VoiceAgentButton: View {
   }
 }
 
-#if DEBUG
-private struct WorkflowDemonstrationDocument: FileDocument {
-  static let readableContentTypes: [UTType] = [.json]
-  let data: Data
-
-  init(data: Data) { self.data = data }
-
-  init(configuration: ReadConfiguration) throws {
-    guard let data = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
-    self.data = data
-  }
-
-  func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-    FileWrapper(regularFileWithContents: data)
-  }
-}
-
-private struct WorkflowDemonstrationMenu: View {
-  @ObservedObject var agent: VoiceAgentController
-  @ObservedObject private var recorder: WorkflowDemonstrationRecorder
-  @State private var document: WorkflowDemonstrationDocument?
-  @State private var exportID: UUID?
-  @State private var exporting = false
-  @State private var exportFailed = false
-  @State private var screenshotGoal: WorkflowDemonstrationGoal?
-  @State private var confirmsScreenshots = false
-
-  init(agent: VoiceAgentController) {
-    self.agent = agent
-    _recorder = ObservedObject(wrappedValue: agent.demonstrations)
-  }
-
-  var body: some View {
-    Menu {
-      if agent.capturingDemonstrationScreenshot {
-        Button(voiceAgentText("Cancel screenshot capture"), systemImage: "xmark") { agent.pauseDemonstration() }
-      } else if recorder.active {
-        Button(voiceAgentText("Finish demonstration"), systemImage: "stop.circle") { Task { await agent.finishDemonstration() } }
-        Button(voiceAgentText("Finish: goal reached"), systemImage: "checkmark") { Task { await agent.finishDemonstration(outcome: .reached) } }
-        Button(voiceAgentText("Finish: goal not reached"), systemImage: "xmark") { Task { await agent.finishDemonstration(outcome: .notReached) } }
-      } else if let episode = recorder.completed {
-        Button(voiceAgentText(episode.evidence == nil ? "Export demonstration" :
-                               "Export demonstration with view settings"), systemImage: "square.and.arrow.up") {
-          export(episode, id: episode.id)
-        }
-        if let screenshots = recorder.screenshotExport {
-          Button(voiceAgentText("Export demonstration with screenshots"), systemImage: "photo.on.rectangle") {
-            export(screenshots, id: episode.id)
-          }
-        }
-        Button(voiceAgentText("Discard demonstration"), systemImage: "trash", role: .destructive) { recorder.discard() }
-      } else {
-        ForEach(WorkflowDemonstrationGoal.allCases, id: \.self) { goal in
-          Button(voiceAgentText(goal.title), systemImage: "record.circle") { agent.startDemonstration(goal: goal) }
-            .disabled(!agent.canStartDemonstration)
-        }
-        Menu(voiceAgentText("Demonstrate with before and after view settings")) {
-          ForEach(WorkflowDemonstrationGoal.allCases, id: \.self) { goal in
-            Button(voiceAgentText(goal.title), systemImage: "viewfinder") {
-              agent.startDemonstration(goal: goal, includeViewSettings: true)
-            }
-          }
-        }
-        .disabled(!agent.canStartDemonstration)
-        Menu(voiceAgentText("Demonstrate with before and after screenshots")) {
-          ForEach(WorkflowDemonstrationGoal.allCases, id: \.self) { goal in
-            Button(voiceAgentText(goal.title), systemImage: "camera") {
-              screenshotGoal = goal
-              confirmsScreenshots = true
-            }
-          }
-        }
-        .disabled(!agent.canStartDemonstration)
-      }
-    } label: {
-      Image(systemName: agent.capturingDemonstrationScreenshot ? "camera.fill" :
-              recorder.active ? "record.circle.fill" : "record.circle")
-        .foregroundStyle(recorder.active || agent.capturingDemonstrationScreenshot ? Color.red : Color.primary)
-    }
-    .buttonStyle(.bordered)
-    .accessibilityLabel(voiceAgentText(recorder.active ? "Demonstration recording" : "Demonstration"))
-    .help(voiceAgentText(recorder.active ? "Demonstration recording" : "Demonstration"))
-    .fileExporter(isPresented: $exporting, document: document, contentType: .json,
-                  defaultFilename: "BorgVR-demonstration") { result in
-      document = nil
-      let completedExportID = exportID
-      exportID = nil
-      switch result {
-        case .success:
-          if let completedExportID { recorder.discard(id: completedExportID) }
-        case .failure: exportFailed = true
-      }
-    }
-    .alert(voiceAgentText("Could not export demonstration"), isPresented: $exportFailed) {
-      Button(voiceAgentText("Close"), role: .cancel) {}
-    }
-    .alert(voiceAgentText("Allow before and after screenshots?"), isPresented: $confirmsScreenshots) {
-      Button(voiceAgentText("Allow for this demonstration")) {
-        guard let goal = screenshotGoal else { return }
-        screenshotGoal = nil
-        Task { await agent.startScreenshotDemonstration(goal: goal) }
-      }
-      Button(voiceAgentText("Cancel"), role: .cancel) { screenshotGoal = nil }
-    } message: {
-      Text(voiceAgentText("The two render images may reveal dataset details. They are only included in a separate local export and are never sent to the workflow server."))
-    }
-    .alert(voiceAgentText("Could not capture both screenshots"), isPresented: $agent.demonstrationScreenshotFailed) {
-      Button(voiceAgentText("Close"), role: .cancel) {}
-    }
-  }
-
-  private func export<T: Encodable>(_ value: T, id: UUID) {
-    do {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      document = WorkflowDemonstrationDocument(data: try encoder.encode(value))
-      exportID = id
-      exporting = true
-    } catch { exportFailed = true }
-  }
-}
-
-#endif
-
 struct VoiceAgentView: View {
   static let windowID = "VoiceAgent"
   @ObservedObject var agent: VoiceAgentController
@@ -183,8 +59,8 @@ struct VoiceAgentView: View {
         HStack {
           Label(agent.status, systemImage: agent.connectionState == .ready ? "checkmark.shield" : "network")
           Spacer()
-          if (agent.busy && agent.collaborationQuestion == nil && agent.annotationDeletion == nil && agent.editStateDeletion == nil &&
-              agent.volumeEditApproval == nil && !agent.userIsInteracting) || agent.connectionState == .connecting {
+          if (agent.busy && agent.annotationDeletion == nil && agent.editStateDeletion == nil &&
+              agent.volumeEditApproval == nil) || agent.connectionState == .connecting {
             ProgressView().controlSize(.small)
           }
           Button { agent.newConversation() } label: { Image(systemName: "arrow.counterclockwise") }
@@ -242,21 +118,14 @@ struct VoiceAgentView: View {
                     Text(message.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                   } else {
                     VoiceAgentMarkdownText(message.text)
+                    if let count = message.confirmedChanges {
+                      Text(count == 0 ? voiceAgentText("No change applied") :
+                        String(format: voiceAgentText("Confirmed changes: %lld"), Int64(count)))
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
                   }
                 }
                 .id(message.id)
-              }
-              ForEach(agent.ruleProposals) { proposal in
-                VStack(alignment: .leading, spacing: 8) {
-                  Text(proposal.text).font(.callout).fixedSize(horizontal: false, vertical: true)
-                  ViewThatFits(in: .horizontal) {
-                    HStack { ruleActions(proposal) }
-                    VStack(alignment: .leading) { ruleActions(proposal) }
-                  }
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
               }
             }
             .padding(.vertical, 8)
@@ -265,19 +134,6 @@ struct VoiceAgentView: View {
           .onChange(of: agent.messages.count) { _, _ in
             if let last = agent.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
           }
-        }
-        if agent.collaborationQuestion != nil {
-          ViewThatFits(in: .horizontal) {
-            HStack { collaborationActions }
-            VStack(alignment: .leading) { collaborationActions }
-          }
-        }
-        if agent.canResume && !agent.busy && agent.connectionState == .ready {
-          Button(voiceAgentText("Continue"), systemImage: "play.fill") {
-            Task { await agent.resumePartialTask() }
-          }
-          .buttonStyle(.borderedProminent)
-          .disabled(speech.isRecording)
         }
         if let selection = agent.presentedFileSelection {
           HStack {
@@ -307,15 +163,6 @@ struct VoiceAgentView: View {
         if !speech.transcript.isEmpty, speech.isRecording {
           Text(speech.transcript).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
-        #if DEBUG
-        if agent.hasDataset || agent.demonstrations.active || agent.demonstrations.completed != nil {
-          DisclosureGroup(voiceAgentText("Workflow research (debug)")) {
-            WorkflowDemonstrationMenu(agent: agent)
-              .frame(maxWidth: .infinity, alignment: .leading)
-          }
-          .font(.caption)
-        }
-        #endif
         Divider()
         HStack(alignment: .bottom, spacing: 12) {
           Button { Task { await agent.toggleMicrophone() } } label: {
@@ -325,10 +172,10 @@ struct VoiceAgentView: View {
           .tint(speech.isRecording ? .red : .accentColor)
           .help(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
           .accessibilityLabel(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
-          .disabled(agent.interrupting || agent.connectionState == .connecting || !agent.isAvailable)
-          TextField(voiceAgentText(agent.collaborationQuestion == nil ? "Message" : "Reply"), text: $text, axis: .vertical)
+          .disabled(agent.connectionState == .connecting || !agent.isAvailable)
+          TextField(voiceAgentText("Message"), text: $text, axis: .vertical)
             .lineLimit(1...4).textFieldStyle(.roundedBorder)
-            .disabled(agent.interrupting || speech.isRecording)
+            .disabled(speech.isRecording)
             .submitLabel(.send)
             .onSubmit { sendMessage() }
             .onKeyPress(.return, phases: .down) { key in
@@ -338,8 +185,8 @@ struct VoiceAgentView: View {
             }
           Button { sendMessage() } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
           .buttonStyle(.borderedProminent)
-          .help(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
-          .accessibilityLabel(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
+          .help(voiceAgentText(agent.busy ? "Send and interrupt current request" : "Send"))
+          .accessibilityLabel(voiceAgentText(agent.busy ? "Send and interrupt current request" : "Send"))
           .disabled(!canSendMessage)
           Button { agent.cancel() } label: { Image(systemName: "xmark.circle").frame(width: 28, height: 28) }
             .buttonStyle(.bordered).help(voiceAgentText("Cancel"))
@@ -441,7 +288,7 @@ struct VoiceAgentView: View {
 
   private var canSendMessage: Bool {
     !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && text.count <= 8192 &&
-      !agent.interrupting && !speech.isRecording && agent.connectionState != .connecting && agent.isAvailable
+      !speech.isRecording && agent.connectionState != .connecting && agent.isAvailable
   }
 
   private var deletionTitle: String {
@@ -459,26 +306,7 @@ struct VoiceAgentView: View {
     Task { await agent.submit(message) }
   }
 
-  @ViewBuilder private var collaborationActions: some View {
-    Button(voiceAgentText("Yes"), systemImage: "checkmark") {
-      Task { await agent.answerCollaboration(voiceAgentText("Yes")) }
-    }.buttonStyle(.borderedProminent)
-    Button(voiceAgentText("No"), systemImage: "xmark") {
-      Task { await agent.answerCollaboration(voiceAgentText("No")) }
-    }.buttonStyle(.bordered)
-    Button(voiceAgentText("Continue without help"), systemImage: "play.fill") {
-      Task { await agent.answerCollaboration(voiceAgentText("Please continue without additional hints.")) }
-    }.buttonStyle(.bordered)
-  }
 
-  @ViewBuilder private func ruleActions(_ proposal: VoiceAgentQuestion) -> some View {
-    Button(voiceAgentText("Remember rule"), systemImage: "brain.head.profile") {
-      Task { await agent.decideRule(proposal, remember: true) }
-    }.buttonStyle(.borderedProminent)
-    Button(voiceAgentText("Discard"), systemImage: "xmark") {
-      Task { await agent.decideRule(proposal, remember: false) }
-    }.buttonStyle(.bordered)
-  }
 }
 
 private struct VoiceAgentCopyButton: View {
@@ -563,7 +391,8 @@ struct VoiceAgentSettingsView: View {
   @ObservedObject var agent: VoiceAgentController
   @ObservedObject private var settings: VoiceAgentSettings
   @State private var token = ""
-  @State private var importsCertificate = false
+  private enum ImportKind { case token, certificate, knowledge }
+  @State private var importKind = ImportKind.token
   @State private var importing = false
   @State private var testing = false
   @State private var errorText: String?
@@ -576,10 +405,19 @@ struct VoiceAgentSettingsView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       Toggle(voiceAgentText("Enable AI assistant"), isOn: $settings.enabled)
-      Text(voiceAgentText("The assistant sends your text, visualization state and, if allowed, render images to your configured server. It can change the current visualization. No camera or passthrough images are sent."))
+      Picker(voiceAgentText("Model provider"), selection: $settings.provider) {
+        Text("vLLM").tag(VoiceAgentModelProvider.vllm)
+        Text("OpenAI").tag(VoiceAgentModelProvider.openAI)
+      }
+      .disabled(importing || testing)
+      Text(voiceAgentText(settings.provider == .openAI ?
+        "OpenAI receives your request and relevant visualization state. Render images are sent only if you enable sharing below." :
+        "The assistant sends your text, visualization state and, if allowed, render images to your configured server. It can change the current visualization. No camera or passthrough images are sent."))
         .font(.callout).foregroundStyle(.secondary)
       Divider()
-      TextField(voiceAgentText("HTTPS server address"), text: $settings.address).textFieldStyle(.roundedBorder)
+      TextField(voiceAgentText(settings.provider == .openAI ? "OpenAI model ID" : "vLLM HTTPS address"),
+                text: settings.provider == .openAI ? $settings.openAIModel : $settings.address)
+        .textFieldStyle(.roundedBorder)
         #if !os(macOS)
         .textInputAutocapitalization(.never).autocorrectionDisabled()
         #endif
@@ -593,7 +431,7 @@ struct VoiceAgentSettingsView: View {
           .buttonStyle(.bordered).disabled(token.isEmpty)
           .help(voiceAgentText("Save token"))
           .accessibilityLabel(voiceAgentText("Save token"))
-        Button { importsCertificate = false; importing = true } label: { Image(systemName: "square.and.arrow.down") }
+        Button { importKind = .token; importing = true } label: { Image(systemName: "square.and.arrow.down") }
           .buttonStyle(.bordered).help(voiceAgentText("Import token file"))
           .accessibilityLabel(voiceAgentText("Import token file"))
         if settings.hasToken {
@@ -604,9 +442,10 @@ struct VoiceAgentSettingsView: View {
             .accessibilityLabel(voiceAgentText("Remove token"))
         }
       }
-      HStack {
+      if settings.provider == .vllm {
+        HStack {
         Button(voiceAgentText("Import server certificate"), systemImage: "checkmark.shield") {
-          importsCertificate = true; importing = true
+          importKind = .certificate; importing = true
         }
         .buttonStyle(.bordered)
         if !settings.certificate.isEmpty {
@@ -621,7 +460,9 @@ struct VoiceAgentSettingsView: View {
       } else {
         Text(voiceAgentText("System certificate trust")).font(.caption).foregroundStyle(.secondary)
       }
-      Toggle(voiceAgentText("Share render images"), isOn: $settings.sharesImages)
+      }
+      Toggle(voiceAgentText(settings.provider == .openAI ? "Share render images with OpenAI" : "Share render images"),
+             isOn: settings.provider == .openAI ? $settings.sharesOpenAIImages : $settings.sharesImages)
       Toggle(voiceAgentText("Save and restore the assistant conversation"), isOn: $settings.savesConversation)
       if let error = agent.conversationStorageError {
         Text(error).font(.callout).foregroundStyle(.red)
@@ -656,23 +497,18 @@ struct VoiceAgentSettingsView: View {
       }
       .disabled(!settings.speaks)
       Toggle(voiceAgentText("On-device speech recognition only"), isOn: $settings.onDeviceOnly)
-      DisclosureGroup(voiceAgentText("Learner state")) {
-        VoiceAgentLearnerSettings(settings: settings)
-      }
-      if !settings.knowledgeRules.isEmpty {
-        Text(voiceAgentText("Remembered rules")).font(.headline)
-        ForEach(settings.knowledgeRules) { rule in
-          HStack(alignment: .top) {
-            Text(rule.text).fixedSize(horizontal: false, vertical: true)
-            Spacer()
-            Button { settings.forgetRule(id: rule.id) } label: { Image(systemName: "trash") }
-              .buttonStyle(.bordered)
-              .help(voiceAgentText("Remove rule"))
-              .accessibilityLabel(voiceAgentText("Remove rule"))
-          }
+      HStack {
+        Button(voiceAgentText("Import knowledge package"), systemImage: "doc.badge.plus") {
+          importKind = .knowledge; importing = true
+        }
+        .buttonStyle(.bordered)
+        if settings.customKnowledge != nil {
+          Button { try? settings.selectKnowledge(nil) } label: { Image(systemName: "arrow.counterclockwise") }
+            .buttonStyle(.bordered).help(voiceAgentText("Restore bundled knowledge"))
+            .accessibilityLabel(voiceAgentText("Restore bundled knowledge"))
         }
       }
-      Text(voiceAgentText("If on-device-only recognition is disabled, Apple may process microphone audio. Audio is never sent to the BorgVR agent server."))
+      Text(voiceAgentText("If on-device-only recognition is disabled, Apple may process microphone audio. Audio is never sent to the model server."))
         .font(.caption).foregroundStyle(.secondary)
       HStack {
         Button(voiceAgentText("Test server"), systemImage: "network") {
@@ -689,169 +525,26 @@ struct VoiceAgentSettingsView: View {
       }
       if let error = errorText ?? agent.errorText { Text(error).foregroundStyle(.red).font(.callout) }
     }
+    .onChange(of: settings.provider) { _, _ in token = ""; errorText = nil }
     .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
       do {
         guard let url = try result.get().first else { return }
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        guard let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 65536 else {
-          throw VoiceAgentError.configuration
-        }
+        let limit = importKind == .knowledge ? 128 * 1024 : 64 * 1024
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }
-        let data = try file.read(upToCount: 65537) ?? Data()
-        guard data.count <= 65536 else { throw VoiceAgentError.configuration }
-        if importsCertificate { try settings.importCertificate(data) }
-        else {
-          guard let token = String(data: data, encoding: .utf8) else { throw VoiceAgentError.configuration }
-          try settings.setToken(token)
+        let data = try file.read(upToCount: limit + 1) ?? Data()
+        guard data.count <= limit else { throw VoiceAgentError.configuration }
+        switch importKind {
+          case .certificate: try settings.importCertificate(data)
+          case .knowledge: try settings.selectKnowledge(data)
+          case .token:
+            guard let token = String(data: data, encoding: .utf8) else { throw VoiceAgentError.configuration }
+            try settings.setToken(token)
         }
         errorText = nil
-      } catch { errorText = VoiceAgentError.configuration.localizedDescription }
-    }
-  }
-}
-
-private struct LearnerCheckpointDocument: FileDocument {
-  static var readableContentTypes: [UTType] { [.json] }
-  var bytes: Data
-
-  init(bytes: Data) { self.bytes = bytes }
-  init(configuration: ReadConfiguration) throws {
-    guard let bytes = configuration.file.regularFileContents else { throw VoiceAgentLearnerStore.Failure.invalid }
-    self.bytes = bytes
-  }
-  func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { .init(regularFileWithContents: bytes) }
-}
-
-private struct VoiceAgentLearnerSettings: View {
-  @ObservedObject var settings: VoiceAgentSettings
-  @State private var observer = ""
-  @State private var busy = false
-  @State private var importing = false
-  @State private var exporting = false
-  @State private var document: LearnerCheckpointDocument?
-  @State private var error: String?
-
-  private var store: VoiceAgentLearnerStore { .init() }
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        SecureField(voiceAgentText(settings.observerToken() == nil ? "Observer token" : "Observer token stored in Keychain"), text: $observer)
-          .textFieldStyle(.roundedBorder)
-        Button { saveToken(observer) } label: { Image(systemName: "checkmark") }
-          .help(voiceAgentText("Save token")).accessibilityLabel(voiceAgentText("Save token"))
-          .disabled(observer.isEmpty)
-        if settings.observerToken() != nil {
-          Button { saveToken("") } label: { Image(systemName: "trash") }
-            .help(voiceAgentText("Remove token")).accessibilityLabel(voiceAgentText("Remove token"))
-        }
-      }.buttonStyle(.bordered)
-      if settings.observerToken() != nil {
-        let checkpoint = store.cached(settings)
-        Toggle(voiceAgentText("Share assistant interactions with the learner"), isOn: $settings.sharesLearningTrace)
-        VStack(alignment: .leading, spacing: 6) {
-          Button(voiceAgentText("Fetch learner state"), systemImage: "arrow.down.circle") {
-            run { _ = try await store.fetch(settings) }
-          }
-          Button(voiceAgentText("Export learner state"), systemImage: "square.and.arrow.up") {
-            run {
-              document = try LearnerCheckpointDocument(bytes: store.exportCheckpoint(settings))
-              exporting = true
-            }
-          }.disabled(checkpoint == nil)
-          Button(voiceAgentText("Import learner state on this server"), systemImage: "square.and.arrow.down") {
-            importing = true
-          }
-        }.buttonStyle(.bordered)
-        if busy { ProgressView().controlSize(.small) }
-        let entries = store.entries(in: checkpoint)
-        if !entries.isEmpty {
-          ForEach(entries) { entry in
-            DisclosureGroup {
-              Text(entry.situation).font(.caption).foregroundStyle(.secondary)
-              if let guidance = entry.guidance {
-                Text(guidance).font(.callout).textSelection(.enabled)
-                approvalSwitch(entry, .guidance, label: "Use this guidance")
-              }
-              if let program = entry.program {
-                DisclosureGroup(voiceAgentText("Procedure details")) {
-                  ScrollView {
-                    Text(verbatim: program).font(.caption.monospaced()).textSelection(.enabled)
-                      .frame(maxWidth: .infinity, alignment: .leading)
-                  }.frame(maxHeight: 180)
-                }
-                approvalSwitch(entry, .procedure, label: "Allow this procedure")
-              }
-            } label: { Text(entry.goal).fixedSize(horizontal: false, vertical: true) }
-          }
-        }
-        if let checkpoint {
-          hypotheses(checkpoint)
-        }
-      }
-      if let error { Text(error).font(.callout).foregroundStyle(.red) }
-    }
-    .disabled(busy)
-    .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-      run { try await store.importCheckpoint(try result.get(), settings: settings) }
-    }
-    .fileExporter(isPresented: $exporting, document: document, contentType: .json, defaultFilename: "BorgVR-Learner") { result in
-      if case .failure(let failure) = result { error = failure.localizedDescription }
-      document = nil
-    }
-  }
-
-  private func hypotheses(_ checkpoint: [String: Any]) -> some View {
-    let rows = checkpoint["hypotheses"] as? [[String: Any]] ?? []
-    let records = checkpoint["evidence"] as? [[String: Any]] ?? []
-    return DisclosureGroup(voiceAgentText("Open hypotheses and evidence")) {
-      ForEach(rows.indices, id: \.self) { index in
-        let row = rows[index]
-        if let claim = row["claim"] as? String {
-          DisclosureGroup(claim) {
-            ForEach(row["next_steps"] as? [String] ?? [], id: \.self) { step in
-              Text(step).font(.caption)
-            }
-            let refs = row["evidence"] as? [[String: Any]] ?? []
-            ForEach(refs.indices, id: \.self) { ref in
-              let item = refs[ref]
-              if let id = item["id"] as? String,
-                 let record = records.first(where: { $0["id"] as? String == id }),
-                 let summary = record["summary"] as? String {
-                Label(summary, systemImage: item["relation"] as? String == "supports" ? "plus.circle" :
-                  item["relation"] as? String == "contradicts" ? "minus.circle" : "questionmark.circle")
-                  .font(.caption).textSelection(.enabled)
-              }
-            }
-          }
-        }
-      }
-    }.disabled(rows.isEmpty)
-  }
-
-  private func approvalSwitch(_ entry: VoiceAgentLearnerStore.Entry, _ part: VoiceAgentLearnerStore.Part, label: String) -> some View {
-    Toggle(voiceAgentText(label), isOn: Binding(
-      get: { store.approval(entry, part, settings: settings) },
-      set: { approved in
-        do { try store.setApproval(approved, entry: entry, part: part, settings: settings); error = nil }
-        catch { self.error = error.localizedDescription }
-      }))
-  }
-
-  private func saveToken(_ value: String) {
-    do { try settings.setObserverToken(value); observer = ""; error = nil }
-    catch { self.error = error.localizedDescription }
-  }
-
-  private func run(_ operation: @escaping () async throws -> Void) {
-    busy = true
-    error = nil
-    Task { @MainActor in
-      defer { busy = false }
-      do { try await operation() }
-      catch { self.error = error.localizedDescription }
+      } catch { errorText = error.localizedDescription }
     }
   }
 }

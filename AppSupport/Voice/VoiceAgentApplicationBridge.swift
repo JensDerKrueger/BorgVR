@@ -76,10 +76,6 @@ protocol VoiceAgentApplicationBridge: AnyObject {
   func cancelImport(id: UUID)
   func resolveImportFileSelection(id: UUID, url: URL?)
   var changes: AnyPublisher<VoiceAgentApplicationChange, Never> { get }
-  var demonstrationActions: AnyPublisher<WorkflowDemonstrationAction, Never> { get }
-  var demonstrationEvidenceInvalidations: AnyPublisher<Void, Never> { get }
-  func workflowViewEvidence() -> WorkflowViewEvidence?
-  func captureWorkflowScreenshot(in context: VoiceAgentContext) async throws -> Data
   func stateSnapshot() throws -> [String: Any]
   func executeTool(name: String, arguments: [String: Any], validateContext: @escaping () throws -> Void) async throws -> [String: Any]
   func executeFileTool(name: String, arguments: [String: Any], select: (VoiceAgentFileSelection) async -> URL?,
@@ -104,10 +100,6 @@ extension VoiceAgentApplicationBridge {
   func resolveImportFileSelection(id: UUID, url: URL?) {}
   func executeFileTool(name: String, arguments: [String: Any], select: (VoiceAgentFileSelection) async -> URL?,
                        validateContext: @escaping () throws -> Void, willCommit: () -> Void) async throws -> [String: Any] { throw VoiceAgentError.commandFailed }
-  var demonstrationActions: AnyPublisher<WorkflowDemonstrationAction, Never> { Empty().eraseToAnyPublisher() }
-  var demonstrationEvidenceInvalidations: AnyPublisher<Void, Never> { Empty().eraseToAnyPublisher() }
-  func workflowViewEvidence() -> WorkflowViewEvidence? { nil }
-  func captureWorkflowScreenshot(in context: VoiceAgentContext) async throws -> Data { throw VoiceAgentError.commandFailed }
   func prepareAnnotationDeletion(scope: String, targetID: String?) throws -> VoiceAgentAnnotationDeletion? { throw VoiceAgentError.commandFailed }
   func executeAnnotationDeletion(_ confirmation: VoiceAgentAnnotationDeletion,
                                 validateContext: @escaping () throws -> Void) async throws -> [String: Any] { throw VoiceAgentError.commandFailed }

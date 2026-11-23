@@ -5,7 +5,6 @@ import subprocess
 import pytest
 
 import configure
-import development
 from model_config import PROFILES
 import switch_model as menu
 
@@ -32,7 +31,6 @@ def installed(tmp_path):
     configure.create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "all")
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     changes = configure.inference_values(parser.parse_args(["--profile", "qwen38-27b", "--tensor-parallel-size", "2",
         "--nccl-p2p-disable", "true", "--disable-custom-all-reduce", "true"]), configure.read_configuration(tmp_path))
     configure.write_configuration_changes(tmp_path, changes)
@@ -40,23 +38,18 @@ def installed(tmp_path):
 
 
 @pytest.mark.parametrize("context_length", [None, "4096"])
-def test_switch_retains_active_development_source_and_credentials(installed, monkeypatch, context_length):
+def test_switch_retains_network_and_credentials(installed, context_length):
     root = installed
-    marker = development.marker(root)
-    marker.write_text('{"root":"test-retained-development"}')
-    verified = []
-    monkeypatch.setattr(development, "overlay_file", lambda path: verified.append(path))
-    protected = [marker, root / "runtime/tls/server.crt", root / "runtime/tls/server.key",
-                 root / "runtime/secrets/agent_token", root / "runtime/secrets/vllm_token"]
+    protected = [root / "runtime/tls/server.crt", root / "runtime/tls/server.key", root / "runtime/secrets/vllm_token"]
     before = {path: path.read_bytes() for path in protected}
     original = configure.read_configuration(root)
     calls = []
     menu.switch(root, "qwen35-4b", context_length=context_length, run=lambda path, command: calls.append(command))
-    assert calls == ["doctor", "restart", "test"] and verified == [root]
+    assert calls == ["doctor", "restart", "test"]
     updated = configure.read_configuration(root)
     assert updated["BORGVR_MODEL"] == PROFILES["qwen35-4b"]["MODEL"]
     assert updated["BORGVR_CONTEXT_LENGTH"] == (context_length or PROFILES["qwen35-4b"]["CONTEXT_LENGTH"])
-    for key in ("BORGVR_AGENT_IMAGE", "BORGVR_VLLM_IMAGE", "BORGVR_GPU", "BORGVR_TENSOR_PARALLEL_SIZE",
+    for key in ("BORGVR_VLLM_IMAGE", "BORGVR_GPU", "BORGVR_TENSOR_PARALLEL_SIZE",
                 "BORGVR_NCCL_P2P_DISABLE", "BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "BORGVR_BIND_ADDRESS", "BORGVR_PORT"):
         assert updated[key] == original[key]
     assert all(path.read_bytes() == data for path, data in before.items())
@@ -118,14 +111,11 @@ def test_interrupted_switch_recovers_without_erasing_new_external_changes(instal
     assert configure.read_value("BORGVR_PORT", installed) == "9999"
 
 
-def test_invalid_development_state_prevents_any_change(installed, monkeypatch):
-    development.marker(installed).write_text("{}")
+def test_legacy_development_mode_requires_cleanup(installed):
+    (installed / "runtime/agent-development.json").write_text("{}")
     original = (installed / ".env").read_bytes()
-    def reject(root):
-        raise ValueError("different installation")
-    monkeypatch.setattr(development, "overlay_file", reject)
-    with pytest.raises(ValueError, match="different installation"):
-        menu.switch(installed, "qwen35-4b")
+    with pytest.raises(ValueError, match="Entwicklungsmodus"):
+        menu.switch(installed, "qwen35-4b", run=lambda *_: pytest.fail("deployment started"))
     assert (installed / ".env").read_bytes() == original
 
 

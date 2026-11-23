@@ -265,13 +265,11 @@ struct macOSApp: App {
           applyMCPConfiguration()
         }
         .onDisappear {
-          voiceAgent.pauseDemonstration()
           voiceAgent.disconnect()
           saveOpenDatasetState()
         }
         .onChange(of: appModel.datasetSessionState) { _, _ in voiceAgent.invalidateContext() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-          voiceAgent.pauseDemonstration()
           voiceAgent.speech.cancel()
         }
         .onChange(of: appSettings.logLevel) { _, newValue in

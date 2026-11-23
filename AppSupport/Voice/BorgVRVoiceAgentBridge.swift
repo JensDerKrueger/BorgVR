@@ -106,55 +106,6 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
     reply?.resume(returning: url)
   }
 
-  var demonstrationActions: AnyPublisher<WorkflowDemonstrationAction, Never> {
-    guard let executor = service.commandExecutor else { return Empty().eraseToAnyPublisher() }
-    return executor.commandEvents.compactMap { event in
-      guard case .committed = event.phase, let domain = Self.domain(event.command) else { return nil }
-      return Self.isManual(event.source) ? WorkflowDemonstrationAction(rawValue: domain) : nil
-    }.eraseToAnyPublisher()
-  }
-
-  var demonstrationEvidenceInvalidations: AnyPublisher<Void, Never> {
-    guard let executor = service.commandExecutor else { return Empty().eraseToAnyPublisher() }
-    return executor.commandEvents.compactMap { event in
-      guard !Self.isManual(event.source), Self.domain(event.command) != nil else { return nil }
-      return ()
-    }.eraseToAnyPublisher()
-  }
-
-  private static func isManual(_ source: BorgVRCommandSource) -> Bool {
-    switch source {
-      case .userInterface, .mouse, .touch, .hand, .muse: return true
-      default: return false
-    }
-  }
-
-  func workflowViewEvidence() -> WorkflowViewEvidence? {
-    let state = service.applicationState()
-    guard state.rendererReady, readinessProvider() else { return nil }
-    return WorkflowViewEvidence(clipMinimum: state.clipMinimum, clipMaximum: state.clipMaximum,
-                                rotation: state.transform.rotation)
-  }
-
-  func captureWorkflowScreenshot(in context: VoiceAgentContext) async throws -> Data {
-    guard self.context == context else { throw VoiceAgentError.contextChanged }
-    var viewChanged = false
-    let observation = service.commandExecutor?.commandEvents.sink { event in
-      if Self.domain(event.command) != nil { viewChanged = true }
-    }
-    defer { observation?.cancel() }
-    let startingFrame = service.applicationState().completedFrame
-    try await service.waitUntilRendered(after: startingFrame, timeout: 3)
-    try Task.checkCancellation()
-    guard !viewChanged, self.context == context else { throw VoiceAgentError.contextChanged }
-    let image = try await service.captureScreenshot(includeAlpha: true)
-    try Task.checkCancellation()
-    guard !viewChanged, self.context == context, image.renderedFrame > startingFrame else {
-      throw VoiceAgentError.contextChanged
-    }
-    return image.pngData
-  }
-
   var changes: AnyPublisher<VoiceAgentApplicationChange, Never> {
     guard let executor = service.commandExecutor else { return Empty().eraseToAnyPublisher() }
     return executor.commandEvents.compactMap { [origin] event in

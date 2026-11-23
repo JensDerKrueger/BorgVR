@@ -1,4 +1,0 @@
-# Only image producers/developers need this overlay. compose.yaml is pull-only.
-services:
-  agent:
-    build: .

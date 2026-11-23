@@ -3,15 +3,15 @@
 Generiert aus `capabilities.json` und den Quellcode-Registern mit `python3 audit_capabilities.py --write`.
 Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nachweis ausgeführter Tests.
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
-Das Agentengespräch ist appweit auch im Startmenü nutzbar. **Ohne offenen Datensatz sind `get_application_state`, `search_datasets`, `open_dataset` und die kontextgebundene Befehlshistorie verfügbar.** Öffnen verlangt einen kürzlich zurückgelieferten Treffer und einen ausgehandelten, korrelierten Kontextwechsel. Renderer-Werkzeuge erfordern einen bereiten Datensatz; Import-/Fusionsjobs sind noch nicht freigeschaltet.
+Der Swift-Assistent ist auch im Startmenü nutzbar. Lokale Freigaben, Datensatz- und Rendererzustand begrenzen die tatsächlich verfügbaren Werkzeuge.
 
-Erfasst: **78 Funktionsgruppen**, **64 MCP-Werkzeuge**, **48 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **105 unterschiedliche GSC-Namen**.
+Erfasst: **77 Funktionsgruppen**, **64 MCP-Werkzeuge**, **48 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **105 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
 daraus folgt weder eine Agentenfreigabe noch eine benannte DSL-Funktion. Tool-Definitionen sind nicht automatisch UI-/Zustands-/Test-Vollständigkeit.
 
-Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
+Der Assistenzkern verwendet den lokalen Werkzeugrouter. Das Modell schlägt strukturierte Entscheidungen vor; es führt keine BorgVR-Commands aus.
 
 ## Übersicht
 
@@ -19,7 +19,6 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 |---|---|---|---|---|---|
 | App und Assistent | [Assistent aktivieren und ab App-Start benutzen](#app-assistant) | application | lokale Funktion | nein | nein |
 | App und Assistent | [Ausgeführte Agentenbefehle und Gesprächskontext nachschlagen](#app-command_history) | assistant | lokale Funktion | nein | ja* |
-| App und Assistent | [Manuelle Demonstration für Forschung (Debug)](#app-demonstration) | dataset | lokale Funktion | nein | nein |
 | App und Assistent | [Textparameter für einen Skriptauftrag eingeben](#app-script_input) | application | lokale Funktion | nein | nein |
 | App und Assistent | [Hauptmenü, Auswahl, Einstellungen und Assistent aufrufen](#app-navigation) | application | nur UI | nein | nein |
 | App und Assistent | [Hilfe, Über und Datenschutz anzeigen](#app-help) | application | nur UI | nein | nein |
@@ -109,10 +108,10 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 - Native Agentenwerkzeuge: fehlen
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
 - Zustandsabfrage: Appweite Sitzung mit Text/Sprache, App-Zustand, begrenzter Katalogsuche und autorisiertem Öffnen ohne vorherigen Renderer. Geplante Übergänge verwerfen alte Werkzeugpläne und erfordern frische Zustandsabfrage.
-- Lücke: Import-/Fusionsjobs und weitere fachliche App-Aufträge folgen noch. Fremde Kontextwechsel stoppen laufende Arbeit.
+- Lücke: Gelernte persönliche Routinen und gemeinsames Erkunden sind nicht implementiert. Fremde Datensatzwechsel stoppen laufende Arbeit.
 - Nächster Schritt: Weitere App-Werkzeuge über die Bridge ergänzen; keine automatische Mikrofonaufnahme.
-- Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [macOSApp/ModeSelectionView.swift](../macOSApp/ModeSelectionView.swift), [iOSApp/ModeSelectionView.swift](../iOSApp/ModeSelectionView.swift), [VisionApp/ModeSelectionView.swift](../VisionApp/ModeSelectionView.swift), [BorgVRAgentServer/PROTOCOL.md](../BorgVRAgentServer/PROTOCOL.md)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_next_runtime.py](../BorgVRAgentServer/tests/test_next_runtime.py)
+- Quellen: [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentViews.swift](../AppSupport/Voice/VoiceAgentViews.swift), [macOSApp/ModeSelectionView.swift](../macOSApp/ModeSelectionView.swift), [iOSApp/ModeSelectionView.swift](../iOSApp/ModeSelectionView.swift), [VisionApp/ModeSelectionView.swift](../VisionApp/ModeSelectionView.swift), [AppSupport/Voice/ARCHITECTURE.md](../AppSupport/Voice/ARCHITECTURE.md)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/AssistantCoreTests.swift](../Tests/AssistantCoreTests.swift)
 
 <a id="app-command_history"></a>
 ### Ausgeführte Agentenbefehle und Gesprächskontext nachschlagen
@@ -125,22 +124,8 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 - Zustandsabfrage: Bestätigte Parameter und freigegebene Ergebnisse sowie frühere Nutzernachrichten und finale Antworten getrennt abfragen; optional ein laufendes Gespräch verschlüsselt auf dem Gerät speichern und laden.
 - Lücke: Kein geräteübergreifendes Archiv. Keine Bilder, ungeklärten Ausführungen oder Freigaben zur Wiederholung.
 - Nächster Schritt: Archiv und serverseitiges Erfahrungswissen getrennt behandeln.
-- Quellen: [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentConversationStore.swift](../AppSupport/Voice/VoiceAgentConversationStore.swift), [BorgVRAgentServer/borgvr_next/session.py](../BorgVRAgentServer/borgvr_next/session.py)
+- Quellen: [AppSupport/Voice/VoiceAgentProtocol.swift](../AppSupport/Voice/VoiceAgentProtocol.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/VoiceAgentConversationStore.swift](../AppSupport/Voice/VoiceAgentConversationStore.swift), [AppSupport/Voice/BorgVRAssistantCore.swift](../AppSupport/Voice/BorgVRAssistantCore.swift)
 - Vorhandene Testquellen: [Tests/VoiceAgentPolicyTests.swift](../Tests/VoiceAgentPolicyTests.swift), [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
-
-<a id="app-demonstration"></a>
-### Manuelle Demonstration für Forschung (Debug)
-
-- Kennung: `app.demonstration`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: lokaler Export; Renderbilder nur nach separater Freigabe; kein Audio.
-- Register: kein spezifischer Command/UI-Registereintrag
-- MCP: fehlt
-- Native Agentenwerkzeuge: fehlen
-- Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: Nur im Debug-Build: Command-Kategorien und optionale Ansichtswerte exportieren; auf Wunsch zwei Renderbilder lokal exportieren.
-- Lücke: Kein Aufnahmemodus im normalen UI. Der Forschungsdienst und die Modellvergleiche übernehmen keine Regeln in den Assistenten.
-- Nächster Schritt: Werkzeugabdeckung und getrenntes Fachwissen haben Vorrang; spätere Beobachtung in die normale Bedienung integrieren.
-- Quellen: [AppSupport/Voice/WorkflowDemonstration.swift](../AppSupport/Voice/WorkflowDemonstration.swift), [AppSupport/Voice/WorkflowUpload.swift](../AppSupport/Voice/WorkflowUpload.swift), [BorgVRAgentServer/WORKFLOW_LEARNER.md](../BorgVRAgentServer/WORKFLOW_LEARNER.md)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift)
 
 <a id="app-script_input"></a>
 ### Textparameter für einen Skriptauftrag eingeben
@@ -238,7 +223,7 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 - Lücke: Keine semantische Vektorsuche und keine gesicherte Vollständigkeit nicht erreichbarer Quellen. Treffer sind Metadatenbelege, keine Diagnose oder Segmentierung.
 - Nächster Schritt: Bei Bedarf gezielte Filter und Quellenstatus ergänzen; gemeinsame Suchimplementierung für UI/MCP/Agent beibehalten.
 - Quellen: [BORGVR-Services/BorgVRDatasetSearch.swift](../BORGVR-Services/BorgVRDatasetSearch.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_next_runtime.py](../BorgVRAgentServer/tests/test_next_runtime.py)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/AssistantCoreTests.swift](../Tests/AssistantCoreTests.swift)
 
 <a id="datasets-open"></a>
 ### Datensatz öffnen und Laden abbrechen
@@ -249,10 +234,10 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 - Native Agentenwerkzeuge: `open_dataset`
 - Benannte GSC-Befehle (macOS): `opendataset`
 - Zustandsabfrage: Autorisiertes Öffnen eines kürzlich zurückgelieferten Suchtreffers über denselben Command-Service. Korrelierte Öffnungs-ID, Warten auf Rendererbereitschaft, neue Werkzeuge und erneute Zustandsabfrage vor Fortsetzung.
-- Lücke: Noch kein allgemeiner Jobvertrag. Pro Auftrag höchstens ein Öffnen; bereits begonnener Ladevorgang wird beim Abbruch nicht automatisch rückgängig gemacht.
+- Lücke: Noch kein allgemeiner Jobvertrag. Ein bereits begonnener Ladevorgang wird beim Abbruch nicht automatisch rückgängig gemacht.
 - Nächster Schritt: Bei Bedarf Öffnungsfortschritt als allgemeinen Job exponieren; unbekannte IDs, fremde Übergänge und automatische Befehlswiederholung weiter abweisen.
-- Quellen: [AppSupport/Datasets/DatasetOpenWorkflow.swift](../AppSupport/Datasets/DatasetOpenWorkflow.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [BorgVRAgentServer/borgvr_next/session.py](../BorgVRAgentServer/borgvr_next/session.py)
-- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [BorgVRAgentServer/tests/test_next_runtime.py](../BorgVRAgentServer/tests/test_next_runtime.py)
+- Quellen: [AppSupport/Datasets/DatasetOpenWorkflow.swift](../AppSupport/Datasets/DatasetOpenWorkflow.swift), [BORGVR-Services/BorgVRMCPServer.swift](../BORGVR-Services/BorgVRMCPServer.swift), [AppSupport/Voice/VoiceAgentController.swift](../AppSupport/Voice/VoiceAgentController.swift), [AppSupport/Voice/BorgVRVoiceAgentBridge.swift](../AppSupport/Voice/BorgVRVoiceAgentBridge.swift), [AppSupport/Voice/BorgVRAssistantCore.swift](../AppSupport/Voice/BorgVRAssistantCore.swift)
+- Vorhandene Testquellen: [Tests/VoiceAgentTests.swift](../Tests/VoiceAgentTests.swift), [Tests/AssistantCoreTests.swift](../Tests/AssistantCoreTests.swift)
 
 <a id="datasets-close"></a>
 ### Datensatz schließen und Zustand sichern
@@ -629,7 +614,7 @@ Der Agent verwendet den je Verbindung von BorgVR gelieferten Werkzeugkatalog.
 - Zustandsabfrage: Grobe Z-Projektion eines einzelnen normierten Intensitätsbandes; keine Änderung der Ansichts-TF.
 - Lücke: Feste Ansicht aus der niedrigsten Volumenauflösung, keine exakte Live-Ansicht.
 - Nächster Schritt: Laufzeit und Treffer auf repräsentativen Datensätzen messen.
-- Quellen: [AppSupport/Voice/VoiceAgentVolumePreview.swift](../AppSupport/Voice/VoiceAgentVolumePreview.swift), [AppSupport/Voice/knowledge-bundle.json](../AppSupport/Voice/knowledge-bundle.json), [BorgVRAgentServer/borgvr_next/preview_compute.py](../BorgVRAgentServer/borgvr_next/preview_compute.py)
+- Quellen: [AppSupport/Voice/VoiceAgentVolumePreview.swift](../AppSupport/Voice/VoiceAgentVolumePreview.swift), [AppSupport/Voice/assistant-knowledge.json](../AppSupport/Voice/assistant-knowledge.json), [AppSupport/Voice/BorgVRAssistantCore.swift](../AppSupport/Voice/BorgVRAssistantCore.swift)
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
 <a id="tf-samples"></a>
@@ -1307,4 +1292,4 @@ Weitere lokale Einstellungen (etwa Serverlisten, Panel-Layout, Assistent und Erk
 Neue Registereinträge müssen einer Funktionsgruppe zugeordnet werden. Neue freie UI-Aktionen ohne Register werden dadurch nicht automatisch erkannt.
 Die Quellenliste muss deshalb bei UI-Änderungen mitgepflegt werden. Ein UI-Button oder ein generischer `writeFiles`-Command ersetzt keinen fachlichen Import-/Exportauftrag.
 Betriebssystemdialoge und Hardwareberechtigungen bleiben lokale Vermittlung; die fachliche Aktion soll trotzdem über denselben Command-Service erreichbar werden.
-Startarchitektur, fehlende Aufträge und Abnahmekriterien: [Umsetzungsplan](CAPABILITY_PLAN.md).
+Startarchitektur, fehlende Aufträge und Abnahmekriterien: [Architektur](../AppSupport/Voice/ARCHITECTURE.md).

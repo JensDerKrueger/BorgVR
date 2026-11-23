@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 import configure
-from configure import AGENT_UID, AGENT_GID, DEFAULT_AGENT_IMAGE, PYTHON_IMAGE, create_configuration, hostname
+from configure import SERVICE_UID, SERVICE_GID, PYTHON_IMAGE, create_configuration, hostname
 
 
 @pytest.mark.parametrize("value", ["ai.example.org", "localhost", "192.168.1.2", "::1"])
@@ -30,12 +30,10 @@ def test_bad_hostnames(value):
 def test_configuration_is_non_destructive_and_private(tmp_path):
     create_configuration(tmp_path, "ai.example.org", "127.0.0.1", 8766, "0")
     env = (tmp_path / ".env").read_bytes()
-    token = (tmp_path / "runtime/secrets/agent_token").read_bytes()
     other_token = (tmp_path / "runtime/secrets/vllm_token").read_bytes()
-    assert token != other_token and len(token.strip()) >= 32
+    assert not (tmp_path / "runtime/secrets/agent_token").exists() and len(other_token.strip()) >= 32
     assert (tmp_path / ".env").stat().st_mode & 0o777 == 0o600
     assert (tmp_path / "runtime").stat().st_mode & 0o777 == 0o700
-    assert (tmp_path / "runtime/secrets/agent_token").stat().st_mode & 0o777 == 0o600
     assert (tmp_path / "runtime/secrets/vllm_token").stat().st_mode & 0o777 == 0o640
     cert = tmp_path / "runtime/tls/server.crt"
     output = subprocess.check_output(["openssl", "x509", "-in", str(cert), "-noout", "-text"], text=True)
@@ -43,12 +41,11 @@ def test_configuration_is_non_destructive_and_private(tmp_path):
     (tmp_path / "runtime/secrets/vllm_token").chmod(0o600)
     create_configuration(tmp_path, "different.example.org", "0.0.0.0", 9876, "1")
     assert (tmp_path / ".env").read_bytes() == env
-    assert (tmp_path / "runtime/secrets/agent_token").read_bytes() == token
     assert (tmp_path / "runtime/secrets/vllm_token").read_bytes() == other_token
     assert (tmp_path / "runtime/secrets/vllm_token").stat().st_mode & 0o777 == 0o640
 
 
-def test_sudo_configuration_keeps_agent_unprivileged(tmp_path, monkeypatch):
+def test_sudo_configuration_keeps_gateway_unprivileged(tmp_path, monkeypatch):
     changed = []
     monkeypatch.setattr(configure.os, "getuid", lambda: 0)
     monkeypatch.setattr(configure.os, "chown", lambda path, uid, gid: changed.append((path, uid, gid)))
@@ -56,12 +53,12 @@ def test_sudo_configuration_keeps_agent_unprivileged(tmp_path, monkeypatch):
     monkeypatch.setattr(configure, "prepare_runtime_access", lambda root: None)
     create_configuration(tmp_path, "192.168.1.2", "127.0.0.1", 8766, "0")
     env = (tmp_path / ".env").read_text()
-    assert f"BORGVR_UID={AGENT_UID}\n" in env and f"BORGVR_GID={AGENT_GID}\n" in env
-    assert f"BORGVR_AGENT_IMAGE={DEFAULT_AGENT_IMAGE}\n" in env
-    assert AGENT_UID != 0 and AGENT_GID != 0
+    assert f"BORGVR_UID={SERVICE_UID}\n" in env and f"BORGVR_GID={SERVICE_GID}\n" in env
+    assert "BORGVR_AGENT_IMAGE" not in env
+    assert SERVICE_UID != 0 and SERVICE_GID != 0
     mounts = tmp_path / "runtime"
-    assert set(changed) == {(mounts / name, AGENT_UID, AGENT_GID) for name in (
-        "secrets", "tls", "secrets/agent_token", "secrets/vllm_token", "tls/server.key", "tls/server.crt")}
+    assert set(changed) == {(mounts / name, SERVICE_UID, SERVICE_GID) for name in (
+        "secrets", "tls", "secrets/vllm_token", "tls/server.key", "tls/server.crt")}
     changed.clear()
     create_configuration(tmp_path, "localhost", "0.0.0.0", 9876, "1")
     assert not changed and (tmp_path / ".env").read_text() == env
@@ -157,13 +154,13 @@ def test_runtime_access_refuses_links_before_changing_permissions(tmp_path, monk
 def test_existing_init_prepares_runtime_access_without_replacing_configuration(tmp_path, monkeypatch):
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     env = (tmp_path / ".env").read_bytes()
-    token = (tmp_path / "runtime/secrets/agent_token").read_bytes()
+    token = (tmp_path / "runtime/secrets/vllm_token").read_bytes()
     prepared = []
     monkeypatch.setattr(configure, "prepare_runtime_access", lambda root: prepared.append(root))
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     assert prepared == [tmp_path]
     assert (tmp_path / ".env").read_bytes() == env
-    assert (tmp_path / "runtime/secrets/agent_token").read_bytes() == token
+    assert (tmp_path / "runtime/secrets/vllm_token").read_bytes() == token
 
 
 def test_partial_setup_never_replaces_secrets(tmp_path):
@@ -220,26 +217,23 @@ def test_shell_syntax_and_help():
 def test_deployment_has_no_public_inference_port_or_privileged_mode():
     root = Path(__file__).resolve().parents[1]
     text = (root / "compose.yaml").read_text()
-    inference = text.split("  agent:")[0]
+    inference = text.split("  model-gateway:")[0]
     assert "ports:" not in inference
     assert "privileged:" not in text and "ipc: host" not in text
     assert "@sha256:" in (root / "configure.py").read_text()
-    assert "--ssl-certfile" in (root / "Dockerfile").read_text()
+    assert "ssl_certificate " in (root / "model-gateway.conf").read_text()
     assert "--trust-remote-code" not in (root / "vllm_start.py").read_text()
     assert "build:" not in text
-    assert "build:" in (root / "compose.build.yaml").read_text()
-    base_image = next(line for line in (root / "Dockerfile").read_text().splitlines() if line.startswith("FROM "))
-    assert base_image == "FROM " + PYTHON_IMAGE
     vllm = yaml.safe_load(text)["services"]["vllm"]
     cuda = yaml.safe_load((root / "compose.cuda.yaml").read_text())["services"]["vllm"]
     assert cuda["group_add"] == ["${BORGVR_GID}"]
     assert vllm["cap_drop"] == ["ALL"] and "cap_add" not in vllm
 
 
-def test_agent_tmpfs_is_one_mount_with_security_options():
+def test_gateway_tmpfs_is_one_mount_with_security_options():
     path = Path(__file__).resolve().parents[1] / "compose.yaml"
-    agent = yaml.safe_load(path.read_text())["services"]["agent"]
-    assert agent["tmpfs"] == ["/tmp:size=64m,noexec,nosuid"]
+    agent = yaml.safe_load(path.read_text())["services"]["model-gateway"]
+    assert agent["tmpfs"] == ["/tmp:mode=1777,size=64m,noexec,nosuid"]
 
 
 def host_function(code, *args):
@@ -283,53 +277,6 @@ def executable(path, text):
     path.chmod(0o755)
 
 
-@pytest.mark.parametrize("prebuilt", [None, True, False])
-def test_install_docker_sequence_without_changing_host(tmp_path, prebuilt):
-    source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "firewall.py", "Dockerfile"):
-        shutil.copyfile(source / name, tmp_path / name)
-    binary = tmp_path / "bin"
-    binary.mkdir()
-    trace = tmp_path / "commands.jsonl"
-    executable(binary / "docker", '''#!/usr/bin/env python3
-import json,os,sys
-args=sys.argv[1:]
-with open(os.environ["TRACE"], "a") as handle:
-    handle.write(json.dumps(args)+"\\n")
-if "run" in args:
-    print(300*1024*1024 if any("disk_usage" in a for a in args) else "CUDA OK")
-if "inspect" in args and "--format" in args:
-    print("typed-v1")
-    sys.exit(0)
-sys.exit(1 if "inspect" in args else 0)
-''')
-    executable(binary / "uname", '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n')
-    executable(binary / "nvidia-smi", '#!/bin/sh\necho "NVIDIA test fixture"\n')
-    forbidden = tmp_path / "unexpected-privilege"
-    for name in ("sudo", "apt-get", "systemctl", "usermod"):
-        executable(binary / name, '#!/bin/sh\ntouch "$FORBIDDEN"\nexit 99\n')
-    env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
-           "TRACE": str(trace), "FORBIDDEN": str(forbidden)}
-    args = ["bash", str(tmp_path / "setup.sh"), "install", "--host", "ai.example.org"]
-    if prebuilt is not None:
-        args.append("--prebuilt-agent" if prebuilt else "--build-agent")
-    if prebuilt is True:
-        args.extend(("--agent-image", "example.org/borgvr-agent:test"))
-    result = subprocess.run(args, env=env, capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
-    assert not forbidden.exists()
-    calls = [json.loads(line) for line in trace.read_text().splitlines()]
-    assert all(call[:2] == ["--host", "unix:///var/run/docker.sock"] for call in calls)
-    assert any("build" in call for call in calls) is (prebuilt is not True)
-    assert any(call[-2:] == ["pull", "example.org/borgvr-agent:test"] for call in calls) is (prebuilt is True)
-    assert any("up" in call and "--no-build" in call and "never" in call for call in calls)
-    assert not any("down" in call for call in calls)
-    probes = [i for i, call in enumerate(calls) if "run" in call and "--no-deps" in call]
-    assert len(probes) == 2 and max(probes) < next(i for i, call in enumerate(calls) if "up" in call)
-    if prebuilt is not True:
-        assert DEFAULT_AGENT_IMAGE in (tmp_path / ".env").read_text()
-
-
 def test_user_setup_docker_access_failure_never_falls_back_to_sudo(tmp_path):
     source = Path(__file__).resolve().parents[1]
     for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "firewall.py"):
@@ -346,18 +293,12 @@ def test_user_setup_docker_access_failure_never_falls_back_to_sudo(tmp_path):
     assert not marker.exists()
 
 
-def test_image_modes_cannot_be_mixed():
-    script = Path(__file__).resolve().parents[1] / "setup.sh"
-    for args in (("install", "--build-agent", "--prebuilt-agent"), ("init", "--build-agent")):
-        result = subprocess.run(["bash", str(script), *args], capture_output=True, text=True)
-        assert result.returncode == 1
-
-
 @pytest.fixture
 def operations(tmp_path):
     source = Path(__file__).resolve().parents[1]
     for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "uninstall.py", "firewall.py"):
         shutil.copyfile(source / name, tmp_path / name)
+    (tmp_path / "check_model.py").write_text("print('synthetic endpoint test')\n")
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     binary = tmp_path / "bin"
     binary.mkdir()
@@ -404,7 +345,7 @@ def test_gpu_access_matches_explicit_configuration(operations, all_gpus):
     selected = str(root / ("compose.cuda-all.yaml" if all_gpus else "compose.cuda.yaml"))
     other = str(root / ("compose.cuda.yaml" if all_gpus else "compose.cuda-all.yaml"))
     compose_calls = [call["args"] for call in calls if "--project-directory" in call["args"]]
-    assert compose_calls and all(selected in call and other not in call for call in compose_calls)
+    assert (compose_calls or command == "test") and all(selected in call and other not in call for call in compose_calls)
 
 
 def test_dual_gpu_probe_checks_both_devices_and_rejects_missing_device(operations, monkeypatch):
@@ -512,54 +453,6 @@ def test_nvidia_driver_uses_wsl_fallback_only_when_not_on_path(tmp_path):
     assert check().returncode == 13  # A broken driver must not be hidden by the fallback.
 
 
-def test_update_downloads_and_probes_before_persisting_then_tests_model(operations):
-    root, run = operations
-    original = (root / ".env").read_bytes()
-    token = (root / "runtime/secrets/vllm_token").read_bytes()
-    image = "ghcr.io/jensderkrueger/borgvr-agent:3.9.99"
-    result, calls = run("update", "--agent-image", image)
-    assert result.returncode == 0, result.stderr
-    args = [call["args"] for call in calls]
-    assert next(i for i, call in enumerate(args) if "pull" in call) < next(i for i, call in enumerate(args) if "run" in call)
-    assert next(i for i, call in enumerate(args) if "up" in call) < next(i for i, call in enumerate(args) if "exec" in call)
-    assert all(call["image"] == image for call in calls if "--project-directory" in call["args"])
-    backups = list((root / "runtime").glob("env-before-update-*"))
-    assert len(backups) == 1 and backups[0].read_bytes() == original
-    assert backups[0].stat().st_mode & 0o777 == 0o600
-    assert (root / ".env").read_text() == original.decode().replace(DEFAULT_AGENT_IMAGE, image)
-    assert (root / ".env").stat().st_mode & 0o777 == 0o600
-    assert (root / "runtime/secrets/vllm_token").read_bytes() == token
-
-
-@pytest.mark.parametrize("failure", ["pull", "run"])
-def test_failed_update_preparation_preserves_running_configuration(operations, failure):
-    root, run = operations
-    original = (root / ".env").read_bytes()
-    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.99", failure=failure)
-    assert result.returncode != 0
-    assert (root / ".env").read_bytes() == original
-    assert not list((root / "runtime").glob("env-before-update-*"))
-    assert not any("up" in call["args"] or "stop" in call["args"] for call in calls)
-
-
-def test_install_rejects_old_prebuilt_image_before_tearing_down_existing_services(operations):
-    root, run = operations
-    original = (root / ".env").read_bytes()
-    result, calls = run("install", "--agent-image", "example.org/borgvr-agent:old", failure="old-runtime")
-    assert result.returncode != 0 and "not the current typed-v1 agent" in result.stderr
-    assert all(not {"down", "up", "stop"}.intersection(call["args"]) for call in calls)
-    assert (root / ".env").read_bytes() == original
-
-
-def test_failed_update_start_keeps_backup_and_reports_failure(operations):
-    root, run = operations
-    original = (root / ".env").read_bytes()
-    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.99", failure="up")
-    assert result.returncode != 0 and "Update did not become healthy" in result.stderr
-    assert next((root / "runtime").glob("env-before-update-*")).read_bytes() == original
-    assert not any("exec" in call["args"] for call in calls)
-
-
 def test_update_without_new_image_keeps_pins(operations):
     root, run = operations
     original = (root / ".env").read_bytes()
@@ -568,7 +461,7 @@ def test_update_without_new_image_keeps_pins(operations):
     assert (root / ".env").read_bytes() == original
     assert not list((root / "runtime").glob("env-before-update-*"))
     assert any("pull" in call["args"] for call in calls)
-    assert any("exec" in call["args"] and "--smoke" in call["args"] for call in calls)
+    assert "synthetic endpoint test" in result.stdout
 
 
 @pytest.mark.parametrize("command", ["start", "stop", "restart", "status", "logs", "test"])
@@ -577,7 +470,7 @@ def test_operation_commands_only_address_this_deployment(operations, command):
     result, calls = run(command)
     assert result.returncode == 0, result.stderr
     compose_calls = [call["args"] for call in calls if "--project-directory" in call["args"]]
-    assert compose_calls and all(str(root / "compose.yaml") in call and str(root / ".env") in call for call in compose_calls)
+    assert (compose_calls or command == "test") and all(str(root / "compose.yaml") in call and str(root / ".env") in call for call in compose_calls)
     assert not any("pull" in call for call in compose_calls)
     if command == "restart":
         assert next(i for i, call in enumerate(compose_calls) if "stop" in call) < next(i for i, call in enumerate(compose_calls) if "up" in call)
@@ -603,30 +496,6 @@ def test_operation_flags_do_not_change_unrelated_settings(operations):
         assert result.returncode != 0 and (root / ".env").read_bytes() == original
 
 
-def test_image_update_refuses_symlinked_env(tmp_path):
-    outside = tmp_path / "outside"
-    outside.write_text("BORGVR_AGENT_IMAGE=original:1\n")
-    (tmp_path / ".env").symlink_to(outside)
-    with pytest.raises(ValueError):
-        configure.set_agent_image(tmp_path, "replacement:1")
-    assert outside.read_text() == "BORGVR_AGENT_IMAGE=original:1\n"
-
-
-def test_image_update_failure_keeps_original_and_private_backup(operations, monkeypatch):
-    root, _ = operations
-    original = (root / ".env").read_bytes()
-
-    def failed_replace(*args):
-        raise OSError("Simulated atomic replacement failure")
-
-    monkeypatch.setattr(configure.os, "replace", failed_replace)
-    with pytest.raises(OSError):
-        configure.set_agent_image(root, "replacement:1")
-    assert (root / ".env").read_bytes() == original
-    assert next((root / "runtime").glob("env-before-update-*")).read_bytes() == original
-    assert not list(root.glob(".env-update-*"))
-
-
 def test_configure_profile_and_backend_changes_no_containers(operations):
     root, run = operations
     result, calls = run("configure", "--profile", "qwen35-4b", "--backend", "rocm", "--gpu", "1")
@@ -645,19 +514,19 @@ def test_reinstall_removes_old_containers_before_gpu_probe_without_deleting_data
     configure.write_configuration_changes(root, {"BORGVR_BACKEND": backend})
     original = (root / ".env").read_bytes()
     cert = (root / "runtime/tls/server.crt").read_bytes()
-    tokens = [(root / "runtime/secrets" / name).read_bytes() for name in ("agent_token", "vllm_token")]
+    tokens = [(root / "runtime/secrets" / name).read_bytes() for name in ("vllm_token",)]
     # Switch to CUDA after shutting down the previously configured backend.
     result, calls = run("install", "--backend", "cuda")
     assert result.returncode == 0, result.stderr
     args = [call["args"] for call in calls]
     down = next(i for i, call in enumerate(args) if "down" in call)
     assert str(root / f"compose.{backend}.yaml") in args[down]
-    assert args[down][-1] == "down" and "-v" not in args[down] and "--volumes" not in args[down]
+    assert args[down][-2:] == ["down", "--remove-orphans"] and "-v" not in args[down] and "--volumes" not in args[down]
     assert down < next(i for i, call in enumerate(args) if "run" in call)
     assert down < next(i for i, call in enumerate(args) if "up" in call)
     assert not any("rmi" in call or "prune" in call or "volume" in call for call in args)
     assert (root / "runtime/tls/server.crt").read_bytes() == cert
-    assert [(root / "runtime/secrets" / name).read_bytes() for name in ("agent_token", "vllm_token")] == tokens
+    assert [(root / "runtime/secrets" / name).read_bytes() for name in ("vllm_token",)] == tokens
     if backend == "cuda":
         assert (root / ".env").read_bytes() == original
 
@@ -668,14 +537,14 @@ def test_reinstall_changes_network_and_certificate_but_preserves_tokens(operatio
     original = (root / ".env").read_bytes()
     cert = (root / "runtime/tls/server.crt").read_bytes()
     key = (root / "runtime/tls/server.key").read_bytes()
-    token = (root / "runtime/secrets/agent_token").read_bytes()
+    token = (root / "runtime/secrets/vllm_token").read_bytes()
     result, calls = run("install", "--host", host, "--bind", "0.0.0.0", "--port", "9876")
     assert result.returncode == 0, result.stderr
     assert configure.read_value("BORGVR_BIND_ADDRESS", root) == "0.0.0.0"
     assert configure.read_value("BORGVR_PORT", root) == "9876"
     assert configure.certificate_matches(root / "runtime/tls", host)
     assert configure.certificate_matches(root / "runtime/tls", "127.0.0.1")
-    assert (root / "runtime/secrets/agent_token").read_bytes() == token
+    assert (root / "runtime/secrets/vllm_token").read_bytes() == token
     backup = next((root / "runtime").glob("tls-before-install-*"))
     assert (backup / "server.crt").read_bytes() == cert and (backup / "server.key").read_bytes() == key
     assert backup.stat().st_mode & 0o777 == 0o700
@@ -714,7 +583,7 @@ def test_failed_reinstall_config_write_restores_certificate(operations, monkeypa
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
     args = parser.parse_args([])
-    args.host, args.bind, args.port, args.agent_image, args.check = "ai1", "0.0.0.0", None, None, False
+    args.host, args.bind, args.port, args.check = "ai1", "0.0.0.0", None, False
     original = (root / ".env").read_bytes()
     files = {name: (root / "runtime/tls" / name).read_bytes() for name in ("server.crt", "server.key")}
 
@@ -731,7 +600,7 @@ def test_failed_reinstall_config_write_restores_certificate(operations, monkeypa
 
 def test_model_switch_is_one_command_and_preserves_credentials(operations):
     root, run = operations
-    token = (root / "runtime/secrets/agent_token").read_bytes()
+    token = (root / "runtime/secrets/vllm_token").read_bytes()
     cert = (root / "runtime/tls/server.crt").read_bytes()
     for profile, model in (("qwen35-4b", "Qwen/Qwen3.5-4B"),
                            ("qwen38-27b", "Qwen/Qwen3.8-27B"),
@@ -739,10 +608,10 @@ def test_model_switch_is_one_command_and_preserves_credentials(operations):
         result, calls = run("model", profile)
         assert result.returncode == 0, result.stderr
         assert configure.read_value("BORGVR_MODEL", root) == model
-        assert (root / "runtime/secrets/agent_token").read_bytes() == token
+        assert (root / "runtime/secrets/vllm_token").read_bytes() == token
         assert (root / "runtime/tls/server.crt").read_bytes() == cert
         assert any("up" in call["args"] for call in calls)
-        assert any("--capabilities" in call["args"] for call in calls)
+        assert "synthetic endpoint test" in result.stdout
         assert not any("down" in call["args"] or "volume" in call["args"] for call in calls)
 
 

@@ -174,7 +174,6 @@ struct VisionApp: App {
     .onChange(of: scenePhase, initial: true) { _, phase in
       BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
       if phase == .background {
-        voiceAgent.pauseDemonstration()
         voiceAgent.disconnect()
         saveOpenDatasetState()
       }

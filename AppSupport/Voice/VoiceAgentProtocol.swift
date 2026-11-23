@@ -10,19 +10,17 @@ enum VoiceAgentSpeechRate {
     value.isFinite ? min(range.upperBound, max(range.lowerBound, value)) : defaultMultiplier
   }
 }
-
 enum VoiceAgentError: LocalizedError, Equatable {
   case configuration, protocolViolation, contextChanged, timedOut, imageTooLarge
   case permissions, speechUnavailable, connection, commandFailed
+  case modelDeclined
   case contextLimit, changesAppliedContextLimit, changesAppliedVerificationFailed, completionUncertain
-  case serverUpdateRequired
 
   var errorDescription: String? {
     let key: String
     switch self {
       case .configuration: key = "Check the HTTPS server address, access token and certificate."
-      case .serverUpdateRequired: key = "Update the agent server to use the app-wide assistant."
-      case .protocolViolation: key = "The agent sent an invalid or unsupported message. The connection was closed."
+      case .protocolViolation: key = "The assistant received an invalid decision or knowledge file."
       case .contextChanged: key = "The dataset or edit state changed. Start a new conversation."
       case .timedOut: key = "The agent did not respond in time. Start a new conversation."
       case .imageTooLarge: key = "The render image could not be prepared for the agent."
@@ -30,6 +28,7 @@ enum VoiceAgentError: LocalizedError, Equatable {
       case .speechUnavailable: key = "Speech recognition is unavailable. Try text input or change the on-device recognition setting."
       case .connection: key = "The agent connection failed. Check the server, token, certificate and network access."
       case .commandFailed: key = "The command could not be completed. Inspect the visualization before continuing."
+      case .modelDeclined: key = "The model declined this request. No further action was taken."
       case .contextLimit: key = "The request exceeds the AI model's context. Start a new conversation or shorten the request."
       case .changesAppliedContextLimit: key = "Changes were applied, but the AI model's context was exhausted before the final check. Inspect the visualization and start a new conversation."
       case .changesAppliedVerificationFailed: key = "Changes were applied, but the final check could not be completed. Inspect the visualization before continuing."
@@ -41,29 +40,23 @@ enum VoiceAgentError: LocalizedError, Equatable {
 
 struct VoiceAgentEndpoint: Equatable {
   let origin: URL
-  let socket: URL
   let host: String
 
   init(_ value: String) throws {
     guard value.utf8.count <= 2048,
           var parts = URLComponents(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
-          ["https", "wss"].contains(parts.scheme?.lowercased() ?? ""),
+          parts.scheme?.lowercased() == "https",
           let host = parts.host, !host.isEmpty, host != "0.0.0.0", host != "::",
           parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
-          parts.path.isEmpty || parts.path == "/",
+          ["", "/", "/v1", "/v1/"].contains(parts.path),
           parts.port == nil || (1...65535).contains(parts.port!),
           !host.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains($0) })
     else { throw VoiceAgentError.configuration }
     self.host = host.hasPrefix("[") ? String(host.dropFirst().dropLast()) : host
     parts.scheme = "https"
-    parts.port = parts.port ?? 8766
     parts.path = ""
     guard let origin = parts.url else { throw VoiceAgentError.configuration }
     self.origin = origin
-    parts.scheme = "wss"
-    parts.path = "/v1/session"
-    guard let socket = parts.url else { throw VoiceAgentError.configuration }
-    self.socket = socket
   }
 
   static func validateToken(_ token: String) throws {
@@ -114,7 +107,7 @@ enum VoiceAgentPolicy {
     "remove_object", "remove_measurement", "clear_annotations",
     "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions"
   ]
-  static let typedOnlyTools: Set<String> = [
+  static let additionalTools: Set<String> = [
     "set_transfer_function_component", "capture_tf_preview",
   ]
   static let intensityPreviewTool: [String: Any] = [
@@ -130,40 +123,6 @@ enum VoiceAgentPolicy {
                                     "wait_until_rendered", "capture_screenshot", "capture_tf_preview", "pick_screenshot_positions", "list_objects", "list_measurements",
                                     "get_volume_edit_state", "wait_volume_edits", "get_command_history", "get_import_status"]
 
-  private static let readRoles = ["get_application_state": "application_state", "search_datasets": "catalog_search",
-                                  "capture_screenshot": "render_image", "capture_tf_preview": "render_image",
-                                  "get_volume_edit_state": "edit_state"]
-  private static let annotationDeletions: Set<String> = ["remove_object", "remove_measurement", "clear_annotations"]
-
-  static func wireCatalog(_ tools: [[String: Any]], typed: Bool) -> [[String: Any]] {
-    guard typed else {
-      return tools.filter { entry in
-        (entry["name"] as? String).map { !typedOnlyTools.contains($0) } ?? true
-      }
-    }
-    return tools.map { original in
-      guard let name = original["name"] as? String else { return original }
-      var entry = original
-      let transition = transitions[name]
-      var execution: [String: Any] = ["kind": transition != nil ? "transition" : reads.contains(name) ? "read" : "mutation"]
-      execution["role"] = readRoles[name]
-      execution["transition"] = transition
-      if fileTools.contains(name) {
-        execution["approval_group"] = "file_selection"
-      } else if annotationDeletions.contains(name) {
-        execution["approval_group"] = "annotation_delete"
-      } else if name == "edit_volume" {
-        execution["approval_group"] = "volume_edit"
-      } else if name == "delete_edit_state" {
-        execution["approval_group"] = "edit_state_delete"
-      }
-      execution["timeout_seconds"] = name == "open_dataset" ? 330
-        : fileTools.contains(name) || annotationDeletions.contains(name) || name == "delete_edit_state" ? 310
-        : name == "create_edit_state" ? 145 : name == "edit_volume" ? 135 : name == "search_datasets" ? 75 : 45
-      entry["execution"] = execution
-      return entry
-    }
-  }
   static let maximumVolumeEditSamples = 256
   static let applicationTools: Set<String> = conversionTools.union([
     "get_application_state", "search_datasets", "open_dataset", "get_command_history", "get_import_status", "cancel_import",
@@ -211,7 +170,7 @@ enum VoiceAgentPolicy {
         "offset": ["type": "integer", "minimum": 0, "maximum": maximumResultBytes],
       ]] as [String: Any]]
     return (definitions.filter { $0["name"] as? String != commandHistoryTool } + [history]).compactMap { original in
-      guard let name = original["name"] as? String, allowed.contains(name) || typedOnlyTools.contains(name) else { return nil }
+      guard let name = original["name"] as? String, allowed.contains(name) || additionalTools.contains(name) else { return nil }
       if !datasetReady && !applicationTools.contains(name) { return nil }
       if datasetReady && conversionTools.contains(name) { return nil }
       if vision && ["set_background", "set_screen_projection", "get_background"].contains(name) { return nil }
@@ -380,7 +339,7 @@ enum VoiceAgentPolicy {
   }
 }
 
-/// Confirmed tool receipts belong to the conversation, not to the WebSocket replay ledger.
+/// Confirmed tool receipts belong to the local conversation, never the model context window.
 struct VoiceAgentCommandHistory<Scope: Equatable & Codable>: Codable {
   private struct Receipt: Codable {
     let id: UUID
@@ -540,51 +499,5 @@ struct VoiceAgentCommandHistory<Scope: Equatable & Codable>: Codable {
     page["fragment"] = String(decoding: data[offset..<end], as: UTF8.self)
     if end < data.count { page["nextOffset"] = end }
     return page
-  }
-}
-
-/// Call IDs are connection-scoped, not turn-scoped. Replays must never repeat a mutation.
-struct VoiceAgentCallLedger {
-  struct Entry {
-    let signature: String
-    var reply: String?
-    var completed = false
-  }
-  private(set) var entries: [String: Entry] = [:]
-  private var bytes = 0
-  private var completedOrder: [String] = []
-
-  mutating func begin(id: String, signature: String) throws -> Entry? {
-    guard !id.isEmpty, id.utf8.count <= 128, signature.utf8.count <= VoiceAgentPolicy.maximumFrameBytes
-    else { throw VoiceAgentError.protocolViolation }
-    let digest = SHA256.hash(data: Data(signature.utf8)).map { String(format: "%02x", $0) }.joined()
-    if let previous = entries[id] {
-      guard previous.signature == digest, !previous.completed || previous.reply != nil
-      else { throw VoiceAgentError.protocolViolation }
-      return previous
-    }
-    guard entries.count < 8192
-    else { throw VoiceAgentError.protocolViolation }
-    entries[id] = Entry(signature: digest)
-    return nil
-  }
-
-  mutating func finish(id: String, reply: String) throws {
-    guard var entry = entries[id], !entry.completed, reply.utf8.count <= VoiceAgentPolicy.maximumFrameBytes
-    else { throw VoiceAgentError.protocolViolation }
-    // Evict reply bytes, but retain call-signature hashes so an old mutation can
-    // never execute again just because its screenshot has left the replay cache.
-    while bytes + reply.utf8.count > 8 * 1024 * 1024, !completedOrder.isEmpty {
-      let oldID = completedOrder.removeFirst()
-      if let oldReply = entries[oldID]?.reply {
-        bytes -= oldReply.utf8.count
-        entries[oldID]?.reply = nil
-      }
-    }
-    bytes += reply.utf8.count
-    entry.reply = reply
-    entry.completed = true
-    entries[id] = entry
-    completedOrder.append(id)
   }
 }

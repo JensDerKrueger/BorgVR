@@ -229,7 +229,7 @@ def test_docs_use_executable_commands_without_bash_labels():
     for name in ("README.md", "README.de.md"):
         text = (root / name).read_text()
         assert "```bash" not in text and "bash setup" not in text
-        assert "./setup.sh" in text and "./uninstall.py" in text
+        assert "./setup.sh uninstall" in text
     assert (root / "setup.sh").stat().st_mode & 0o111
     assert (root / "setup-host.sh").stat().st_mode & 0o111
     assert (root / "uninstall.py").stat().st_mode & 0o111

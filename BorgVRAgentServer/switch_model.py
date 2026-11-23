@@ -1,4 +1,4 @@
-"""Interactive model switching without replacing the agent image or development source."""
+"""Interactive model switching with rollback for the vLLM endpoint."""
 
 import argparse
 import fcntl
@@ -6,9 +6,9 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 import configure
-import development
 from model_config import PROFILES
 
 ROOT = Path(__file__).resolve().parent
@@ -37,6 +37,26 @@ def run_setup(root, command):
     subprocess.run(["bash", str(root / "setup.sh"), command], check=True)
 
 
+def configuration_bytes(path):
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 65536:
+        raise ValueError("Ungültige .env-Datei")
+    return path.read_bytes()
+
+
+def restore(path, data, owner):
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".env-restore-", delete=False) as staged:
+        target = Path(staged.name)
+        try:
+            if os.geteuid() == 0:
+                os.fchown(staged.fileno(), owner.st_uid, owner.st_gid)
+            staged.write(data)
+            staged.flush()
+            os.fsync(staged.fileno())
+            os.replace(target, path)
+        finally:
+            target.unlink(missing_ok=True)
+
+
 def switch(root, profile, *, context_length=None, run=run_setup):
     if profile not in PROFILES or profile == "custom":
         raise ValueError("Unbekanntes Modellprofil")
@@ -59,38 +79,34 @@ def switch(root, profile, *, context_length=None, run=run_setup):
     else:
         parser = argparse.ArgumentParser()
         configure.add_model_options(parser)
-        parser.add_argument("--agent-image")
         options = ["--profile", profile]
         if context_length is not None:
             options += ["--context-length", context_length]
         changes = configure.inference_values(parser.parse_args(options), existing)
-    if development.marker(root).exists() or development.marker(root).is_symlink():
-        development.overlay_file(root)
-        print("Entwicklungsmodus bleibt aktiv: Agentencode und SSH-Zugang bleiben erhalten.")
+    marker = runtime / "agent-development.json"
+    if marker.exists() or marker.is_symlink():
+        raise ValueError("Alten Entwicklungsmodus im vorherigen Checkout deaktivieren")
     print("GPU-Auswahl und Parallelisierung bleiben unverändert: "
           f"{existing.get('BORGVR_GPU', '0')}, TP={existing.get('BORGVR_TENSOR_PARALLEL_SIZE', '1')}")
     print("Laufende KI-Aufträge werden unterbrochen. Der erste Modelldownload kann lange dauern.")
-    original = development.read_file(env, 65536)
+    original = configuration_bytes(env)
     owner = env.stat()
     written = None
     restarting = False
     try:
         configure.write_configuration_changes(root, changes)
-        written = development.read_file(env, 65536)
+        written = configuration_bytes(env)
         run(root, "doctor")
         restarting = True
-        # Restart retains Compose's development overlay and never pulls/builds agent images.
         run(root, "restart")
         run(root, "test")
     except (Exception, KeyboardInterrupt):
-        current = development.read_file(env, 65536)
+        current = configuration_bytes(env)
         if current not in (original, written):
             print("Die Konfiguration wurde zwischenzeitlich geändert. Keine automatische Rücksetzung. "
                   "Sicherungen unter runtime/env-before-update-* prüfen.", file=sys.stderr)
             raise
-        development.atomic_file(env, original, 0o600)
-        if os.geteuid() == 0:
-            os.chown(env, owner.st_uid, owner.st_gid)
+        restore(env, original, owner)
         print("Modellwechsel fehlgeschlagen; bisherige Konfiguration wiederhergestellt.", file=sys.stderr)
         if restarting:
             try:
@@ -101,7 +117,7 @@ def switch(root, profile, *, context_length=None, run=run_setup):
                 print("Auch der Wiederanlauf ist fehlgeschlagen. Bitte sudo ./setup.sh logs prüfen; "
                       "die bisherige Konfiguration ist wieder eingestellt.", file=sys.stderr)
         raise
-    print("Modellwechsel erfolgreich. Bitte den Assistenten in BorgVR neu verbinden.")
+    print("Modellwechsel erfolgreich. BorgVR ermittelt das aktive Modell beim nächsten Auftrag.")
 
 
 def main():
@@ -120,7 +136,9 @@ def main():
     runtime = ROOT / "runtime"
     if runtime.is_symlink() or not runtime.is_dir():
         raise ValueError("Reguläres runtime-Verzeichnis erforderlich")
-    with development.deployment_lock(runtime):
+    flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW
+    with os.fdopen(os.open(runtime / "model-switch.lock", flags, 0o600), "wb") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
         switch(ROOT, profile, context_length=args.context_length)
 
 

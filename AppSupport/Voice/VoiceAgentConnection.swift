@@ -8,17 +8,13 @@ func voiceAgentText(_ key: String) -> String {
 }
 
 struct VoiceAgentConnectionIdentity: Equatable {
+  let provider: VoiceAgentModelProvider
+  let model: String
   let address: String
   let revision: UUID
   let enabled: Bool
   let images: Bool
   let workMinutes: Int
-  let knowledgeRevision: UUID
-}
-
-struct VoiceAgentRule: Codable, Identifiable, Equatable {
-  let id: UUID
-  let text: String
 }
 
 @MainActor
@@ -29,10 +25,17 @@ final class VoiceAgentSettings: ObservableObject {
   private let defaults: UserDefaults
   private let tokenAccount: String
   @Published var enabled: Bool { didSet { defaults.set(enabled, forKey: "voiceAgent.enabled") } }
+  @Published var provider: VoiceAgentModelProvider {
+    didSet {
+      defaults.set(provider.rawValue, forKey: "assistant.provider")
+      if provider != oldValue { changeArchiveOwner(); refreshTokenState() }
+    }
+  }
+  @Published var openAIModel: String { didSet { defaults.set(openAIModel, forKey: "assistant.openAIModel") } }
   @Published var address: String {
     didSet {
       defaults.set(address, forKey: "voiceAgent.address")
-      if address != oldValue { changeArchiveOwner(); sharesLearningTrace = false }
+      if address != oldValue { changeArchiveOwner() }
     }
   }
   @Published var speaks: Bool { didSet { defaults.set(speaks, forKey: "voiceAgent.speaks") } }
@@ -44,9 +47,8 @@ final class VoiceAgentSettings: ObservableObject {
     }
   }
   @Published var sharesImages: Bool { didSet { defaults.set(sharesImages, forKey: "voiceAgent.images") } }
-  @Published var sharesLearningTrace: Bool {
-    didSet { defaults.set(sharesLearningTrace, forKey: "voiceAgent.sharesLearningTrace"); refreshKnowledge() }
-  }
+  @Published var sharesOpenAIImages: Bool { didSet { defaults.set(sharesOpenAIImages, forKey: "assistant.openAIImages") } }
+  var sharesProviderImages: Bool { provider == .openAI ? sharesOpenAIImages : sharesImages }
   @Published var savesConversation: Bool { didSet { defaults.set(savesConversation, forKey: "voiceAgent.saveConversation") } }
   @Published var confirmsVolumeEdits: Bool { didSet { defaults.set(confirmsVolumeEdits, forKey: "voiceAgent.confirmVolumeEdits") } }
   @Published var onDeviceOnly: Bool { didSet { defaults.set(onDeviceOnly, forKey: "voiceAgent.onDeviceOnly") } }
@@ -58,40 +60,41 @@ final class VoiceAgentSettings: ObservableObject {
     }
   }
   @Published private(set) var certificate: Data
-  @Published private(set) var knowledgeRules: [VoiceAgentRule]
+  @Published private(set) var customKnowledge: Data?
   @Published private(set) var hasToken: Bool
   @Published private(set) var revision = UUID()
-  @Published private(set) var knowledgeRevision = UUID()
   private(set) var archiveOwnerID: UUID
 
   var identity: VoiceAgentConnectionIdentity {
-    .init(address: address, revision: revision, enabled: enabled, images: sharesImages, workMinutes: workMinutes,
-          knowledgeRevision: knowledgeRevision)
+    .init(provider: provider, model: provider == .openAI ? openAIModel : "", address: address, revision: revision,
+          enabled: enabled, images: sharesProviderImages, workMinutes: workMinutes)
   }
 
-  init(defaults: UserDefaults = .standard, tokenAccount: String = "voice-agent-token") {
+  init(defaults: UserDefaults = .standard, tokenAccount: String = "assistant-vllm-token") {
     self.defaults = defaults
     self.tokenAccount = tokenAccount
     enabled = defaults.bool(forKey: "voiceAgent.enabled")
-    address = defaults.string(forKey: "voiceAgent.address") ?? "https://ai1:8766"
+    let initialProvider = defaults.string(forKey: "assistant.provider").flatMap(VoiceAgentModelProvider.init(rawValue:)) ?? .vllm
+    provider = initialProvider
+    openAIModel = defaults.string(forKey: "assistant.openAIModel") ?? "gpt-6.2-sol"
+    address = defaults.string(forKey: "voiceAgent.address") ?? ""
     speaks = defaults.object(forKey: "voiceAgent.speaks") as? Bool ?? true
     speechRateMultiplier = VoiceAgentSpeechRate.normalized(
       defaults.object(forKey: "voiceAgent.speechRateMultiplier") as? Double ?? VoiceAgentSpeechRate.defaultMultiplier)
     sharesImages = defaults.object(forKey: "voiceAgent.images") as? Bool ?? true
-    sharesLearningTrace = defaults.bool(forKey: "voiceAgent.sharesLearningTrace")
+    sharesOpenAIImages = defaults.bool(forKey: "assistant.openAIImages")
     savesConversation = defaults.bool(forKey: "voiceAgent.saveConversation")
     confirmsVolumeEdits = defaults.object(forKey: "voiceAgent.confirmVolumeEdits") as? Bool ?? true
     archiveOwnerID = defaults.string(forKey: "voiceAgent.archiveOwner").flatMap(UUID.init(uuidString:)) ?? UUID()
     defaults.set(archiveOwnerID.uuidString, forKey: "voiceAgent.archiveOwner")
     onDeviceOnly = defaults.object(forKey: "voiceAgent.onDeviceOnly") as? Bool ?? true
     workMinutes = Self.normalizedWorkMinutes(defaults.object(forKey: "voiceAgent.workMinutes") as? Int ?? Self.defaultWorkMinutes)
-    defaults.removeObject(forKey: "voiceAgent.maximumCalls")
-    if let data = defaults.data(forKey: "voiceAgent.knowledge"), data.count <= 64 * 1024,
-       let rules = try? JSONDecoder().decode([VoiceAgentRule].self, from: data) {
-      knowledgeRules = Array(rules.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.text.count <= 500 }.prefix(16))
-    } else { knowledgeRules = [] }
+    customKnowledge = defaults.data(forKey: "assistant.knowledgePack").flatMap {
+      (try? AssistantKnowledge.load($0)) == nil ? nil : $0
+    }
     certificate = defaults.data(forKey: "voiceAgent.certificate") ?? Data()
-    hasToken = ((try? KeychainSecretStore.string(account: tokenAccount)) ?? "").isEmpty == false
+    let account = initialProvider == .openAI ? tokenAccount + "-openai" : tokenAccount
+    hasToken = ((try? KeychainSecretStore.string(account: account)) ?? "").isEmpty == false
   }
 
   private static func normalizedWorkMinutes(_ value: Int) -> Int {
@@ -99,71 +102,49 @@ final class VoiceAgentSettings: ObservableObject {
   }
 
   func token() throws -> String {
-    guard let value = try KeychainSecretStore.string(account: tokenAccount) else {
+    guard let value = try KeychainSecretStore.string(account: activeTokenAccount) else {
       throw VoiceAgentError.configuration
     }
     try VoiceAgentEndpoint.validateToken(value)
     return value
   }
 
-  func observerToken() -> String? {
-    guard let account = try? observerAccount() else { return nil }
-    return try? KeychainSecretStore.string(account: account)
+  private var activeTokenAccount: String { provider == .openAI ? tokenAccount + "-openai" : tokenAccount }
+
+  private func refreshTokenState() {
+    hasToken = ((try? KeychainSecretStore.string(account: activeTokenAccount)) ?? "").isEmpty == false
   }
 
-  func setObserverToken(_ raw: String) throws {
-    let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    let account = try observerAccount()
-    if token.isEmpty {
-      try KeychainSecretStore.delete(account: account)
-    } else {
-      guard token.hasPrefix("bn1_"), token.utf8.count == 68,
-            token.utf8.dropFirst(4).allSatisfy({ (48...57).contains($0) || (97...102).contains($0) })
-      else { throw VoiceAgentError.configuration }
-      try KeychainSecretStore.setString(token, account: account)
+  func selectKnowledge(_ data: Data?) throws {
+    if let data { _ = try AssistantKnowledge.load(data) }
+    customKnowledge = data
+    defaults.set(data, forKey: "assistant.knowledgePack")
+  }
+
+  func knowledge() throws -> AssistantKnowledge {
+    if let customKnowledge { return try AssistantKnowledge.load(customKnowledge) }
+    guard let url = Bundle.main.url(forResource: "assistant-knowledge", withExtension: "json") else {
+      throw VoiceAgentError.configuration
     }
-    sharesLearningTrace = false
+    return try AssistantKnowledge.load(Data(contentsOf: url))
   }
-
-  private func observerAccount() throws -> String {
-    let endpoint = try VoiceAgentEndpoint(address)
-    return tokenAccount + "-observer-" + VoiceAgentLearnerStore.digest(Data(endpoint.origin.absoluteString.utf8) + certificate)
-  }
-
-  func refreshKnowledge() { knowledgeRevision = UUID() }
 
   func setToken(_ value: String) throws {
     let token = value.trimmingCharacters(in: .whitespacesAndNewlines)
     if token.isEmpty {
-      try KeychainSecretStore.delete(account: tokenAccount)
+      try KeychainSecretStore.delete(account: activeTokenAccount)
     } else {
       try VoiceAgentEndpoint.validateToken(token)
-      try KeychainSecretStore.setString(token, account: tokenAccount)
+      try KeychainSecretStore.setString(token, account: activeTokenAccount)
     }
     hasToken = !token.isEmpty
-    sharesLearningTrace = false
     revision = UUID()
     changeArchiveOwner()
-  }
-
-  func rememberRule(_ text: String) throws {
-    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty, trimmed.count <= 500 else { throw VoiceAgentError.protocolViolation }
-    guard !knowledgeRules.contains(where: { $0.text == trimmed }) else { return }
-    guard knowledgeRules.count < 16 else { throw VoiceAgentError.configuration }
-    knowledgeRules.append(.init(id: UUID(), text: trimmed))
-    defaults.set(try JSONEncoder().encode(knowledgeRules), forKey: "voiceAgent.knowledge")
-  }
-
-  func forgetRule(id: UUID) {
-    knowledgeRules.removeAll { $0.id == id }
-    defaults.set(try? JSONEncoder().encode(knowledgeRules), forKey: "voiceAgent.knowledge")
   }
 
   func importCertificate(_ data: Data) throws {
     let der = try VoiceAgentTLS.certificateData(data)
     certificate = der
-    sharesLearningTrace = false
     defaults.set(der, forKey: "voiceAgent.certificate")
     revision = UUID()
     changeArchiveOwner()
@@ -171,7 +152,6 @@ final class VoiceAgentSettings: ObservableObject {
 
   func removeCertificate() {
     certificate = Data()
-    sharesLearningTrace = false
     defaults.removeObject(forKey: "voiceAgent.certificate")
     revision = UUID()
     changeArchiveOwner()
@@ -254,7 +234,7 @@ final class VoiceAgentTLS: NSObject, URLSessionTaskDelegate, @unchecked Sendable
     configuration.httpCookieStorage = nil
     configuration.urlCredentialStorage = nil
     configuration.urlCache = nil
-    configuration.timeoutIntervalForRequest = 15
+    configuration.timeoutIntervalForRequest = 180
     configuration.timeoutIntervalForResource = resourceTimeout
     return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
   }

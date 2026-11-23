@@ -20,8 +20,7 @@ from model_config import CUDA_IMAGE, ROCM_IMAGE, PROFILES, ModelConfig, profile_
 ROOT = Path(__file__).resolve().parent
 PYTHON_IMAGE = "python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70"
 VLLM_IMAGE = CUDA_IMAGE
-DEFAULT_AGENT_IMAGE = "borgvr-agent:next"
-AGENT_UID = AGENT_GID = 10001
+SERVICE_UID = SERVICE_GID = 10001
 
 
 def image_reference(value):
@@ -73,10 +72,6 @@ def write_configuration_changes(root, changes):
             temporary.unlink(missing_ok=True)
     prepare_runtime_access(root)
     print(f"Previous configuration saved privately: {backup}")
-
-
-def set_agent_image(root, image):
-    write_configuration_changes(root, {"BORGVR_AGENT_IMAGE": image_reference(image)})
 
 
 def read_configuration(root):
@@ -181,8 +176,6 @@ def inference_values(args, existing=None):
     values.update(BORGVR_BACKEND=backend, BORGVR_VLLM_IMAGE=image_reference(image), BORGVR_GPU=gpu,
                   BORGVR_RENDER_GID=device_group("render"), BORGVR_VIDEO_GID=device_group("video"))
     values["BORGVR_TENSOR_PARALLEL_SIZE"] = str(validate_model_gpu(values).tensor_parallel_size)
-    if args.agent_image:
-        values["BORGVR_AGENT_IMAGE"] = image_reference(args.agent_image)
     return {key: value for key, value in values.items() if key not in existing or existing[key] != value}
 
 
@@ -196,7 +189,7 @@ def prepare_shared_token(root):
         info = os.fstat(descriptor)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_gid != gid:
             raise ValueError("Internal token must be a regular private file owned by BORGVR_GID")
-        # The two containers share this group; neither needs a DAC-bypass capability.
+        # vLLM can read the secret without a DAC-bypass capability.
         os.fchmod(descriptor, 0o640)
     finally:
         os.close(descriptor)
@@ -234,8 +227,8 @@ def prepare_runtime_access(root):
         if owner is None:
             return  # A direct root installation without a sudo caller remains root-only.
         uid, gid = owner
-        agent_gid = int(read_value("BORGVR_GID", root))
-        if not 0 < agent_gid < 2**32 - 1:
+        service_gid = int(read_value("BORGVR_GID", root))
+        if not 0 < service_gid < 2**32 - 1:
             raise ValueError("BORGVR_GID must identify an unprivileged container group")
         records = []
 
@@ -249,7 +242,7 @@ def prepare_runtime_access(root):
             shared = relative in (("secrets",), ("tls",), ("secrets", "agent_token"),
                                   ("secrets", "vllm_token"), ("tls", "server.key"), ("tls", "server.crt"))
             mode = (0o750 if directory else 0o640) if shared else (0o700 if directory else 0o600)
-            records.append((descriptor, agent_gid if shared else gid, mode))
+            records.append((descriptor, service_gid if shared else gid, mode))
             if directory:
                 for name in os.listdir(descriptor):
                     inspect(opened(name, os.O_RDONLY, descriptor), (*relative, name))
@@ -335,7 +328,7 @@ def install_configuration(root, args):
         return
     if not (root / ".env").exists():
         create_configuration(root, args.host or "localhost", args.bind or "127.0.0.1", args.port or 8766,
-                             args.gpu or "0", args.agent_image or DEFAULT_AGENT_IMAGE, changes)
+                             args.gpu or "0", changes)
         return
     prepare_shared_token(root)
     prepare_runtime_access(root)
@@ -379,7 +372,7 @@ def generate_certificate(tls_dir, host):
     san = ",".join(dict.fromkeys([san, "DNS:localhost", "IP:127.0.0.1"]))
     subprocess.run([
         "openssl", "req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes",
-        "-days", "365", "-subj", "/CN=BorgVR Agent",
+        "-days", "365", "-subj", "/CN=BorgVR Model Endpoint",
         "-addext", f"subjectAltName={san}",
         "-addext", "basicConstraints=critical,CA:FALSE",
         "-addext", "extendedKeyUsage=serverAuth",
@@ -388,7 +381,7 @@ def generate_certificate(tls_dir, host):
     (tls_dir / "server.key").chmod(0o600)
 
 
-def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_IMAGE, inference=None):
+def create_configuration(root, host, bind, port, gpu, inference=None):
     env = root / ".env"
     if env.exists():
         prepare_shared_token(root)
@@ -396,7 +389,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
         print("Existing .env retained; credentials and certificates were not changed.")
         return
     privileged = os.getuid() == 0
-    uid, gid = (AGENT_UID, AGENT_GID) if privileged else (os.getuid(), os.getgid())
+    uid, gid = (SERVICE_UID, SERVICE_GID) if privileged else (os.getuid(), os.getgid())
     runtime = root / "runtime"
     if runtime.exists():
         raise ValueError("runtime exists without .env. Inspect it manually; refusing to replace existing secrets.")
@@ -407,19 +400,16 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
     secret_dir, tls_dir = runtime / "secrets", runtime / "tls"
     secret_dir.mkdir(mode=0o700)
     tls_dir.mkdir(mode=0o700)
-    for name in ("agent_token", "vllm_token"):
-        path = secret_dir / name
-        with open(path, "x", opener=lambda p, flags: os.open(p, flags, 0o600)) as handle:
-            handle.write((vllm_token if name == "vllm_token" else secrets.token_urlsafe(48)) + "\n")
+    with open(secret_dir / "vllm_token", "x", opener=lambda p, flags: os.open(p, flags, 0o600)) as handle:
+        handle.write(vllm_token + "\n")
     generate_certificate(tls_dir, host)
     if privileged:
         # Keep the container unprivileged while allowing access to its private mounts.
-        for path in (secret_dir, tls_dir, secret_dir / "agent_token", secret_dir / "vllm_token",
+        for path in (secret_dir, tls_dir, secret_dir / "vllm_token",
                      tls_dir / "server.key", tls_dir / "server.crt"):
             os.chown(path, uid, gid)
     values = {
         "BORGVR_VLLM_IMAGE": VLLM_IMAGE,
-        "BORGVR_AGENT_IMAGE": agent_image,
         **profile_values("qwen36-35b"),
         "BORGVR_BACKEND": "cuda", "BORGVR_RENDER_GID": device_group("render"),
         "BORGVR_VIDEO_GID": device_group("video"),
@@ -439,7 +429,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
     prepare_shared_token(root)
     prepare_runtime_access(root)
     print(f"Configuration created for https://{host}:{port}; listen address {bind}.")
-    print("Agent token: runtime/secrets/agent_token (not printed). Certificate: runtime/tls/server.crt")
+    print("Model token: runtime/secrets/vllm_token (not printed). Certificate: runtime/tls/server.crt")
 
 
 def read_value(name, root=ROOT):
@@ -471,23 +461,16 @@ def main():
     sub.add_parser("gpu-groups")
     sub.add_parser("profiles")
     change = sub.add_parser("configure")
-    change.add_argument("--agent-image", type=image_reference)
     add_model_options(change)
-    validate = sub.add_parser("validate-image")
-    validate.add_argument("image", type=image_reference)
-    update = sub.add_parser("set-agent-image")
-    update.add_argument("image", type=image_reference)
     init = sub.add_parser("init")
     init.add_argument("--host", type=hostname, default="localhost")
     init.add_argument("--bind", type=bind_address, default="127.0.0.1")
     init.add_argument("--port", type=int, choices=range(1024, 65536), metavar="1024..65535", default=8766)
     add_model_options(init)
-    init.add_argument("--agent-image", type=image_reference, default=DEFAULT_AGENT_IMAGE)
     install = sub.add_parser("install")
     install.add_argument("--host", type=hostname)
     install.add_argument("--bind", type=bind_address)
     install.add_argument("--port", type=int, choices=range(1024, 65536), metavar="1024..65535")
-    install.add_argument("--agent-image", type=image_reference)
     install.add_argument("--check", action="store_true")
     add_model_options(install)
     get = sub.add_parser("get")
@@ -507,10 +490,6 @@ def main():
             print(f"{name}: {values['MODEL'] or 'explicit model/revision/parser required'}; context {values['CONTEXT_LENGTH']}; disk reserve {values['MIN_FREE_GIB']} GiB")
     elif args.command == "configure":
         write_configuration_changes(ROOT, inference_values(args, read_configuration(ROOT)))
-    elif args.command == "validate-image":
-        return
-    elif args.command == "set-agent-image":
-        set_agent_image(ROOT, args.image)
     elif args.command == "prepare-secrets":
         prepare_shared_token(ROOT)
         prepare_runtime_access(ROOT)
@@ -520,7 +499,7 @@ def main():
         print(PYTHON_IMAGE)
     else:
         inference = inference_values(args)
-        create_configuration(ROOT, args.host, args.bind, args.port, args.gpu or "0", args.agent_image, inference)
+        create_configuration(ROOT, args.host, args.bind, args.port, args.gpu or "0", inference)
 
 
 if __name__ == "__main__":

@@ -11,13 +11,17 @@ xcrun swiftc -parse-as-library -module-cache-path "$TEMP/policy-modules" \
   "$ROOT/AppSupport/Voice/VoiceAgentAnnotationPolicy.swift" \
   "$ROOT/Tests/VoiceAgentPolicyTests.swift" -o "$TEMP/policy-tests"
 "$TEMP/policy-tests"
+xcrun swiftc -parse-as-library -module-cache-path "$TEMP/policy-modules" \
+  "$ROOT/AppSupport/Voice/VoiceAgentProtocol.swift" "$ROOT/AppSupport/Voice/VoiceAgentAnnotationPolicy.swift" \
+  "$ROOT/AppSupport/Voice/BorgVRAssistantCore.swift" "$ROOT/AppSupport/Voice/VoiceAgentModelClient.swift" \
+  "$ROOT/Tests/AssistantCoreTests.swift" -o "$TEMP/assistant-core-tests"
+"$TEMP/assistant-core-tests" "$ROOT/AppSupport/Voice/assistant-knowledge.json"
 if [ "$#" -eq 0 ]; then
-  printf 'For the native TLS/WSS/GSC integration test, pass <macOS Debug products directory> <agent-venv-python>.\n'
+  printf 'For native command, TLS and GSC integration, pass <macOS Debug products directory>.\n'
   exit 0
 fi
-PRODUCTS=${1:?Usage: test-voice-agent.sh <macOS Debug products directory> <agent-venv-python>}
-PYTHON=${2:?Pass the Python interpreter with BorgVRAgentServer test dependencies installed}
-PYTHONPATH="$ROOT/BorgVRAgentServer" "$PYTHON" -c '
+PRODUCTS=${1:?Usage: test-voice-agent.sh <macOS Debug products directory>}
+PYTHONPATH="$ROOT/BorgVRAgentServer" python3 -c '
 import sys
 from pathlib import Path
 from configure import create_configuration
@@ -27,4 +31,3 @@ xcrun swiftc -parse-as-library -module-cache-path "$TEMP/modules" -I "$PRODUCTS"
   "$ROOT/Tests/VoiceAgentTests.swift" "$PRODUCTS/BorgVR.app/Contents/MacOS/BorgVR.debug.dylib" \
   -Xlinker -rpath -Xlinker "$PRODUCTS/BorgVR.app/Contents/MacOS" -o "$TEMP/voice-agent-tests"
 "$TEMP/voice-agent-tests" "$ROOT/c60_32.data" "$TEMP"
-sh "$ROOT/Scripts/test-voice-agent-catalog.sh" "$PRODUCTS" "$PYTHON"

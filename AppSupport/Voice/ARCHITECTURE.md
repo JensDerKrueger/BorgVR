@@ -1,199 +1,27 @@
-# Optionaler KI-Assistent
+# BorgVR assistant core
 
-Der Assistent ist ein optionales Subsystem. Renderer, Datensätze, Command-Ausführung und
-GSC-Aufzeichnung dürfen weder den Agenten noch ein bestimmtes Modell voraussetzen.
+The interactive assistant is an opt-in Swift module shared by macOS, iOS and visionOS. It coordinates requested work against the live application. It has no UI references and does not require a Python agent, WebSocket session, MCP listener or GSC interpreter. It does not observe or learn in the background.
 
-Der [Funktionskatalog](../../BorgVRAgentServer/CAPABILITIES.md) und der
-[Plan für den appweiten Assistenten](../../BorgVRAgentServer/CAPABILITY_PLAN.md) beschreiben
-Iststand und nächste Ausbauschritte. Sie sind keine Laufzeitfreigabe. Insbesondere werden
-Import/Fusion nicht direkt aus dem Agenten an UI-Views oder Konvertierungsobjekte gekoppelt.
+## Authority and decision loop
 
-## Schnittstellen
+- `BorgVRAssistantCore` builds the next model request from the user's goal, confirmed application state, selected guidance, recent outcomes, and relevant render images. A response proposes `investigate`, `apply`, `ask`, or `finish`. It does not have execution authority.
+- `AssistantWorkspace` is the application interface. `VoiceAgentController` binds start, stop and local consent to that interface. `BorgVRVoiceAgentBridge` uses the in-process MCP router and existing command services, including file pickers and confirmations for consequential changes. Model arguments cannot grant consent.
+- The workspace tracks the dataset opening and manual revisions. Old model output cannot execute against a later revision. Evidence is discarded when its revision is no longer current. A stopped task cannot start another command, and an uncertain mutation is never automatically replayed. Cancellation does not undo completed operations.
+- A successful command receipt is not proof that the visual goal was met. The UI reports confirmed changes separately from the model's text. A clarification can continue the same in-memory work and receipts. An optional encrypted conversation archive contains text and confirmed tool receipts, not the working image evidence. Provider changes invalidate the local conversation owner.
+- `VoiceAgentModelClient` uses structured HTTP requests. vLLM uses `/v1/models` and `/v1/chat/completions`; OpenAI uses `/v1/responses` with `store: false`. OpenAI uses system TLS and a separate Keychain key and image consent. Microphone audio, passthrough and camera images are not provided to either model. The application's local speech recognition setting remains independent of the model provider.
 
-```text
-UI / lokale Sprache
-        |
-VoiceAgentController -- WSS / Protokoll 1 -- BorgVR-Agent -- Modell-API -- vLLM
-        |
-VoiceAgentApplicationBridge
-        |
-BorgVRVoiceAgentBridge
-        |
-bestehender MCP-Werkzeugrouter / Command-Service / Command-Ereignisse
-        |
-BorgVR-Kern und Renderer
-```
+## Knowledge packages
 
-- **App-Vertrag:** `VoiceAgentApplicationBridge` bietet Kontextidentität, den freigegebenen
-  Zustand, Werkzeugdefinitionen, Werkzeugausführung und semantische Änderungsereignisse.
-  Er enthält keine MCP-, Renderer- oder Plattformmodelltypen.
-- **Einziger Adapter:** `BorgVRVoiceAgentBridge` kennt den vorhandenen MCP-Router und die
-  generischen Commands. Er kennzeichnet eigene Aufrufe mit einer privaten Herkunftskennung
-  und übersetzt fremde Commands in sieben Änderungsdomänen. Rohbefehle, Dateipfade,
-  Editierpuffer und Zugangsdaten werden nicht als Ereignisse übertragen.
-- **Kern-Vertrag:** `BorgVRCommandExecuting.commandEvents` veröffentlicht unabhängig von
-  einer GSC-Aufzeichnung Beginn, Abschluss und Fehlschlag von Aktionen. Der Kern kennt
-  keine Agentenklasse. `originOverride` ist eine allgemeine Herkunftskennung für Adapter.
-- **Netzvertrag:** `BorgVRAgentServer/PROTOCOL.md` beschreibt die begrenzten, validierten
-  Nachrichten. Es gibt keinen direkten Serverzugriff auf App-Speicher oder Datensätze.
+The example is [`assistant-knowledge.json`](assistant-knowledge.json). An edited JSON file can be imported in **Settings > AI Assistant > Import knowledge package**. It replaces the bundled package for the next task, is validated before use, and can be reset without a rebuild. An in-progress task uses its original package.
 
-## Zuständigkeiten
+Version 1 has two independent sections. `rules` are English guidance with unique IDs, optional `operations` and language-neutral tool names, `topics` for retrieval, and `text`. The selector filters by available operations and ranks a small number using the goal, current focus, and recent operation. It does not require a separate model call. Topic matching is lexical; the bundled English and German terms are examples, not a guarantee of multilingual retrieval. Selecting or importing a rule never grants permission.
 
-`VoiceAgentController` verwaltet Verbindung, Auftragskontext, Abbruch, Freigaben und die
-lokale Ausführungssicherung. `VoiceAgentPolicy` begrenzt Werkzeuge und Daten.
-`VoiceAgentSpeech` und die SwiftUI-Views sind lokale Ein-/Ausgabe, nicht Teil der Planung.
-`VoiceAgentSettings` hält Gerätekonfiguration und bestätigte Regeln. Der Python-Agent
-besitzt Planung, Kontextpflege, Arbeitsbudget und Rückfragen; diese Logik liegt nicht im
-Renderer. `create_app(settings, model)` erlaubt einen unabhängig injizierbaren Modelladapter.
+`workflows` are data: a unique `inspect.*` ID, a description and a short list of typed read-only steps. Supported primitives are `screenshot` (a bounded width) and `intensityScan` (initial bands, maximum number of previews, minimum band width, difference threshold and palette). New compositions and options need no app rebuild; new primitives need Swift. No arbitrary source code, paths, network access, or loops from packages are executed.
 
-Speichern und Exportieren laufen über die vorhandenen MCP-Commands. Der App-Vertrag
-vermittelt lokale Datei-/Ordnerauswahl, aber kein Werkzeug akzeptiert Dateipfade vom
-Server. Import und Fusion laufen im Adapter über den gemeinsamen Konvertierungsdienst;
-die App-Wurzel liefert nur Einstellungen, das Datensatzverzeichnis und die Freigabe für
-einen exklusiven Import. Ein Abbruch folgt dem vorhandenen Konvertierungs-Token.
-Darstellungs-JSON wird ausschließlich aus einer lokal gewählten Datei geladen.
-Anlegen und Duplizieren liefern einen verifizierten Wechsel des Editierkontexts.
-Die lokale Löschfreigabe ist an den angezeigten inaktiven Stand gebunden und
-wird vor der Ausführung erneut geprüft.
+The sweep makes isolated coarse projections of an unsigned scalar channel. It refines adjacent bands where enough pixel visibility differs, within the configured budget. Scores are not anatomy or noise recognition. The model can request actual previews two at a time and choose one it has seen. Applying a chosen band builds its opacity and palette at the live transfer function's existing resolution and uses the local Command path. The coarse preview is not the live render; inspect the live result as needed. No sweep is required when existing evidence suffices.
 
-## Gespräch und Ausführungsbelege
+## Verification and scope
 
-Der Client hält Nutzernachrichten, finale Antworten und bestätigte native
-Werkzeugaufrufe im Arbeitsspeicher des aktuellen Gesprächs. Der Chat ist Kontext,
-kein Nachweis einer Ausführung. Ein Werkzeugbeleg enthält die übergebenen
-Argumente und die bereits für den Agenten aufbereiteten Ergebnisdaten. Er wird
-vor dem Netzversand lokal erfasst und ist nicht mit der Socket-gebundenen
-Wiederholungssicherung identisch. Bildpixel, abgelehnte und ungewisse
-Ausführungen sowie die Abfrage der Historie selbst werden nicht gespeichert.
+`sh Scripts/test-voice-agent.sh` covers schema validation, the native sweep loop with synthetic images and decisions, stale evidence, stop, and both provider payloads and replies. Pass the `macOSApp` Debug products directory for real BorgVR bridge/GSC/security tests. On a running GPU host `sudo ./setup.sh test` checks HTTPS, key enforcement, endpoint restrictions, vision and structured output using a synthetic image. Local tests do not establish how well a specific model recognizes anatomy or other structures.
 
-`get_command_history` fragt beide Quellen schreibgeschützt und paginiert ab.
-Das Werkzeug ist vom MCP-Server unabhängig. Der Verlauf bleibt bei
-Kontextkompression und Reconnect abrufbar. Mit ausdrücklicher Einstellung
-speichert BorgVR das aktuelle Gespräch verschlüsselt lokal und stellt es beim
-App-Start wieder her. Der Schlüssel bleibt im gerätespezifischen Keychain.
-Abfragen sehen nur den aktuellen App- bzw. Datensatzöffnungs- und Editierkontext.
-Nach einem Neustart werden abgelegte Datensatzbelege nur bei derselben
-Datensatz-ID und demselben Editierstand erneut gebunden. Ausschalten der
-Speicherung löscht die Datei, ohne den aktuellen Chat aus der UI zu entfernen.
-Ein neues Gespräch leert den Verlauf. Ein Wechsel von Serveradresse, Schlüssel
-oder Zertifikat verwirft die zugehörigen Belege und das Archiv. Historische
-Belege sind keine aktuellen Zustände und keine Autorisierung.
-
-## Appweite Sitzung
-
-Die drei App-Wurzeln besitzen je einen Controller; Startmenü und Render-Bedienelemente
-öffnen dieselbe Unterhaltung. Auf iOS liegt auch die Sheet-Präsentation an der App-Wurzel,
-auf macOS und visionOS ist es ein eigenes Fenster. Öffnen verbindet nach bewusster
-Aktivierung in den Einstellungen, startet aber weder Mikrofonaufnahme noch einen Auftrag.
-
-Der Bridge-Kontext ist ohne Datensatz wirklich `nil`. Im ausgehandelten Protokollzusatz
-`application_session` wird `dataset_id: null` übertragen. Ohne renderbereiten Datensatz
-geben Client und Server `get_application_state`, `search_datasets`, `open_dataset`
-und `get_command_history` sowie die lokalen Import-/Fusionswerkzeuge frei.
-Die Historie zeigt dort nur App-Kontext-Belege. Schließen wechselt zurück in diesen
-Kontext; das Gespräch bleibt bestehen.
-
-Bei einem Wechsel im Leerlauf werden Kontext-ID und Werkzeugkatalog neu abgeglichen.
-Die Verbindung und der sichtbare Gesprächsverlauf bleiben erhalten. Der Server übernimmt
-nur begrenzte Textauszüge als historische Daten; Bilder, Zustände und Werkzeugfolgen des
-alten Datensatzes entfallen. Ein neuer Auftrag muss den aktuellen Zustand neu lesen.
-Bei laufendem Auftrag, noch ausstehendem Werkzeug, manueller Bearbeitung oder erneutem
-Wechsel während des Abgleichs wird stattdessen die Verbindung beendet. Fenster und
-Gesprächsverlauf bleiben bestehen; nur eine neue Nutzereingabe startet neue Arbeit.
-Alte Aufträge werden bei fremden Wechseln niemals automatisch fortgesetzt oder wiederholt. Ältere Server
-werden mit einem verständlichen Aktualisierungshinweis abgewiesen.
-
-## Katalog und geplantes Öffnen
-
-`BorgVRDatasetSearch` ist ein normaler, agentenunabhängiger Automatisierungsdienst hinter
-dem MCP-Router. Er verwendet die bestehenden begrenzten Katalogprovider und liefert bis zu
-20 Treffer mit kurzen Metadatenbelegen. Maximal zwei Ergebnissnapshots, 512 Cursor und fünf
-Minuten Lebensdauer begrenzen die Paginierung. URLs, Pfade und erkennbare Schlüsselwerte
-werden aus Auszügen entfernt; Quellenadressen und Zugangsdaten werden nicht ausgegeben.
-Nicht erreichbare Quellen sind kein Nachweis für fehlende Datensätze. Die Suche ist keine
-Bildanalyse oder semantische Vektorsuche; Synonyme und Übersetzungen plant der Agent.
-
-Nur der Bridge-Adapter kennt Katalog und Command-Service. Beide Agentenseiten merken sich
-höchstens 2000 tatsächlich gelieferte Treffer-IDs für fünf Minuten. `open_dataset` erfordert
-einen solchen Treffer, eine frische Zustandsabfrage und eine ausdrückliche Nutzerabsicht.
-Pro Auftrag ist höchstens ein Öffnen möglich. Der gemeinsame Service prüft den Kontext nach
-asynchronen Vorbereitungen und meldet den Öffnungsbeginn synchron mit seiner neuen Identität.
-Die Bridge wartet bis zu fünf Minuten auf den Renderer und kontrolliert dabei die Öffnungs-ID.
-Die stabile Öffnungsidentität bleibt dabei auch während der internen Bearbeitungsvorbereitung
-vorhanden. Bereitschaft wird separat abgefragt; erst nach ihrem Abschluss wird der endgültige
-Editierstand in den neuen Kontext übernommen. Gleiche Datensatz-ID mit anderer Öffnungs-ID
-bleibt ein fremder Wechsel. Die laufende Prüfung erkennt auch verzögert eintretende Bereitschaft.
-Fremde Auswahl oder Abbruch stoppen die Fortsetzung, ohne bereits begonnene Änderungen
-automatisch zurückzunehmen. Der normale Command-/GSC-Pfad bleibt erhalten.
-
-Die ausgehandelte Erweiterung `dataset_opening` koppelt den Werkzeugbeleg an den neuen
-Kontext und Werkzeugkatalog. Erst die Serverbestätigung erlaubt neue Aufrufe. Der Server
-verwirft den alten Werkzeugplan einschließlich weiterer Aufrufe aus demselben Modellpaket,
-übernimmt nur historische Textauszüge und Ausführungsbelege und plant die unerledigten Teile
-des ursprünglichen Auftrags mit frischer Zustandsabfrage neu. Keine Agententypen gelangen
-in Katalog, Renderer, App-Modelle oder Command-Ausführung.
-
-## Annotationen
-
-`VoiceAgentAnnotationPolicy` definiert ausschließlich die begrenzten Agentenschemas.
-Nur der Bridge-Adapter kennt BorgVRs Marker-, Messungs- und Geometrietypen. Er leitet
-Änderungen an den vorhandenen Command-Service weiter; MCP und GSC bleiben unabhängig.
-Der Controller enthält keine Annotationstypen oder direkte Modellmutation.
-
-Der Server verlangt vor Upserts eine aktuelle Zustands- und Listenabfrage. Der Adapter
-prüft Edit-IDs im aktuellen Datensatz, Markerarten, normierte Koordinaten, Punktzahlen
-und Messgeometrie vor der Ausführung. Listen sind paginiert und bytebegrenzt; ausgelassene
-Details werden ausdrücklich markiert und dürfen nicht als vollständiger Upsert dienen.
-Die physische Messgröße berechnet BorgVR mit der Datensatzskalierung; ohne diese gibt es
-keinen behaupteten Messwert. Volumen ist die konvexe Hülle der Punkte, keine Segmentierung.
-Sichere Validierungsablehnungen liefern `not_applied`; echte Ungewissheit führt weiterhin
-zum Abbruch ohne Wiederholung. Einzelnes Löschen nutzt vorhandene Commands. Sammellöschen
-und das letzte Element einer Annotationsart benötigen eine lokale UI-Bestätigung mit
-Anzahl der betroffenen Elemente. Die einmalige Freigabe ist an Datensatz und Inhalt
-gebunden und verfällt nach 300 Sekunden. Ablehnung sperrt weitere Löschversuche desselben
-Auftrags auf beiden Seiten. Der generische Bestätigungsvertrag enthält keine BorgVR-Typen;
-Meshes bleiben geschützt und Mesh-Platzierung bleibt gesperrt.
-
-## Gemeinsame Bearbeitung
-
-Manuelle Änderungen erhöhen die lokale Ansichtsrevision und unterbrechen nur die noch
-nicht ausgeführte Modellplanung. Ereignisse werden bis zu 800 ms Bedienpause gebündelt;
-asynchrone Nutzeraktionen müssen zuerst enden. Bereits gestartete Werkzeuge werden nicht
-automatisch wiederholt oder zurückgesetzt. Vor dem nächsten Aufruf prüft die App erneut
-die Revision. Veraltete Aufrufe erhalten eine ausdrücklich nicht ausgeführte Antwort.
-Automatische Zustandswiederherstellung zählt nicht als manueller Eingriff. Begonnene oder
-fehlgeschlagene Aktionen pausieren zur Sicherheit, aber nur abgeschlossene Änderungen
-tragen einen geänderten Bereich bei.
-
-Danach erhält der Agent den aktuellen Zustand und setzt denselben Auftrag fort. Alte
-Zustandsdetails und Bilder werden als überholt markiert, Ausführungsbelege bleiben erhalten.
-Ein Datensatzwechsel während laufender Arbeit beendet die Verbindung. Eine durch den
-Benutzer angestoßene Bearbeitung darf den Editierstand innerhalb derselben Öffnung ändern.
-
-Rückfragen laufen als gesonderte Nachrichten im selben Auftrag, nicht als neuer Prompt.
-Die Frage nach der Hilfsabsicht setzt eine abgeschlossene manuelle Änderung im laufenden
-Auftrag voraus. Startzustand und Eingriffe aus früheren Aufträgen reichen nicht aus;
-Hilfsgesuche und Fragen nach weiteren Ansichtsänderungen bleiben unabhängig davon möglich.
-Regelvorschläge erfordern ausdrückliches Feedback und anschließend einen separaten
-Bestätigungsklick. Erst dann werden höchstens 16 Regeln à 500 Zeichen auf diesem Gerät
-gespeichert und künftigen Gesprächen mitgegeben. Sie sind fehlbare Präferenzen, keine
-Sicherheitsregeln und kein Modelltraining. Löschen in den Einstellungen wirkt auf künftige
-Gespräche; für das Vergessen im aktuellen Kontext ein neues Gespräch beginnen.
-
-## Austauschen oder entfernen
-
-- Ein anderer Agentenserver kann denselben Netzvertrag implementieren, ohne BorgVR zu ändern.
-- Ein anderer App-Backendzugang implementiert ausschließlich `VoiceAgentApplicationBridge`.
-- Zum vollständigen Ausbau `AppSupport/Voice` und `BorgVRAgentServer` entfernen sowie die
-  Assistenten-Instanzen, Einstellungen, Fenster und Buttons in den drei App-Verzeichnissen.
-  Mikrofon-/Spracherkennungsberechtigungen entfernen, soweit sie nicht anderweitig gebraucht werden.
-  Renderer, Datensatzlogik, Command-Ausführung, MCP und GSC brauchen dafür keinen Ersatz.
-  Der generische Ereigniskanal kann auch ohne Agent bestehen bleiben.
-
-## Absicherung
-
-`tests/test_collaboration.py` prüft Planungspause, sichere Fortsetzung, unveränderte
-Auftragsziele, keine Befehlswiederholung, Rückfragen und explizite Regelentscheidungen.
-Ein Strukturtest verhindert direkte Kernabhängigkeiten im Controller und Agentennamen im
-Command-Kern. `Scripts/test-voice-agent.sh` prüft zusätzlich den echten nativen
-TLS-/WebSocket-Weg, Herkunftsfilterung, Nutzerpriorität, lokale Regeln und GSC-Roundtrip.
+Point 2 (target-directed visualization) is the first focus. Direct commands share the execution path. Learned personal routines and an exploratory collaborator are future work, not hidden modes in the current application.

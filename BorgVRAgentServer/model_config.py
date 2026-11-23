@@ -1,4 +1,4 @@
-"""Validated model/runtime options shared by setup, vLLM and the agent."""
+"""Validated model/runtime options shared by setup and vLLM."""
 
 from dataclasses import dataclass
 import math
@@ -125,6 +125,8 @@ class ModelConfig:
                   "--enable-auto-tool-choice", "--tool-call-parser", self.tool_parser, "--no-enable-log-requests"]
         if self.reasoning_parser != "none":
             result += ["--reasoning-parser", self.reasoning_parser]
+        if self.thinking != "default":
+            result += ["--default-chat-template-kwargs", '{"enable_thinking":' + ("true" if self.thinking == "on" else "false") + "}"]
         if self.attention_backend != "auto":
             result += ["--attention-backend", self.attention_backend]
         if self.tensor_parallel_size > 1:

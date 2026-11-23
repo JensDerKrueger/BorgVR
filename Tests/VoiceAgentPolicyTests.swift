@@ -12,30 +12,8 @@ private func rejects(_ operation: () throws -> Void) throws {
 @main
 struct VoiceAgentPolicyTests {
   static func main() throws {
-    if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-catalog" {
-      let source = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2]))
-      guard let definitions = try JSONSerialization.jsonObject(with: source) as? [[String: Any]] else {
-        throw Failure.failed("Missing catalog fixture")
-      }
-      var catalogs: [String: [[String: Any]]] = [:]
-      for (name, vision, transferFunctions, images, ready) in [
-        ("start_menu", false, true, true, false), ("renderer", false, true, true, true),
-        ("no_images", false, true, false, true), ("rgba", false, false, true, true),
-        ("vision", true, true, true, true)
-      ] {
-        let catalog = VoiceAgentPolicy.catalog(definitions, vision: vision,
-          transferFunctions: transferFunctions, images: images, datasetReady: ready)
-        catalogs[name] = VoiceAgentPolicy.wireCatalog(catalog, typed: true)
-        try check(VoiceAgentPolicy.wireCatalog(catalog, typed: false).allSatisfy { $0["execution"] == nil },
-                  "Unnegotiated connection gained execution metadata")
-        try check(catalogs[name]?.allSatisfy { $0["execution"] is [String: Any] } == true,
-                  "A catalog entry lost execution metadata")
-      }
-      print(String(decoding: try JSONSerialization.data(withJSONObject: catalogs), as: UTF8.self))
-      return
-    }
     let endpoint = try VoiceAgentEndpoint("https://ai1:8766/")
-    try check(endpoint.socket.absoluteString == "wss://ai1:8766/v1/session", "Wrong WSS path")
+    try check(endpoint.origin.absoluteString == "https://ai1:8766", "Wrong HTTPS origin")
     try check(try VoiceAgentEndpoint("https://[::1]:8766").host == "::1", "IPv6 host normalization")
     for value in ["http://ai1", "https://user:secret@ai1", "https://ai1?token=x", "https://ai1/path",
                   "https://ai1#fragment", "https://ai1:0", "https://ai1:65536", "https://0.0.0.0"] {
@@ -67,24 +45,6 @@ struct VoiceAgentPolicyTests {
               "TF preview size or endpoints changed")
     _ = try VoiceAgentPolicy.encoded(preview, limit: VoiceAgentPolicy.maximumResultBytes)
     try check(rows.count == 65536, "TF preview changed the original table")
-    var ledger = VoiceAgentCallLedger()
-    try check(try ledger.begin(id: "one", signature: "actual") == nil, "Fresh call lost")
-    try check(try ledger.begin(id: "one", signature: "actual")?.reply == nil, "Pending replay duplicated")
-    try ledger.finish(id: "one", reply: "committed")
-    try check(try ledger.begin(id: "one", signature: "actual")?.reply == "committed", "Cached reply lost")
-    try rejects { _ = try ledger.begin(id: "one", signature: "changed") }
-    try rejects { _ = try ledger.begin(id: "", signature: "invalid") }
-    for index in 0..<3 {
-      _ = try ledger.begin(id: "large-\(index)", signature: "screenshot-\(index)")
-      try ledger.finish(id: "large-\(index)", reply: String(repeating: "x", count: 3 * 1024 * 1024))
-    }
-    try rejects { _ = try ledger.begin(id: "large-0", signature: "screenshot-0") }
-    try check(try ledger.begin(id: "large-2", signature: "screenshot-2")?.reply != nil, "Recent reply evicted")
-    try rejects { _ = try ledger.begin(id: "large-0", signature: "changed") }
-    for index in 0..<1024 {
-      _ = try ledger.begin(id: "long-\(index)", signature: "state")
-      try ledger.finish(id: "long-\(index)", reply: "ok")
-    }
     try check(VoiceAgentPolicy.allowed.contains("open_dataset") && VoiceAgentPolicy.reads.contains("search_datasets") &&
               VoiceAgentPolicy.allowed.contains("edit_volume") && !VoiceAgentPolicy.reads.contains("edit_volume") &&
               VoiceAgentPolicy.reads.contains("wait_volume_edits") &&
@@ -192,6 +152,6 @@ struct VoiceAgentPolicyTests {
     let urls = links.blocks.flatMap(\.cells).flatMap { $0.runs.compactMap(\.link) }
     try check(urls.count == 1 && urls.first?.absoluteString == "https://example.com", "Unsafe Markdown link enabled")
     try check(VoiceAgentMarkdown("").blocks.isEmpty, "Empty message acquired visible content")
-    print("Voice agent policy tests passed: endpoints, credentials, schemas, limits and call replay protection")
+    print("Voice agent policy tests passed: endpoints, credentials, schemas, limits and history")
   }
 }

@@ -47,7 +47,6 @@ def test_custom_model_has_no_qwen_request_or_parser_assumptions():
 def test_switch_from_custom_settings_resets_model_options_but_keeps_hardware_and_endpoint(tmp_path):
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     configure.create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "all")
     original = configure.read_configuration(tmp_path)
     original.update(BORGVR_TENSOR_PARALLEL_SIZE="2", BORGVR_NCCL_P2P_DISABLE="true",
@@ -59,7 +58,7 @@ def test_switch_from_custom_settings_resets_model_options_but_keeps_hardware_and
     arguments = ModelConfig.from_env(custom).arguments()
     assert arguments[arguments.index("--attention-backend") + 1] == "FLASH_ATTN"
     for key in ("BORGVR_GPU", "BORGVR_TENSOR_PARALLEL_SIZE", "BORGVR_NCCL_P2P_DISABLE",
-                "BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "BORGVR_BIND_ADDRESS", "BORGVR_PORT", "BORGVR_AGENT_IMAGE"):
+                "BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "BORGVR_BIND_ADDRESS", "BORGVR_PORT"):
         assert custom[key] == original[key]
     args = parser.parse_args(["--profile", "qwen38-27b"])
     qwen = ModelConfig.from_env({**custom, **configure.inference_values(args, custom)})
@@ -121,7 +120,7 @@ def test_gpu_workaround_defaults_and_compose_isolation(tmp_path):
     for key in configure.GPU_RUNTIME_OPTIONS.values():
         assert configure.read_value(key, tmp_path) == "false"
         assert services["vllm"]["environment"][key] == "${" + key + ":-false}"
-        assert key not in services["agent"]["environment"]
+        assert key not in services["model-gateway"].get("environment", {})
     (tmp_path / ".env").write_text("BORGVR_MODEL=Qwen/Qwen3.8-27B\n")
     for key in configure.GPU_RUNTIME_OPTIONS.values():
         assert configure.read_value(key, tmp_path) == "false"
@@ -130,10 +129,9 @@ def test_gpu_workaround_defaults_and_compose_isolation(tmp_path):
 def test_parallel_hardware_selection_survives_model_switch_and_preserves_connection(tmp_path):
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     configure.create_configuration(tmp_path, "134.91.11.251", "134.91.11.251", 8766, "0")
     original = configure.read_configuration(tmp_path)
-    tokens = {name: (tmp_path / "runtime/secrets" / name).read_bytes() for name in ("agent_token", "vllm_token")}
+    tokens = {name: (tmp_path / "runtime/secrets" / name).read_bytes() for name in ("vllm_token",)}
     certificate = (tmp_path / "runtime/tls/server.crt").read_bytes()
     options = parser.parse_args(["--profile", "qwen38-27b", "--gpu", "all", "--tensor-parallel-size", "2",
                                 "--nccl-p2p-disable", "true", "--disable-custom-all-reduce", "true"])
@@ -157,7 +155,6 @@ def test_parallel_hardware_selection_survives_model_switch_and_preserves_connect
 def test_parallelism_does_not_silently_expand_gpu_access(backend, gpu):
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     options = parser.parse_args(["--backend", backend, "--gpu", gpu, "--tensor-parallel-size", "2"])
     with pytest.raises(ValueError, match="--gpu all"):
         configure.inference_values(options)
@@ -199,7 +196,6 @@ def test_vllm_bootstrap_checks_gpu_count_before_starting_workers(monkeypatch, vi
 def test_nccl_workaround_cannot_silently_follow_backend_switch_to_rocm():
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     with pytest.raises(ValueError, match="requires --backend cuda"):
         configure.inference_values(parser.parse_args(["--backend", "rocm", "--nccl-p2p-disable", "true"]))
 
@@ -211,7 +207,6 @@ def test_initial_backend_and_small_profile_configuration(tmp_path, backend, imag
     assert "qwen38-27b" in subprocess.check_output(args, text=True)
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     options = parser.parse_args(["--backend", backend, "--profile", "qwen35-4b"])
     values = configure.inference_values(options)
     assert values["BORGVR_VLLM_IMAGE"] == image
@@ -243,7 +238,6 @@ def test_backend_overlays_do_not_mix_devices_or_weaken_security():
 def test_all_gpus_is_explicit_and_cuda_only(backend):
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     args = parser.parse_args(["--backend", backend, "--gpu", "all"])
     if backend == "rocm":
         with pytest.raises(ValueError, match="only CUDA"):
@@ -257,10 +251,9 @@ def test_all_gpus_is_explicit_and_cuda_only(backend):
 def test_model_switch_does_not_reuse_old_revision_or_private_keys(tmp_path):
     configure.create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     original = configure.read_configuration(tmp_path)
-    token = (tmp_path / "runtime/secrets/agent_token").read_bytes()
+    token = (tmp_path / "runtime/secrets/vllm_token").read_bytes()
     parser = argparse.ArgumentParser()
     configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
     options = parser.parse_args(["--profile", "qwen38-27b", "--backend", "rocm"])
     changes = configure.inference_values(options, original)
     configure.write_configuration_changes(tmp_path, changes)
@@ -268,7 +261,7 @@ def test_model_switch_does_not_reuse_old_revision_or_private_keys(tmp_path):
     assert updated["BORGVR_MODEL_REVISION"] == PROFILES["qwen38-27b"]["MODEL_REVISION"]
     assert updated["BORGVR_MODEL_REVISION"] != original["BORGVR_MODEL_REVISION"]
     assert updated["BORGVR_VLLM_IMAGE"] == ROCM_IMAGE
-    assert (tmp_path / "runtime/secrets/agent_token").read_bytes() == token
+    assert (tmp_path / "runtime/secrets/vllm_token").read_bytes() == token
     options = parser.parse_args(["--model", "Other/Vision", "--tool-parser", "hermes"])
     with pytest.raises(ValueError, match="revision"):
         configure.inference_values(options, updated)
@@ -279,11 +272,6 @@ def test_legacy_configuration_keeps_model_and_cuda_defaults(tmp_path):
     assert configure.read_value("BORGVR_BACKEND", tmp_path) == "cuda"
     assert configure.read_value("BORGVR_MAX_SEQS", tmp_path) == "2"
     assert configure.read_value("BORGVR_MIN_FREE_GIB", tmp_path) == "200"
-
-
-def test_recursive_python_caches_are_excluded_from_image_context():
-    text = (Path(__file__).resolve().parents[1] / ".dockerignore").read_text()
-    assert "**/__pycache__" in text and "**/*.pyc" in text
 
 
 @pytest.mark.parametrize("groups,expected", [(("1000", "1000", "0"), ["1000", "0"]),
