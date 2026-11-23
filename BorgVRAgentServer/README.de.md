@@ -42,7 +42,7 @@ sudo ./switch-model.sh
 
 ## Bestehende Installation umstellen
 
-Falls der frühere SSH-Entwicklungsmodus aktiv ist, führe **im alten Checkout** zuerst `sudo ./setup.sh dev disable --remove` aus. Plane für die Umstellung eine kurze Unterbrechung ein. Aktualisiere den Checkout und führe im bestehenden Installationsverzeichnis `sudo ./setup.sh install` aus. Der alte Compose-Dienst wird ersetzt. Modell-Cache, TLS-Dateien und `vllm_token` bleiben. Der alte `agent_token` gilt für die neue App nicht. Ein vorgeschalteter eigener TLS-Proxy muss künftig die beiden Modellpfade weiterleiten, nicht `/v1/session`. Das Modell muss dafür nicht gewechselt werden.
+Falls der frühere SSH-Entwicklungsmodus aktiv ist, führe **im alten Checkout** zuerst `sudo ./setup.sh dev disable --remove` aus. Aktualisiere dann den Checkout. Ist vLLM bereits gesund und läuft der alte Agent noch, wechselt `sudo bash ./migrate-endpoint.sh` auf dem bestehenden HTTPS-Port zum Modellendpunkt, ohne vLLM neu zu starten. Bei einem fehlgeschlagenen Test versucht das Skript, den alten Agenten wieder zu starten. Andernfalls nutze `sudo ./setup.sh install` für eine vollständige Neuinstallation der Dienste. Modell-Cache, TLS-Dateien und `vllm_token` bleiben. Der alte `agent_token` gilt für die neue App nicht. Ein vorgeschalteter TLS-Proxy muss die beiden Modellpfade weiterleiten, nicht `/v1/session`.
 
 ## Deinstallieren
 

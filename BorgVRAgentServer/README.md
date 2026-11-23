@@ -42,7 +42,7 @@ sudo ./switch-model.sh
 
 ## Migrate an old deployment
 
-If you enabled the former SSH development mode, run `sudo ./setup.sh dev disable --remove` **from the previous checkout** before upgrading. Take a short maintenance window, update the checkout, and run `sudo ./setup.sh install` from the existing deployment directory. It replaces the old Compose service, retains the model cache, and reuses the TLS files and `vllm_token`. The old `agent_token` is not accepted by the new app. A separate upstream TLS reverse proxy must now forward the two model API paths, not `/v1/session`. No change to the model is needed for migration.
+If you enabled the former SSH development mode, run `sudo ./setup.sh dev disable --remove` **from the previous checkout** before upgrading. Update the checkout. With a healthy vLLM and a running legacy agent, `sudo bash ./migrate-endpoint.sh` switches the existing HTTPS port without restarting vLLM. If the new endpoint test fails, the script tries to restore the previous agent. Otherwise, use `sudo ./setup.sh install` for a full service reinstall. Both paths retain the model cache and reuse the TLS files and `vllm_token`. The old `agent_token` is not accepted by the new app. A separate upstream TLS reverse proxy must forward the two model API paths, not `/v1/session`.
 
 ## Uninstall
 
