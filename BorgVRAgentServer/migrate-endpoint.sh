@@ -7,7 +7,7 @@ VLLM=borgvr-ai-vllm-1
 GATEWAY=borgvr-ai-model-gateway-1
 
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
-[[ $# == 0 && $EUID == 0 ]] || die 'Usage: sudo bash ./migrate-endpoint.sh'
+[[ $# == 0 && $EUID == 0 ]] || die 'Usage: sudo ./migrate-endpoint.sh'
 [[ -f "$DIR/.env" ]] || die 'Run inside the existing BorgVR deployment directory.'
 [[ ! -e "$DIR/runtime/agent-development.json" && ! -L "$DIR/runtime/agent-development.json" ]] ||
   die 'Disable the old SSH development mode from the previous checkout before migrating.'

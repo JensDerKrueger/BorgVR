@@ -1,6 +1,14 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Assistant options": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Assistentenoptionen" } } } },
+    "Model profiles": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Modellprofile" } } } },
+    "Add model profile": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Modellprofil hinzufügen" } } } },
+    "Edit model profile": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Modellprofil bearbeiten" } } } },
+    "Remove model profile": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Modellprofil entfernen" } } } },
+    "Profile name": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Profilname" } } } },
+    "Test connection": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Testen" } } } },
+    "OK": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "OK" } } } },
     "Model provider": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "Modellanbieter" } } } },
     "OpenAI model ID": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "OpenAI-Modell-ID" } } } },
     "vLLM HTTPS address": { "extractionState": "manual", "localizations": { "de": { "stringUnit": { "state": "translated", "value": "vLLM-HTTPS-Adresse" } } } },

@@ -74,9 +74,10 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
 
 ### AI voice and text assistant
 
-- Opt in under **Settings > AI Assistant** on macOS, iOS and visionOS. Choose a private
-  vLLM HTTPS endpoint or OpenAI and add the matching Keychain credential. OpenAI image
-  sharing is separately opt-in. Camera, passthrough and microphone audio never go to a model.
+- Opt in under **Settings > AI Assistant** on macOS, iOS and visionOS. Add and select a
+  named profile for a vLLM HTTPS endpoint or an OpenAI model. Each profile has its own
+  Keychain credential and image-sharing preference. Camera, passthrough and microphone
+  audio never go to a model.
 - The Swift core interprets goals, requests observations, and uses local Commands and
   confirmations to apply changes. Stop prevents further commands; it does not undo changes.
 - The optional knowledge package contains editable rules and bounded read-only workflows.

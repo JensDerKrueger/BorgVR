@@ -22,7 +22,7 @@ Der erste Modell-Download kann länger dauern. Der Test prüft TLS, Schlüsselpf
 
 ## BorgVR verbinden
 
-Unter **Einstellungen → KI-Assistent** den Assistenten einschalten und **vLLM** wählen. `https://ai1:8766` (oder tatsächlichen Namen/IP und Port) eintragen und `runtime/secrets/vllm_token` als Zugangsschlüssel importieren. Wird das Zertifikat nicht bereits vertraut, das öffentliche `runtime/tls/server.crt` importieren. Niemals `server.key` übertragen. Mit **Server testen** prüfen und im Assistenten eine Anfrage tippen oder sprechen. Der Sweep setzt die Freigabe für Renderbilder voraus. Ein eigener kompatibler vLLM-Endpunkt kann direkt eingetragen werden; er braucht dieses Setup nicht.
+Unter **Einstellungen → KI-Assistent** den Assistenten einschalten. Über **+** ein Profil vom Typ **vLLM** anlegen, zum Beispiel `ai1`. `https://ai1:8766` (oder tatsächlichen Namen/IP und Port) eintragen und `runtime/secrets/vllm_token` als Zugangsschlüssel importieren. Wird dem Zertifikat nicht bereits vertraut, das öffentliche `runtime/tls/server.crt` importieren. Niemals `server.key` übertragen. Für den Sweep **Renderbilder teilen** aktivieren. **Testen** prüft den Entwurf, **OK** speichert ihn. In der Liste wird genau ein Profil ausgewählt; Bearbeiten und Entfernen gelten jeweils nur für die betreffende Zeile. Ein vorhandener kompatibler vLLM-Endpunkt braucht dieses Setup nicht.
 
 Für **OpenAI** die Modell-ID und einen eigenen API-Schlüssel hinterlegen. Renderbilder an OpenAI werden separat freigegeben. Die App setzt `store: false`; das ersetzt nicht die Regeln des Anbieters zum Umgang mit Daten. Sensible Datensätze oder Metadaten nur an dafür freigegebene Dienste übermitteln.
 
@@ -42,7 +42,7 @@ sudo ./switch-model.sh
 
 ## Bestehende Installation umstellen
 
-Falls der frühere SSH-Entwicklungsmodus aktiv ist, führe **im alten Checkout** zuerst `sudo ./setup.sh dev disable --remove` aus. Aktualisiere dann den Checkout. Ist vLLM bereits gesund und läuft der alte Agent noch, wechselt `sudo bash ./migrate-endpoint.sh` auf dem bestehenden HTTPS-Port zum Modellendpunkt, ohne vLLM neu zu starten. Bei einem fehlgeschlagenen Test versucht das Skript, den alten Agenten wieder zu starten. Andernfalls nutze `sudo ./setup.sh install` für eine vollständige Neuinstallation der Dienste. Modell-Cache, TLS-Dateien und `vllm_token` bleiben. Der alte `agent_token` gilt für die neue App nicht. Ein vorgeschalteter TLS-Proxy muss die beiden Modellpfade weiterleiten, nicht `/v1/session`.
+Falls der frühere SSH-Entwicklungsmodus aktiv ist, führe **im alten Checkout** zuerst `sudo ./setup.sh dev disable --remove` aus. Aktualisiere dann den Checkout. Ist vLLM bereits gesund und läuft der alte Agent noch, wechselt `sudo ./migrate-endpoint.sh` auf dem bestehenden HTTPS-Port zum Modellendpunkt, ohne vLLM neu zu starten. Bei einem fehlgeschlagenen Test versucht das Skript, den alten Agenten wieder zu starten. Andernfalls nutze `sudo ./setup.sh install` für eine vollständige Neuinstallation der Dienste. Modell-Cache, TLS-Dateien und `vllm_token` bleiben. Der alte `agent_token` gilt für die neue App nicht. Ein vorgeschalteter TLS-Proxy muss die beiden Modellpfade weiterleiten, nicht `/v1/session`.
 
 ## Deinstallieren
 

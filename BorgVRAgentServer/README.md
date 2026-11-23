@@ -22,7 +22,7 @@ The first start downloads the model and may take time. The test checks TLS, a mi
 
 ## Connect BorgVR
 
-In **Settings > AI Assistant**, enable the assistant and select **vLLM**. Enter `https://ai1:8766` (or the real DNS name or IP and port) and import `runtime/secrets/vllm_token` as the access token. Import the public `runtime/tls/server.crt` if the certificate is not already trusted. Never copy `server.key`. Choose **Test server**, then try a text or voice request. Render sharing is required for the intensity sweep. With an existing compatible vLLM endpoint, configure its HTTPS URL and key instead; the two host scripts are not required.
+In **Settings > AI Assistant**, enable the assistant. Choose **+** and create a **vLLM** profile, for example `ai1`. Enter `https://ai1:8766` (or the real DNS name or IP and port) and import `runtime/secrets/vllm_token` as the access token. Import the public `runtime/tls/server.crt` if the certificate is not already trusted. Never copy `server.key`. Enable **Share render images** for the intensity sweep. **Test connection** tests the draft; **OK** saves it. Select one profile in the list. Edit and remove act on the corresponding row. With an existing compatible vLLM endpoint, the host setup scripts are not required.
 
 For **OpenAI**, set the model ID and enter an API key for that provider. Render sharing with OpenAI must be enabled separately. The app requests `store: false`; this does not change the provider's own data handling policies. Don't send sensitive images or metadata to a provider that is not approved for them.
 
@@ -42,7 +42,7 @@ sudo ./switch-model.sh
 
 ## Migrate an old deployment
 
-If you enabled the former SSH development mode, run `sudo ./setup.sh dev disable --remove` **from the previous checkout** before upgrading. Update the checkout. With a healthy vLLM and a running legacy agent, `sudo bash ./migrate-endpoint.sh` switches the existing HTTPS port without restarting vLLM. If the new endpoint test fails, the script tries to restore the previous agent. Otherwise, use `sudo ./setup.sh install` for a full service reinstall. Both paths retain the model cache and reuse the TLS files and `vllm_token`. The old `agent_token` is not accepted by the new app. A separate upstream TLS reverse proxy must forward the two model API paths, not `/v1/session`.
+If you enabled the former SSH development mode, run `sudo ./setup.sh dev disable --remove` **from the previous checkout** before upgrading. Update the checkout. With a healthy vLLM and a running legacy agent, `sudo ./migrate-endpoint.sh` switches the existing HTTPS port without restarting vLLM. If the new endpoint test fails, the script tries to restore the previous agent. Otherwise, use `sudo ./setup.sh install` for a full service reinstall. Both paths retain the model cache and reuse the TLS files and `vllm_token`. The old `agent_token` is not accepted by the new app. A separate upstream TLS reverse proxy must forward the two model API paths, not `/v1/session`.
 
 ## Uninstall
 

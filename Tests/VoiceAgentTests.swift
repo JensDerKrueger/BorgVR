@@ -248,6 +248,13 @@ struct VoiceAgentTests {
     let suite = "BorgVRVoiceTests-\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
     let account = "voice-agent-test-\(UUID())"
+    let legacyToken = String(repeating: "a", count: 64)
+    let legacyCloud = String(repeating: "o", count: 64)
+    defaults.set("https://localhost:8766", forKey: "voiceAgent.address")
+    defaults.set(der, forKey: "voiceAgent.certificate")
+    defaults.set("gpt-6.2-sol", forKey: "assistant.openAIModel")
+    try KeychainSecretStore.setString(legacyToken, account: account)
+    try KeychainSecretStore.setString(legacyCloud, account: account + "-openai")
     defer { defaults.removePersistentDomain(forName: suite); try? KeychainSecretStore.delete(account: account) }
     let settings = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
     func isolatedConversationStore(_ name: String) -> VoiceAgentConversationStore {
@@ -255,8 +262,38 @@ struct VoiceAgentTests {
             keyAccount: "\(account)-conversation-\(name)")
     }
     try expect(settings.workMinutes == 60, "Default work time changed")
-    try settings.setToken(String(contentsOf: fixture.appendingPathComponent("runtime/secrets/vllm_token"), encoding: .utf8))
-    try expect(!String(describing: defaults.dictionaryRepresentation()).contains(try settings.token()), "Token leaked to preferences")
+    try expect(settings.hasToken && settings.profiles.count == 2, "Existing provider settings did not migrate")
+    guard let local = settings.selectedProfile, let cloud = settings.profiles.first(where: { $0.provider == .openAI }) else {
+      throw Failure.failed("Missing migrated profiles")
+    }
+    try expect(local.trustedCertificate == der && settings.hasSavedToken(for: cloud) && !cloud.sharesImages,
+               "Certificate, credential, or consent was not isolated in the migration")
+    var differentHost = local
+    differentHost.address = "https://ai2.example.org:8766"
+    try expect(!settings.hasSavedToken(for: differentHost) && differentHost.trustedCertificate.isEmpty,
+               "A draft endpoint change reused the old token or certificate")
+    try rejects { _ = try settings.modelClient(for: differentHost) }
+    var ai2 = VoiceAgentProfile(provider: .vllm, name: "ai2")
+    ai2.address = differentHost.address
+    ai2.sharesImages = true
+    let ai2Token = String(repeating: "b", count: 64)
+    try settings.saveProfile(ai2, token: ai2Token)
+    defer { try? settings.removeProfile(ai2.id) }
+    var secondCloud = VoiceAgentProfile(provider: .openAI, name: "Second cloud model")
+    secondCloud.model = "alternate-model"
+    try settings.saveProfile(secondCloud, token: nil)
+    try expect(!settings.hasSavedToken(for: secondCloud) && settings.selectedProfileID == local.id,
+               "Adding a profile inherited a key or automatically switched models")
+    settings.selectProfile(ai2.id)
+    let reopened = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
+    try expect(reopened.selectedProfileID == ai2.id && reopened.sharesProviderImages && reopened.hasToken,
+               "Selected model profile did not persist")
+    try settings.removeProfile(ai2.id)
+    try expect(settings.selectedProfileID == local.id && settings.hasToken && settings.hasSavedToken(for: cloud),
+               "Removing ai2 cleared another model profile")
+    let serialized = defaults.data(forKey: "assistant.modelProfiles").map { String(decoding: $0, as: UTF8.self) } ?? ""
+    try expect(!serialized.contains(legacyToken) && !serialized.contains(legacyCloud) && !serialized.contains(ai2Token),
+               "Model credentials leaked to preferences")
     try expect(!settings.savesConversation && settings.confirmsVolumeEdits,
                "Conversation must be opt-in and edits must ask by default")
     settings.workMinutes = 75
@@ -268,12 +305,9 @@ struct VoiceAgentTests {
     try expect(settings.workMinutes == 5, "Work time must not be shorter than five minutes")
     settings.workMinutes = 180
     try expect(settings.speechRateMultiplier == 1, "Default speech rate changed")
-    let vllmToken = try settings.token()
-    settings.provider = .openAI
-    try expect(!settings.hasToken && !settings.sharesProviderImages, "OpenAI reused local credentials or render consent")
-    try settings.setToken(String(repeating: "o", count: 64))
-    settings.provider = .vllm
-    try expect(try settings.token() == vllmToken && settings.sharesProviderImages, "vLLM settings were overwritten")
+    settings.selectProfile(cloud.id)
+    try expect(settings.hasToken && !settings.sharesProviderImages, "OpenAI reused local render consent")
+    settings.selectProfile(local.id)
     defer { try? KeychainSecretStore.delete(account: account + "-openai") }
     let initialIdentity = settings.identity
     settings.speechRateMultiplier = 1.6
@@ -296,6 +330,10 @@ struct VoiceAgentTests {
     try store.save(archive, owner: settings.archiveOwnerID)
     try expect(try store.load(owner: settings.archiveOwnerID)?.transcript.first?.text == "Keep a local record.",
                "Local opt-in conversation did not round-trip")
+    for profile in settings.profiles { try settings.removeProfile(profile.id) }
+    let empty = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
+    try expect(empty.profiles.isEmpty && empty.selectedProfileID == nil && !empty.hasToken,
+               "Deleted profiles were recreated from legacy settings")
     app.closeDataset(destination: .datasetSelection)
     try await testImportWorkflow(fixture: fixture, service: service, model: app)
     print("Native assistant tests passed: TLS trust, provider separation, local policy, screenshots, import and fusion")

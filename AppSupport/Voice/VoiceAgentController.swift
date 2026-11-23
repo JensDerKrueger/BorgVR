@@ -71,7 +71,7 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
     }
   }
 
-  var isAvailable: Bool { bridge != nil && settings.enabled }
+  var isAvailable: Bool { bridge != nil && settings.enabled && settings.selectedProfileID != nil }
   var evidenceVersion: AssistantEvidenceVersion { .init(opening: bridge?.applicationDatasetContext?.openingID, revision: revision) }
 
   func configure(bridge: any VoiceAgentApplicationBridge) {
@@ -120,47 +120,25 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
       images: settings.sharesProviderImages, datasetReady: bridge.rendererReady && bridge.context != nil)
   }
 
-  private func client() throws -> VoiceAgentModelClient {
-    let provider = settings.provider
-    let cloud = provider == .openAI
-    let endpoint = try VoiceAgentEndpoint(cloud ? "https://api.openai.com" : settings.address)
-    let model = cloud ? settings.openAIModel.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-    if cloud, model.range(of: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", options: .regularExpression) == nil {
-      throw VoiceAgentError.configuration
-    }
-    let tls = VoiceAgentTLS(endpoint: endpoint, anchor: cloud ? Data() : settings.certificate)
-    return VoiceAgentModelClient(endpoint: endpoint, token: try settings.token(), session: tls.session(),
-                                 provider: provider, configuredModel: model)
-  }
-
   func connect() async {
     guard isAvailable, settings.hasToken, connectionState == .disconnected, !busy else { return }
-    do { try await probe(generate: false) } catch is CancellationError { }
-    catch { errorText = error.localizedDescription }
-  }
-
-  func testServer() async throws { try await probe(generate: true) }
-
-  private func probe(generate: Bool) async throws {
     let identity = settings.identity
     settingsIdentity = identity
     connectionState = .connecting
     do {
-      let client = try client()
+      let client = try settings.modelClient()
       let name = try await client.verifyConnection()
-      if generate {
-        let result = try await client.decide(.init(system: "Return a JSON decision of kind finish with the text ready.",
-                                                   context: "Connectivity test. No BorgVR data.", images: []))
-        guard result.kind == .finish else { throw VoiceAgentError.protocolViolation }
-      }
       guard identity == settings.identity, settingsIdentity == identity else { throw CancellationError() }
       model = name
       connectionState = .ready
       if !busy { status = voiceAgentText("Connected") }
       errorText = nil
     } catch {
-      if settingsIdentity == identity { connectionState = .disconnected; status = voiceAgentText("Disconnected") }
-      throw error
+      if settingsIdentity == identity && settings.identity == identity {
+        connectionState = .disconnected
+        status = voiceAgentText("Disconnected")
+        if !(error is CancellationError) { errorText = error.localizedDescription }
+      }
     }
   }
 
@@ -194,7 +172,7 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
       guard let self else { return }
       var core: BorgVRAssistantCore?
       do {
-        let client = try self.client()
+        let client = try self.settings.modelClient()
         let knowledge = try self.settings.knowledge()
         let assistant = previousCore ?? BorgVRAssistantCore(workspace: self, model: client, knowledge: knowledge,
                                                              imagesAllowed: self.settings.sharesProviderImages)

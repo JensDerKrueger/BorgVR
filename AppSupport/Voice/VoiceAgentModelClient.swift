@@ -1,6 +1,6 @@
 import Foundation
 
-enum VoiceAgentModelProvider: String, CaseIterable, Identifiable {
+enum VoiceAgentModelProvider: String, CaseIterable, Codable, Identifiable {
   case vllm, openAI
   var id: Self { self }
 }
@@ -39,6 +39,14 @@ final class VoiceAgentModelClient: AssistantDecisionModel {
   func verifyConnection() async throws -> String {
     let id = try await discover()
     if provider == .openAI { _ = try await request("models/" + id) }
+    return id
+  }
+
+  func testConnection() async throws -> String {
+    let id = try await verifyConnection()
+    let result = try await decide(.init(system: "Return a JSON decision of kind finish with the text ready.",
+                                        context: "Connectivity test. No BorgVR data.", images: []))
+    guard result.kind == .finish else { throw VoiceAgentError.protocolViolation }
     return id
   }
 

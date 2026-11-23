@@ -390,11 +390,8 @@ struct VoiceAgentMarkdownText: View {
 struct VoiceAgentSettingsView: View {
   @ObservedObject var agent: VoiceAgentController
   @ObservedObject private var settings: VoiceAgentSettings
-  @State private var token = ""
-  private enum ImportKind { case token, certificate, knowledge }
-  @State private var importKind = ImportKind.token
-  @State private var importing = false
-  @State private var testing = false
+  @State private var editingProfile: VoiceAgentProfile?
+  @State private var importsKnowledge = false
   @State private var errorText: String?
 
   init(agent: VoiceAgentController) {
@@ -405,146 +402,114 @@ struct VoiceAgentSettingsView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       Toggle(voiceAgentText("Enable AI assistant"), isOn: $settings.enabled)
-      Picker(voiceAgentText("Model provider"), selection: $settings.provider) {
-        Text("vLLM").tag(VoiceAgentModelProvider.vllm)
-        Text("OpenAI").tag(VoiceAgentModelProvider.openAI)
-      }
-      .disabled(importing || testing)
-      Text(voiceAgentText(settings.provider == .openAI ?
-        "OpenAI receives your request and relevant visualization state. Render images are sent only if you enable sharing below." :
-        "The assistant sends your text, visualization state and, if allowed, render images to your configured server. It can change the current visualization. No camera or passthrough images are sent."))
-        .font(.callout).foregroundStyle(.secondary)
+      profileList
       Divider()
-      TextField(voiceAgentText(settings.provider == .openAI ? "OpenAI model ID" : "vLLM HTTPS address"),
-                text: settings.provider == .openAI ? $settings.openAIModel : $settings.address)
-        .textFieldStyle(.roundedBorder)
-        #if !os(macOS)
-        .textInputAutocapitalization(.never).autocorrectionDisabled()
-        #endif
-      HStack {
-        SecureField(voiceAgentText(settings.hasToken ? "Access token stored in Keychain" : "Access token"), text: $token)
-          .textFieldStyle(.roundedBorder)
-        Button {
-          do { try settings.setToken(token); token = ""; errorText = nil }
-          catch { errorText = error.localizedDescription }
-        } label: { Image(systemName: "checkmark") }
-          .buttonStyle(.bordered).disabled(token.isEmpty)
-          .help(voiceAgentText("Save token"))
-          .accessibilityLabel(voiceAgentText("Save token"))
-        Button { importKind = .token; importing = true } label: { Image(systemName: "square.and.arrow.down") }
-          .buttonStyle(.bordered).help(voiceAgentText("Import token file"))
-          .accessibilityLabel(voiceAgentText("Import token file"))
-        if settings.hasToken {
-          Button {
-            do { try settings.setToken("") } catch { errorText = error.localizedDescription }
-          } label: { Image(systemName: "trash") }
-            .buttonStyle(.bordered).help(voiceAgentText("Remove token"))
-            .accessibilityLabel(voiceAgentText("Remove token"))
+      DisclosureGroup(voiceAgentText("Assistant options")) {
+        Toggle(voiceAgentText("Save and restore the assistant conversation"), isOn: $settings.savesConversation)
+        if let error = agent.conversationStorageError {
+          Text(error).font(.callout).foregroundStyle(.red)
         }
-      }
-      if settings.provider == .vllm {
-        HStack {
-        Button(voiceAgentText("Import server certificate"), systemImage: "checkmark.shield") {
-          importKind = .certificate; importing = true
-        }
-        .buttonStyle(.bordered)
-        if !settings.certificate.isEmpty {
-          Button { settings.removeCertificate() } label: { Image(systemName: "trash") }
-            .buttonStyle(.bordered).help(voiceAgentText("Use system trust"))
-            .accessibilityLabel(voiceAgentText("Use system trust"))
-        }
-      }
-      if !settings.fingerprint.isEmpty {
-        Text("SHA-256: " + settings.fingerprint).font(.caption.monospaced()).textSelection(.enabled)
-          .fixedSize(horizontal: false, vertical: true)
-      } else {
-        Text(voiceAgentText("System certificate trust")).font(.caption).foregroundStyle(.secondary)
-      }
-      }
-      Toggle(voiceAgentText(settings.provider == .openAI ? "Share render images with OpenAI" : "Share render images"),
-             isOn: settings.provider == .openAI ? $settings.sharesOpenAIImages : $settings.sharesImages)
-      Toggle(voiceAgentText("Save and restore the assistant conversation"), isOn: $settings.savesConversation)
-      if let error = agent.conversationStorageError {
-        Text(error).font(.callout).foregroundStyle(.red)
-      }
-      Toggle(voiceAgentText("Confirm volume edits"), isOn: $settings.confirmsVolumeEdits)
-      Toggle(voiceAgentText("Speak responses"), isOn: $settings.speaks)
-      Stepper(value: $settings.workMinutes, in: VoiceAgentSettings.workMinutesRange) {
-        HStack {
-          Text(voiceAgentText("Maximum work time (minutes)"))
-          Spacer()
-          Text(settings.workMinutes, format: .number).monospacedDigit()
-        }
-      }
-      VStack(alignment: .leading, spacing: 8) {
-        HStack {
-          Text(voiceAgentText("Speech rate"))
-          Spacer()
-          HStack(spacing: 4) {
-            Text(settings.speechRateMultiplier, format: .number.precision(.fractionLength(2))).monospacedDigit()
-            Text(verbatim: "\u{00D7}")
+        Toggle(voiceAgentText("Confirm volume edits"), isOn: $settings.confirmsVolumeEdits)
+        Toggle(voiceAgentText("Speak responses"), isOn: $settings.speaks)
+        Stepper(value: $settings.workMinutes, in: VoiceAgentSettings.workMinutesRange) {
+          HStack {
+            Text(voiceAgentText("Maximum work time (minutes)"))
+            Spacer()
+            Text(settings.workMinutes, format: .number).monospacedDigit()
           }
-          .fixedSize()
-          Button { settings.speechRateMultiplier = VoiceAgentSpeechRate.defaultMultiplier } label: {
-            Image(systemName: "arrow.counterclockwise")
+        }
+        VStack(alignment: .leading, spacing: 8) {
+          HStack {
+            Text(voiceAgentText("Speech rate"))
+            Spacer()
+            HStack(spacing: 4) {
+              Text(settings.speechRateMultiplier, format: .number.precision(.fractionLength(2))).monospacedDigit()
+              Text(verbatim: "\u{00D7}")
+            }
+            .fixedSize()
+            Button { settings.speechRateMultiplier = VoiceAgentSpeechRate.defaultMultiplier } label: {
+              Image(systemName: "arrow.counterclockwise")
+            }
+            .buttonStyle(.bordered)
+            .help(voiceAgentText("Default speech rate"))
+            .accessibilityLabel(voiceAgentText("Default speech rate"))
+          }
+          Slider(value: $settings.speechRateMultiplier, in: VoiceAgentSpeechRate.range, step: 0.05)
+            .accessibilityLabel(voiceAgentText("Speech rate"))
+        }
+        .disabled(!settings.speaks)
+        Toggle(voiceAgentText("On-device speech recognition only"), isOn: $settings.onDeviceOnly)
+        HStack {
+          Button(voiceAgentText("Import knowledge package"), systemImage: "doc.badge.plus") {
+            importsKnowledge = true
           }
           .buttonStyle(.bordered)
-          .help(voiceAgentText("Default speech rate"))
-          .accessibilityLabel(voiceAgentText("Default speech rate"))
-        }
-        Slider(value: $settings.speechRateMultiplier, in: VoiceAgentSpeechRate.range, step: 0.05)
-          .accessibilityLabel(voiceAgentText("Speech rate"))
-      }
-      .disabled(!settings.speaks)
-      Toggle(voiceAgentText("On-device speech recognition only"), isOn: $settings.onDeviceOnly)
-      HStack {
-        Button(voiceAgentText("Import knowledge package"), systemImage: "doc.badge.plus") {
-          importKind = .knowledge; importing = true
-        }
-        .buttonStyle(.bordered)
-        if settings.customKnowledge != nil {
-          Button { try? settings.selectKnowledge(nil) } label: { Image(systemName: "arrow.counterclockwise") }
-            .buttonStyle(.bordered).help(voiceAgentText("Restore bundled knowledge"))
-            .accessibilityLabel(voiceAgentText("Restore bundled knowledge"))
-        }
-      }
-      Text(voiceAgentText("If on-device-only recognition is disabled, Apple may process microphone audio. Audio is never sent to the model server."))
-        .font(.caption).foregroundStyle(.secondary)
-      HStack {
-        Button(voiceAgentText("Test server"), systemImage: "network") {
-          testing = true
-          Task {
-            do { try await agent.testServer(); errorText = nil }
-            catch { errorText = VoiceAgentError.connection.localizedDescription }
-            testing = false
+          if settings.customKnowledge != nil {
+            Button { try? settings.selectKnowledge(nil) } label: { Image(systemName: "arrow.counterclockwise") }
+              .buttonStyle(.bordered).help(voiceAgentText("Restore bundled knowledge"))
+              .accessibilityLabel(voiceAgentText("Restore bundled knowledge"))
           }
         }
-        .buttonStyle(.bordered).disabled(testing || !settings.hasToken)
-        if testing { ProgressView().controlSize(.small) }
-        Text(agent.status).foregroundStyle(.secondary)
+        Text(voiceAgentText("If on-device-only recognition is disabled, Apple may process microphone audio. Audio is never sent to the model server."))
+          .font(.caption).foregroundStyle(.secondary)
       }
-      if let error = errorText ?? agent.errorText { Text(error).foregroundStyle(.red).font(.callout) }
+      if let errorText { Text(errorText).foregroundStyle(.red).font(.callout) }
     }
-    .onChange(of: settings.provider) { _, _ in token = ""; errorText = nil }
-    .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
+    .sheet(item: $editingProfile) { profile in
+      VoiceAgentModelProfileEditor(settings: settings, profile: profile)
+    }
+    .fileImporter(isPresented: $importsKnowledge, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
       do {
         guard let url = try result.get().first else { return }
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        let limit = importKind == .knowledge ? 128 * 1024 : 64 * 1024
-        let file = try FileHandle(forReadingFrom: url)
-        defer { try? file.close() }
-        let data = try file.read(upToCount: limit + 1) ?? Data()
-        guard data.count <= limit else { throw VoiceAgentError.configuration }
-        switch importKind {
-          case .certificate: try settings.importCertificate(data)
-          case .knowledge: try settings.selectKnowledge(data)
-          case .token:
-            guard let token = String(data: data, encoding: .utf8) else { throw VoiceAgentError.configuration }
-            try settings.setToken(token)
-        }
+        let limit = 128 * 1024
+        let data = try VoiceAgentModelProfileEditor.readFile(url, limit: limit)
+        try settings.selectKnowledge(data)
         errorText = nil
       } catch { errorText = error.localizedDescription }
+    }
+  }
+
+  private var profileList: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text(voiceAgentText("Model profiles")).font(.headline)
+        Spacer()
+        Button { editingProfile = .init(provider: .vllm, name: "") } label: {
+          Image(systemName: "plus")
+        }
+        .buttonStyle(.bordered)
+        .help(voiceAgentText("Add model profile"))
+        .accessibilityLabel(voiceAgentText("Add model profile"))
+        .disabled(settings.profiles.count >= VoiceAgentSettings.maximumProfiles)
+      }
+      ForEach(settings.profiles) { profile in
+        let selected = settings.selectedProfileID == profile.id
+        HStack(spacing: 8) {
+          Button { settings.selectProfile(profile.id) } label: {
+            HStack(spacing: 8) {
+              Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+              Text(profile.title).lineLimit(1)
+              Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .frame(minHeight: 36)
+          }
+          .buttonStyle(.plain)
+          .accessibilityAddTraits(selected ? .isSelected : [])
+          Button { editingProfile = profile } label: { Image(systemName: "pencil") }
+            .buttonStyle(.bordered)
+            .help(voiceAgentText("Edit model profile"))
+            .accessibilityLabel(voiceAgentText("Edit model profile") + ": " + profile.title)
+          Button(role: .destructive) {
+            do { try settings.removeProfile(profile.id); errorText = nil }
+            catch { errorText = error.localizedDescription }
+          } label: { Image(systemName: "trash") }
+          .buttonStyle(.bordered)
+          .help(voiceAgentText("Remove model profile"))
+          .accessibilityLabel(voiceAgentText("Remove model profile") + ": " + profile.title)
+        }
+      }
     }
   }
 }
