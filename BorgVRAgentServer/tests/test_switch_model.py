@@ -39,7 +39,8 @@ def installed(tmp_path):
     return tmp_path
 
 
-def test_switch_retains_active_development_source_and_credentials(installed, monkeypatch):
+@pytest.mark.parametrize("context_length", [None, "4096"])
+def test_switch_retains_active_development_source_and_credentials(installed, monkeypatch, context_length):
     root = installed
     marker = development.marker(root)
     marker.write_text('{"root":"test-retained-development"}')
@@ -50,10 +51,11 @@ def test_switch_retains_active_development_source_and_credentials(installed, mon
     before = {path: path.read_bytes() for path in protected}
     original = configure.read_configuration(root)
     calls = []
-    menu.switch(root, "qwen35-4b", run=lambda path, command: calls.append(command))
+    menu.switch(root, "qwen35-4b", context_length=context_length, run=lambda path, command: calls.append(command))
     assert calls == ["doctor", "restart", "test"] and verified == [root]
     updated = configure.read_configuration(root)
     assert updated["BORGVR_MODEL"] == PROFILES["qwen35-4b"]["MODEL"]
+    assert updated["BORGVR_CONTEXT_LENGTH"] == (context_length or PROFILES["qwen35-4b"]["CONTEXT_LENGTH"])
     for key in ("BORGVR_AGENT_IMAGE", "BORGVR_VLLM_IMAGE", "BORGVR_GPU", "BORGVR_TENSOR_PARALLEL_SIZE",
                 "BORGVR_NCCL_P2P_DISABLE", "BORGVR_DISABLE_CUSTOM_ALL_REDUCE", "BORGVR_BIND_ADDRESS", "BORGVR_PORT"):
         assert updated[key] == original[key]
@@ -127,9 +129,27 @@ def test_invalid_development_state_prevents_any_change(installed, monkeypatch):
     assert (installed / ".env").read_bytes() == original
 
 
-def test_current_profile_is_a_noop(installed):
+@pytest.mark.parametrize("context_length", [None, "131072"])
+def test_current_profile_is_a_noop_when_context_is_unchanged(installed, context_length):
     original = (installed / ".env").read_bytes()
-    menu.switch(installed, "qwen38-27b", run=lambda *_: pytest.fail("No restart expected"))
+    menu.switch(installed, "qwen38-27b", context_length=context_length, run=lambda *_: pytest.fail("No restart expected"))
+    assert (installed / ".env").read_bytes() == original
+
+
+def test_current_model_context_override_changes_only_context(installed):
+    configure.write_configuration_changes(installed, {"BORGVR_CONTEXT_LENGTH": "16384", "BORGVR_MAX_SEQS": "1"})
+    before = configure.read_configuration(installed)
+    calls = []
+    menu.switch(installed, "qwen38-27b", context_length="131072", run=lambda path, command: calls.append(command))
+    assert calls == ["doctor", "restart", "test"]
+    assert configure.read_configuration(installed) == {**before, "BORGVR_CONTEXT_LENGTH": "131072"}
+
+
+@pytest.mark.parametrize("profile", ["qwen38-27b", "qwen35-4b"])
+def test_invalid_context_override_does_not_change_configuration(installed, profile):
+    original = (installed / ".env").read_bytes()
+    with pytest.raises(ValueError, match="between"):
+        menu.switch(installed, profile, context_length="0", run=lambda *_: pytest.fail("No setup command expected"))
     assert (installed / ".env").read_bytes() == original
 
 
@@ -145,3 +165,4 @@ def test_shell_entry_point_help_needs_no_privileges():
     root = Path(__file__).resolve().parents[1]
     result = subprocess.run(["bash", str(root / "switch-model.sh"), "--help"], capture_output=True, text=True)
     assert result.returncode == 0 and "Interactive model switching" in result.stdout
+    assert "--context-length TOKENS" in result.stdout

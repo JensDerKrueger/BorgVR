@@ -360,6 +360,11 @@ und fragt nach der gewünschten Nummer. `0` bricht ab. `custom` wird nicht angeb
 GPU-Auswahl und Tensor-Parallelisierung bleiben wie bisher eingestellt; die Modellprofile
 ändern nur die Modellparameter.
 
+Mit `./switch-model.sh --context-length 131072` lässt sich das Limit für das gewählte
+Modell ausdrücklich setzen. Ist es bereits aktiv, ändert ein neuer Wert nur die Kontextlänge.
+Die Dienste starten neu, damit vLLM und der Agent das Limit beide übernehmen. Ohne die
+Option bleibt bei erneuter Auswahl des aktuellen Modells alles unverändert.
+
 Der Wechsler sichert die Konfiguration, prüft die GPU, startet die Dienste neu und testet
 Bild- und Werkzeugaufrufe. Laufende KI-Aufträge werden unterbrochen. Bei Fehlern stellt er
 die bisherige Konfiguration wieder her und versucht, das alte Modell erneut zu starten.

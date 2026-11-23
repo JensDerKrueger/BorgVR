@@ -37,21 +37,33 @@ def run_setup(root, command):
     subprocess.run(["bash", str(root / "setup.sh"), command], check=True)
 
 
-def switch(root, profile, *, run=run_setup):
+def switch(root, profile, *, context_length=None, run=run_setup):
     if profile not in PROFILES or profile == "custom":
         raise ValueError("Unbekanntes Modellprofil")
     existing = configure.read_configuration(root)
-    if existing.get("BORGVR_MODEL") == PROFILES[profile]["MODEL"]:
+    same_model = existing.get("BORGVR_MODEL") == PROFILES[profile]["MODEL"]
+    if same_model and context_length is None:
         print("Dieses Modell ist bereits eingestellt; nichts geändert.")
         return
     env = root / ".env"
     runtime = root / "runtime"
     if env.is_symlink() or runtime.is_symlink() or not runtime.is_dir():
         raise ValueError("Reguläre .env und runtime-Verzeichnis erforderlich")
-    parser = argparse.ArgumentParser()
-    configure.add_model_options(parser)
-    parser.add_argument("--agent-image")
-    changes = configure.inference_values(parser.parse_args(["--profile", profile]), existing)
+    if same_model:
+        key = "BORGVR_CONTEXT_LENGTH"
+        length = str(configure.validate_model_gpu({**existing, key: context_length}).context)
+        if existing.get(key) == length:
+            print("Modell und Kontextlänge sind bereits eingestellt; nichts geändert.")
+            return
+        changes = {key: length}
+    else:
+        parser = argparse.ArgumentParser()
+        configure.add_model_options(parser)
+        parser.add_argument("--agent-image")
+        options = ["--profile", profile]
+        if context_length is not None:
+            options += ["--context-length", context_length]
+        changes = configure.inference_values(parser.parse_args(options), existing)
     if development.marker(root).exists() or development.marker(root).is_symlink():
         development.overlay_file(root)
         print("Entwicklungsmodus bleibt aktiv: Agentencode und SSH-Zugang bleiben erhalten.")
@@ -94,7 +106,8 @@ def switch(root, profile, *, run=run_setup):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args()
+    parser.add_argument("--context-length", metavar="TOKENS", help="Override the selected model's context length.")
+    args = parser.parse_args()
     if sys.platform != "linux" or os.geteuid() != 0:
         parser.error("Auf dem Linux-Server mit sudo ./switch-model.sh starten")
     existing = configure.read_configuration(ROOT)
@@ -108,7 +121,7 @@ def main():
     if runtime.is_symlink() or not runtime.is_dir():
         raise ValueError("Reguläres runtime-Verzeichnis erforderlich")
     with development.deployment_lock(runtime):
-        switch(ROOT, profile)
+        switch(ROOT, profile, context_length=args.context_length)
 
 
 if __name__ == "__main__":

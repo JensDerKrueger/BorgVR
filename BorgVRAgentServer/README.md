@@ -338,6 +338,11 @@ model profiles, marks the currently configured model and asks for a number; `0` 
 The `custom` profile is excluded. GPU selection and tensor parallelism remain unchanged;
 profiles only change model settings.
 
+Use `./switch-model.sh --context-length 131072` to override the selected model's context.
+Selecting the current model with a different explicit limit changes only that setting and
+restarts the services so both vLLM and the agent use it. Without an override, selecting the
+current model leaves its configuration unchanged.
+
 The switcher backs up configuration, checks the GPU, restarts services and tests image
 input and tool calling. Active assistant requests are interrupted. On failure it restores
 the previous configuration and attempts to restart the old model; recovery failures are
