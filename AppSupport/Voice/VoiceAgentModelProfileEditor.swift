@@ -10,6 +10,7 @@ struct VoiceAgentModelProfileEditor: View {
   @State private var removeToken = false
   @State private var importsCertificate = false
   @State private var importing = false
+  @State private var showsModels = false
   @State private var test: Task<Void, Never>?
   @State private var testedModel: String?
   @State private var errorText: String?
@@ -25,6 +26,7 @@ struct VoiceAgentModelProfileEditor: View {
     let typed = token.trimmingCharacters(in: .whitespacesAndNewlines)
     return typed.isEmpty ? (removeToken ? "" : nil) : typed
   }
+  private var canUseToken: Bool { tokenOverride.map { (try? VoiceAgentEndpoint.validateToken($0)) != nil } ?? savedToken }
 
   var body: some View {
     NavigationStack {
@@ -38,11 +40,12 @@ struct VoiceAgentModelProfileEditor: View {
         } else {
           LabeledContent(voiceAgentText("Model provider"), value: profile.provider == .openAI ? "OpenAI" : "vLLM")
         }
-        TextField(voiceAgentText(profile.provider == .openAI ? "OpenAI model ID" : "vLLM HTTPS address"),
-                  text: profile.provider == .openAI ? $profile.model : $profile.address)
-        #if !os(macOS)
-          .textInputAutocapitalization(.never).autocorrectionDisabled()
-        #endif
+        if profile.provider == .vllm {
+          TextField(voiceAgentText("vLLM HTTPS address"), text: $profile.address)
+          #if !os(macOS)
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+          #endif
+        }
         HStack {
           SecureField(voiceAgentText(savedToken ? "Access token stored in Keychain" : "Access token"), text: $token)
           Button { importsCertificate = false; importing = true } label: { Image(systemName: "square.and.arrow.down") }
@@ -55,6 +58,24 @@ struct VoiceAgentModelProfileEditor: View {
               .help(voiceAgentText("Remove token"))
               .accessibilityLabel(voiceAgentText("Remove token"))
           }
+        }
+        if profile.provider == .openAI {
+          TextField(voiceAgentText("OpenAI model ID"), text: $profile.model)
+          #if !os(macOS)
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+          #endif
+          Button(voiceAgentText("Choose OpenAI model"), systemImage: "list.bullet") { showsModels = true }
+            .disabled(!canUseToken)
+            .popover(isPresented: $showsModels) {
+              let draft = profile
+              let override = tokenOverride
+              OpenAIModelPicker(selectedModel: draft.model, load: {
+                try await settings.openAIModels(for: draft, tokenOverride: override)
+              }, select: { id in
+                profile.model = id
+                showsModels = false
+              })
+            }
         }
         if profile.provider == .vllm {
           HStack {
@@ -93,7 +114,7 @@ struct VoiceAgentModelProfileEditor: View {
             .keyboardShortcut(.cancelAction)
           Spacer()
           Button(voiceAgentText("Test connection"), action: testConnection)
-            .disabled(test != nil || !profile.isConfigured || (tokenOverride?.isEmpty ?? !savedToken))
+            .disabled(test != nil || !profile.isConfigured || !canUseToken)
           Button(voiceAgentText("OK")) { save() }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.defaultAction)
@@ -165,5 +186,71 @@ struct VoiceAgentModelProfileEditor: View {
     let data = try file.read(upToCount: limit + 1) ?? Data()
     guard data.count <= limit else { throw VoiceAgentError.configuration }
     return data
+  }
+}
+
+private struct OpenAIModelPicker: View {
+  let selectedModel: String
+  let load: @MainActor () async throws -> [String]
+  let select: (String) -> Void
+  @State private var modelIDs: [String]?
+  @State private var failed = false
+  @State private var search = ""
+
+  private var matches: [String] {
+    let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (modelIDs ?? []).filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      if failed {
+        Text(voiceAgentText("Could not load models. Check the API key, its permissions and the network."))
+      } else if let modelIDs {
+        if modelIDs.isEmpty {
+          Text(voiceAgentText("No OpenAI models available"))
+        } else {
+          TextField(voiceAgentText("Search models"), text: $search)
+            .textFieldStyle(.roundedBorder)
+            #if !os(macOS)
+            .textInputAutocapitalization(.never).autocorrectionDisabled()
+            #endif
+            .onSubmit {
+              if matches.count == 1, let id = matches.first { select(id) }
+            }
+          if matches.isEmpty {
+            Text(voiceAgentText("No matching models")).foregroundStyle(.secondary)
+            Spacer()
+          } else {
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(matches, id: \.self) { id in
+                  Button { select(id) } label: {
+                    HStack {
+                      Text(id).lineLimit(2).truncationMode(.middle)
+                      Spacer(minLength: 8)
+                      if id == selectedModel { Image(systemName: "checkmark") }
+                    }
+                    .frame(minHeight: 36)
+                    .contentShape(Rectangle())
+                  }
+                  .buttonStyle(.plain)
+                  .accessibilityAddTraits(id == selectedModel ? .isSelected : [])
+                }
+              }
+            }
+          }
+        }
+      } else {
+        ProgressView().accessibilityLabel(voiceAgentText("Loading OpenAI models"))
+      }
+    }
+    .padding()
+    .frame(idealWidth: 320, maxWidth: 360, idealHeight: 300, maxHeight: 340)
+    .task {
+      do { modelIDs = try await load() }
+      catch { if !Task.isCancelled { failed = true } }
+    }
+    .presentationCompactAdaptation(.popover)
   }
 }

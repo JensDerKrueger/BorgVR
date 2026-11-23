@@ -38,8 +38,7 @@ struct VoiceAgentProfile: Codable, Identifiable {
 
   var isConfigured: Bool {
     if provider == .vllm { return origin != nil }
-    return model.trimmingCharacters(in: .whitespacesAndNewlines)
-      .range(of: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", options: .regularExpression) != nil
+    return VoiceAgentModelClient.isValidOpenAIModelID(model.trimmingCharacters(in: .whitespacesAndNewlines))
   }
 
   var trustedCertificate: Data {
@@ -245,9 +244,18 @@ final class VoiceAgentSettings: ObservableObject {
   private func refreshTokenState() { hasToken = selectedProfile.map { hasSavedToken(for: $0) } ?? false }
 
   func modelClient(for draft: VoiceAgentProfile? = nil, tokenOverride: String? = nil) throws -> VoiceAgentModelClient {
-    guard let profile = draft ?? selectedProfile, profile.isConfigured, let origin = profile.origin else {
-      throw VoiceAgentError.configuration
-    }
+    guard let profile = draft ?? selectedProfile, profile.isConfigured else { throw VoiceAgentError.configuration }
+    return try makeModelClient(for: profile, tokenOverride: tokenOverride)
+  }
+
+  func openAIModels(for draft: VoiceAgentProfile, tokenOverride: String?) async throws -> [String] {
+    guard draft.provider == .openAI else { throw VoiceAgentError.configuration }
+    let client = try makeModelClient(for: draft, tokenOverride: tokenOverride)
+    return try await client.listOpenAIModels()
+  }
+
+  private func makeModelClient(for profile: VoiceAgentProfile, tokenOverride: String?) throws -> VoiceAgentModelClient {
+    guard let origin = profile.origin else { throw VoiceAgentError.configuration }
     let endpoint = try VoiceAgentEndpoint(origin)
     let token = try tokenOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? storedToken(for: profile)
     try VoiceAgentEndpoint.validateToken(token)

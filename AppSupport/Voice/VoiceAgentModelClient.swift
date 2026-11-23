@@ -24,14 +24,28 @@ final class VoiceAgentModelClient: AssistantDecisionModel {
 
   deinit { session.invalidateAndCancel() }
 
-  func discover() async throws -> String {
+  private func modelIDs() async throws -> [String] {
     struct Models: Decodable {
       struct Item: Decodable { let id: String }
       let data: [Item]
     }
-    if !model.isEmpty { return model }
     let response = try JSONDecoder().decode(Models.self, from: try await request("models"))
-    guard let id = response.data.first?.id, !id.isEmpty, id.utf8.count <= 256 else { throw VoiceAgentError.connection }
+    return response.data.map(\.id)
+  }
+
+  nonisolated static func isValidOpenAIModelID(_ id: String) -> Bool {
+    id.range(of: "\\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\\z", options: .regularExpression) != nil
+  }
+
+  func listOpenAIModels() async throws -> [String] {
+    guard provider == .openAI else { throw VoiceAgentError.configuration }
+    let ids = try await modelIDs()
+    return Set(ids.filter { Self.isValidOpenAIModelID($0) }).sorted()
+  }
+
+  func discover() async throws -> String {
+    if !model.isEmpty { return model }
+    guard let id = try await modelIDs().first, !id.isEmpty, id.utf8.count <= 256 else { throw VoiceAgentError.connection }
     model = id
     return id
   }

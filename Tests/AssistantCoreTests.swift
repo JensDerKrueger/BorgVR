@@ -8,6 +8,43 @@ private func check(_ condition: Bool, _ message: String) throws {
   if !condition { throw Failure.unexpected(message) }
 }
 
+private final class ModelListFixture: URLProtocol, @unchecked Sendable {
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    guard let url = request.url, request.httpMethod == "GET", url.path == "/v1/models", request.httpBody == nil else {
+      client?.urlProtocol(self, didFailWithError: Failure.unexpected("incorrect model list request"))
+      return
+    }
+    let status: Int
+    let body: String
+    switch (url.host, request.value(forHTTPHeaderField: "Authorization")) {
+      case ("api.openai.com", "Bearer draft-key"):
+        status = 200
+        body = #"{"data":[{"id":"gpt-test-2"},{"id":"ft:gpt-test:custom"},{"id":"gpt-test-2"},{"id":""},{"id":"invalid/id"},{"id":"invalid\n"}]}"#
+      case ("api.openai.com", "Bearer empty-key"):
+        status = 200
+        body = #"{"data":[]}"#
+      case ("api.openai.com", "Bearer forbidden-key"):
+        status = 403
+        body = #"{"error":{"message":"Missing models permission"}}"#
+      case ("vllm.example", "Bearer local-key"):
+        status = 200
+        body = #"{"data":[{"id":"Qwen/local"},{"id":"adapter"}]}"#
+      default:
+        client?.urlProtocol(self, didFailWithError: Failure.unexpected("incorrect model list origin or token"))
+        return
+    }
+    let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Data(body.utf8))
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}
+
 @MainActor
 private final class Workspace: AssistantWorkspace {
   var revision: UInt64 = 0
@@ -154,6 +191,33 @@ struct AssistantCoreTests {
       let decision = try VoiceAgentModelClient.decision(from: Data(output.utf8), provider: provider)
       try check(decision.kind == .finish && decision.text == "ok", "provider output did not decode to the shared decision")
     }
+    try await testModelList()
     print("Swift assistant: sweep, exact application, stale evidence, cancellation, permissions, rules, and both provider contracts passed.")
+  }
+
+  private static func testModelList() async throws {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [ModelListFixture.self]
+    let cloud = try VoiceAgentEndpoint("https://api.openai.com")
+    func client(_ token: String, selected: String = "") -> VoiceAgentModelClient {
+      .init(endpoint: cloud, token: token, session: URLSession(configuration: config),
+            provider: .openAI, configuredModel: selected)
+    }
+
+    let draft = client("draft-key", selected: "gpt-manual")
+    let choices = try await draft.listOpenAIModels()
+    try check(choices == ["ft:gpt-test:custom", "gpt-test-2"], "invalid/duplicate OpenAI IDs or wrong list order")
+    try check(draft.model == "gpt-manual", "fetch replaced the model selection")
+    let empty = try await client("empty-key").listOpenAIModels()
+    try check(empty.isEmpty, "failed to handle an empty list without a selected model")
+    do {
+      _ = try await client("forbidden-key").listOpenAIModels()
+      throw Failure.unexpected("a refused list request succeeded")
+    } catch VoiceAgentError.connection {}
+
+    let local = VoiceAgentModelClient(endpoint: try VoiceAgentEndpoint("https://vllm.example"), token: "local-key",
+                                      session: URLSession(configuration: config))
+    let model = try await local.discover()
+    try check(model == "Qwen/local", "vLLM discovery did not keep the first served ID")
   }
 }

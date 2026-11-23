@@ -24,7 +24,7 @@ Der erste Modell-Download kann länger dauern. Der Test prüft TLS, Schlüsselpf
 
 Unter **Einstellungen → KI-Assistent** den Assistenten einschalten. Über **+** ein Profil vom Typ **vLLM** anlegen, zum Beispiel `ai1`. `https://ai1:8766` (oder tatsächlichen Namen/IP und Port) eintragen und `runtime/secrets/vllm_token` als Zugangsschlüssel importieren. Wird dem Zertifikat nicht bereits vertraut, das öffentliche `runtime/tls/server.crt` importieren. Niemals `server.key` übertragen. Für den Sweep **Renderbilder teilen** aktivieren. **Testen** prüft den Entwurf, **OK** speichert ihn. In der Liste wird genau ein Profil ausgewählt; Bearbeiten und Entfernen gelten jeweils nur für die betreffende Zeile. Ein vorhandener kompatibler vLLM-Endpunkt braucht dieses Setup nicht.
 
-Für **OpenAI** die Modell-ID und einen eigenen API-Schlüssel hinterlegen. Renderbilder an OpenAI werden separat freigegeben. Die App setzt `store: false`; das ersetzt nicht die Regeln des Anbieters zum Umgang mit Daten. Sensible Datensätze oder Metadaten nur an dafür freigegebene Dienste übermitteln.
+Für **OpenAI** den API-Schlüssel eingeben und unter **OpenAI-Modell auswählen** die für diesen Schlüssel verfügbaren Modelle durchsuchen. Die Modell-ID lässt sich auch von Hand eingeben. **Testen** prüft, ob das gewählte Modell eine strukturierte Textantwort liefert; ein Eintrag in der Liste garantiert keine Eignung für den Assistenten. Renderbilder an OpenAI werden separat freigegeben. Die App setzt `store: false`; das ersetzt nicht die Regeln des Anbieters zum Umgang mit Daten. Sensible Datensätze oder Metadaten nur an dafür freigegebene Dienste übermitteln.
 
 ## Betrieb und Modellwechsel
 
