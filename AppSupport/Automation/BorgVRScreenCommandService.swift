@@ -11,6 +11,7 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
 
   private let session: ScreenBorgVRSession
   var commandExecutor: (any BorgVRCommandExecuting)? { session }
+  var viewportAspectRatio: Float { session.visualizationState.viewportAspectRatio }
   private let datasetListProvider: DatasetListProvider
   private let datasetOpener: DatasetOpener
   private let datasetCloser: DatasetCloser
@@ -381,30 +382,25 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     defer { try? FileManager.default.removeItem(at: temporaryURL) }
 
     let requestID = UUID()
-    let url = try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<URL, Error>) in
-      let gate = BorgVRMCPContinuationGate(continuation)
-      appModel.requestRenderScreenshot(
-        id: requestID,
-        to: temporaryURL,
-        accessURL: nil,
-        maxWidth: maxWidth
-      ) { result in
-        gate.resume(with: result)
-      }
-      Task { @MainActor in
-        do {
-          try await Task.sleep(for: .seconds(10))
-        } catch {
-          return
+    let url: URL = try await withTaskCancellationHandler {
+      try Task.checkCancellation()
+      return try await withCheckedThrowingContinuation { continuation in
+        let gate = BorgVRMCPContinuationGate(continuation)
+        let timeout = Task { @MainActor in
+          do { try await Task.sleep(for: .seconds(10)) }
+          catch { return }
+          appModel.cancelRenderScreenshot(id: requestID, error: BorgVRMCPCommandError.timeout)
+          gate.resume(with: .failure(BorgVRMCPCommandError.timeout))
         }
-        appModel.cancelRenderScreenshot(
-          id: requestID,
-          error: BorgVRMCPCommandError.timeout
-        )
-        gate.resume(with: .failure(BorgVRMCPCommandError.timeout))
+        appModel.requestRenderScreenshot(id: requestID, to: temporaryURL, accessURL: nil, maxWidth: maxWidth) {
+          timeout.cancel()
+          gate.resume(with: $0)
+        }
       }
+    } onCancel: {
+      Task { @MainActor in appModel.cancelRenderScreenshot(id: requestID, error: CancellationError()) }
     }
+    try Task.checkCancellation()
     let data = try Data(contentsOf: url)
     guard let source = CGImageSourceCreateWithData(data as CFData, nil),
           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

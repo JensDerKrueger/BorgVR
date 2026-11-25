@@ -10,6 +10,24 @@ enum VoiceAgentSpeechRate {
     value.isFinite ? min(range.upperBound, max(range.lowerBound, value)) : defaultMultiplier
   }
 }
+
+enum VoiceAgentResponseLength: String, CaseIterable {
+  case concise, standard, detailed
+
+  var guidance: String {
+    switch self {
+      case .concise:
+        "Use a brief sentence for a progress update. Prefer one or two short sentences in replies. Keep necessary caveats and questions."
+      case .standard:
+        "Use a natural length suited to the request. Keep progress updates to one sentence."
+      case .detailed:
+        "Keep each progress update to one sentence, adding a reason if helpful. In the final reply, explain the relevant evidence, result and any remaining uncertainty."
+    }
+  }
+
+  var stepCharacterLimit: Int { self == .concise ? 140 : 280 }
+}
+
 enum VoiceAgentError: LocalizedError, Equatable {
   case configuration, protocolViolation, contextChanged, timedOut, imageTooLarge
   case permissions, speechUnavailable, connection, commandFailed
@@ -33,6 +51,47 @@ enum VoiceAgentError: LocalizedError, Equatable {
       case .changesAppliedContextLimit: key = "Changes were applied, but the AI model's context was exhausted before the final check. Inspect the visualization and start a new conversation."
       case .changesAppliedVerificationFailed: key = "Changes were applied, but the final check could not be completed. Inspect the visualization before continuing."
       case .completionUncertain: key = "It is unclear whether the last change was fully applied. Inspect the visualization before starting a new conversation; the command will not be repeated automatically."
+    }
+    return NSLocalizedString(key, tableName: "VoiceAgent", comment: "")
+  }
+}
+
+enum AssistantRunFailure: String, LocalizedError {
+  case knowledgeMissing = "knowledge_missing"
+  case knowledgeInvalid = "knowledge_invalid"
+  case contextInvalid = "context_invalid"
+  case modelResponseInvalid = "model_response_invalid"
+  case modelOutputLimit = "model_output_limit"
+  case modelDecisionMissing = "model_decision_missing"
+  case modelDecisionInvalid = "model_decision_invalid"
+  case modelReplyEmpty = "model_reply_empty"
+  case modelStalled = "model_stalled"
+
+  var decisionRepairHint: String? {
+    switch self {
+      case .modelOutputLimit:
+        return "Your last decision exceeded the output limit. Return one short decision with only the necessary arguments."
+      case .modelDecisionMissing, .modelDecisionInvalid:
+        return "Your last response did not contain a usable structured decision. Return one decision matching the current schema."
+      case .modelReplyEmpty:
+        return "Your last finish or ask decision did not contain text. Supply the actual answer or question, or choose a justified tool."
+      default:
+        return nil
+    }
+  }
+
+  var errorDescription: String? {
+    let key: String
+    switch self {
+      case .knowledgeMissing: key = "BorgVR could not find the assistant knowledge package."
+      case .knowledgeInvalid: key = "BorgVR could not read or validate the assistant knowledge package."
+      case .contextInvalid: key = "BorgVR could not prepare the current state for the assistant."
+      case .modelResponseInvalid: key = "The model server returned an unexpected response."
+      case .modelOutputLimit: key = "The model reached its output limit before BorgVR could use its decision."
+      case .modelDecisionMissing: key = "The model did not return a BorgVR decision."
+      case .modelDecisionInvalid: key = "The model returned a decision that BorgVR could not read."
+      case .modelReplyEmpty: key = "The model ended the request or asked a question without supplying text."
+      case .modelStalled: key = "The assistant could not make progress on this request. No changes were confirmed."
     }
     return NSLocalizedString(key, tableName: "VoiceAgent", comment: "")
   }
@@ -76,6 +135,8 @@ enum VoiceAgentPolicy {
 
   static let maximumFrameBytes = 4 * 1024 * 1024
   static let maximumResultBytes = 256 * 1024
+  // Four three-digit bytes per row must fit in a structured assistant observation.
+  static let maximumTransferPreviewSamples = 192
   static let maximumTools = 48
   static let conversionTools: Set<String> = ["import_volume", "fuse_volumes"]
   static let fileTools: Set<String> = conversionTools.union(["save_visualization_state", "load_visualization_state", "export_edited_dataset"])
@@ -108,19 +169,10 @@ enum VoiceAgentPolicy {
     "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions"
   ]
   static let additionalTools: Set<String> = [
-    "set_transfer_function_component", "capture_tf_preview",
-  ]
-  static let intensityPreviewTool: [String: Any] = [
-    "name": "capture_tf_preview",
-    "description": "Render a coarse, isolated Z projection of a scalar intensity band without changing the current view.",
-    "inputSchema": ["type": "object", "additionalProperties": false, "required": ["channel", "high", "low", "palette"],
-      "properties": ["channel": ["type": "integer", "minimum": 0, "maximum": 3],
-                     "low": ["type": "number", "minimum": 0, "maximum": 1],
-                     "high": ["type": "number", "minimum": 0, "maximum": 1],
-                     "palette": ["type": "string", "enum": ["grayscale", "rainbow"]]]]
+    "set_transfer_function_component",
   ]
   static let reads: Set<String> = ["search_datasets", "get_application_state", "get_transfer_function", "get_background",
-                                    "wait_until_rendered", "capture_screenshot", "capture_tf_preview", "pick_screenshot_positions", "list_objects", "list_measurements",
+                                    "wait_until_rendered", "capture_screenshot", "pick_screenshot_positions", "list_objects", "list_measurements",
                                     "get_volume_edit_state", "wait_volume_edits", "get_command_history", "get_import_status"]
 
   static let maximumVolumeEditSamples = 256
@@ -174,9 +226,9 @@ enum VoiceAgentPolicy {
       if !datasetReady && !applicationTools.contains(name) { return nil }
       if datasetReady && conversionTools.contains(name) { return nil }
       if vision && ["set_background", "set_screen_projection", "get_background"].contains(name) { return nil }
-      if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_transfer_function_component", "capture_tf_preview", "set_render_mode",
+      if !transferFunctions && ["get_transfer_function", "set_transfer_function", "set_transfer_function_component", "set_render_mode",
                                 "set_iso_value", "set_lighting"].contains(name) { return nil }
-      if !images && ["capture_screenshot", "capture_tf_preview", "pick_screenshot_positions"].contains(name) { return nil }
+      if !images && ["capture_screenshot", "pick_screenshot_positions"].contains(name) { return nil }
       var value = original
       if let schema = VoiceAgentAnnotationPolicy.schema(for: name) {
         value["inputSchema"] = schema
@@ -190,12 +242,12 @@ enum VoiceAgentPolicy {
       }
       if ["get_transfer_function", "set_transfer_function"].contains(name) {
         value["description"] = (original["description"] as? String ?? "") +
-          " Returned samples are a uniformly spaced preview across [0,1], at most 256 entries. " +
+          " Returned samples are a uniformly spaced preview across [0,1], at most \(maximumTransferPreviewSamples) entries. " +
           "originalSampleCount is the full table size; samplesArePreview marks approximate previews. " +
           "This does not reduce the actual TF resolution."
       }
       if name == "capture_screenshot" {
-        var properties: [String: Any] = ["include_alpha": ["type": "boolean"]]
+        var properties: [String: Any] = ["include_alpha": ["type": "boolean", "default": true]]
         if let schema = original["inputSchema"] as? [String: Any],
            let advertised = schema["properties"] as? [String: Any],
            let maxWidth = advertised["max_width"] {
@@ -273,41 +325,63 @@ enum VoiceAgentPolicy {
     }
   }
 
-  static func validate(_ value: Any, schema: [String: Any], depth: Int = 0) throws {
-    guard depth <= 16 else { throw VoiceAgentError.protocolViolation }
+  struct ArgumentIssue: Error {
+    let path: String
+    let reason: String
+
+    var detail: String { "\(path): \(reason)" }
+  }
+
+  static func validate(_ value: Any, schema: [String: Any]) throws {
+    try validate(value, schema: schema, path: "arguments", depth: 0)
+  }
+
+  private static func validate(_ value: Any, schema: [String: Any], path: String, depth: Int) throws {
+    func issue(_ reason: String) -> ArgumentIssue { .init(path: path, reason: reason) }
+    guard depth <= 16 else { throw issue("nesting exceeds the supported limit.") }
     switch schema["type"] as? String {
       case "object":
-        guard let object = value as? [String: Any], let properties = schema["properties"] as? [String: Any],
-              Set(object.keys).isSubset(of: Set(properties.keys)),
-              Set(schema["required"] as? [String] ?? []).isSubset(of: Set(object.keys))
-        else { throw VoiceAgentError.protocolViolation }
-        for (key, item) in object {
-          guard let child = properties[key] as? [String: Any] else { throw VoiceAgentError.protocolViolation }
-          try validate(item, schema: child, depth: depth + 1)
+        guard let object = value as? [String: Any] else { throw issue("expected an object.") }
+        guard let properties = schema["properties"] as? [String: Any] else { throw issue("no supported object schema.") }
+        if let missing = (schema["required"] as? [String] ?? []).sorted().first(where: { object[$0] == nil }) {
+          throw issue("missing required property '\(missing)'.")
+        }
+        for key in object.keys.sorted() {
+          guard let child = properties[key] as? [String: Any], let item = object[key] else {
+            throw issue("unknown property \(String(reflecting: String(key.prefix(80)))).")
+          }
+          try validate(item, schema: child, path: "\(path).\(key)", depth: depth + 1)
         }
       case "array":
-        guard let array = value as? [Any], array.count >= (schema["minItems"] as? Int ?? 0),
-              array.count <= (schema["maxItems"] as? Int ?? 65536),
-              let items = schema["items"] as? [String: Any] else { throw VoiceAgentError.protocolViolation }
-        for item in array { try validate(item, schema: items, depth: depth + 1) }
+        guard let array = value as? [Any] else { throw issue("expected an array.") }
+        let min = schema["minItems"] as? Int ?? 0, max = schema["maxItems"] as? Int ?? 65536
+        if array.count < min || array.count > max {
+          let expected = min == max ? "exactly \(min)" : "\(min)...\(max)"
+          throw issue("expected \(expected) entries, got \(array.count).")
+        }
+        guard let items = schema["items"] as? [String: Any] else { throw issue("no supported array item schema.") }
+        for (index, item) in array.enumerated() {
+          try validate(item, schema: items, path: "\(path)[\(index)]", depth: depth + 1)
+        }
       case "number", "integer":
         guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
-              number.doubleValue.isFinite else { throw VoiceAgentError.protocolViolation }
+              number.doubleValue.isFinite else { throw issue("expected a finite number, not a boolean or string.") }
         let n = number.doubleValue
-        if schema["type"] as? String == "integer", n.rounded() != n { throw VoiceAgentError.protocolViolation }
-        if let min = schema["minimum"] as? NSNumber, n < min.doubleValue { throw VoiceAgentError.protocolViolation }
-        if let max = schema["maximum"] as? NSNumber, n > max.doubleValue { throw VoiceAgentError.protocolViolation }
-        if let min = schema["exclusiveMinimum"] as? NSNumber, n <= min.doubleValue { throw VoiceAgentError.protocolViolation }
+        if schema["type"] as? String == "integer", n.rounded() != n { throw issue("expected an integer, got \(number).") }
+        if let min = schema["minimum"] as? NSNumber, n < min.doubleValue { throw issue("expected at least \(min), got \(number).") }
+        if let max = schema["maximum"] as? NSNumber, n > max.doubleValue { throw issue("expected at most \(max), got \(number).") }
+        if let min = schema["exclusiveMinimum"] as? NSNumber, n <= min.doubleValue { throw issue("expected greater than \(min), got \(number).") }
       case "boolean":
         guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID()
-        else { throw VoiceAgentError.protocolViolation }
+        else { throw issue("expected true or false.") }
       case "string":
-        guard let string = value as? String, string.count <= (schema["maxLength"] as? Int ?? 8192)
-        else { throw VoiceAgentError.protocolViolation }
-      default: throw VoiceAgentError.protocolViolation
+        guard let string = value as? String else { throw issue("expected a string.") }
+        let max = schema["maxLength"] as? Int ?? 8192
+        guard string.count <= max else { throw issue("expected at most \(max) characters.") }
+      default: throw issue("no supported argument schema.")
     }
     if let choices = schema["enum"] as? [String], let string = value as? String,
-       !choices.contains(string) { throw VoiceAgentError.protocolViolation }
+       !choices.contains(string) { throw issue("expected one of: \(choices.prefix(12).joined(separator: ", ")).") }
   }
 
   static func decode(_ string: String) throws -> [String: Any] {
@@ -323,9 +397,10 @@ enum VoiceAgentPolicy {
     if ["get_transfer_function", "set_transfer_function"].contains(tool),
        let rows = value["samples"] as? [[Any]] {
       value["originalSampleCount"] = rows.count
-      value["samplesArePreview"] = rows.count > 256
-      if rows.count > 256 {
-        value["samples"] = (0..<256).map { rows[Int((Double($0) * Double(rows.count - 1) / 255).rounded())] }
+      let count = min(rows.count, maximumTransferPreviewSamples)
+      value["samplesArePreview"] = rows.count > count
+      if rows.count > count {
+        value["samples"] = (0..<count).map { rows[Int((Double($0) * Double(rows.count - 1) / Double(count - 1)).rounded())] }
       }
     }
     return value
@@ -336,6 +411,82 @@ enum VoiceAgentPolicy {
     guard data.count <= limit, let string = String(data: data, encoding: .utf8)
     else { throw VoiceAgentError.protocolViolation }
     return string
+  }
+}
+
+struct VoiceAgentPreviewOpacity: Sendable {
+  enum Shape: String, Sendable { case band, smoothstep }
+
+  let shape: Shape
+  let low: Double
+  let high: Double
+  private let lower: Float
+  private let upper: Float
+
+  init?(_ shape: Shape, low: Double, high: Double) {
+    guard (0...1).contains(low), high > low, Float(high) > Float(low),
+          high <= (shape == .band ? 1 : 1.25) else { return nil }
+    self.shape = shape
+    self.low = low
+    self.high = high
+    lower = Float(low)
+    upper = Float(high)
+  }
+
+  func alpha(at value: Float) -> Float {
+    switch shape {
+      case .band: return value >= lower && (value < upper || upper == 1 && value == 1) ? 1 : 0
+      case .smoothstep:
+        guard value > lower else { return 0 }
+        if value >= upper { return 1 }
+        let t = (value - lower) / (upper - lower)
+        return t * t * (3 - 2 * t)
+    }
+  }
+
+  func samples(count: Int, rainbow: Bool) -> [SIMD4<UInt8>] {
+    guard count >= 2 else { return [] }
+    return (0..<count).map { index in
+      let x = Double(index) / Double(count - 1)
+      let opacity = UInt8((alpha(at: Float(x)) * 255).rounded())
+      let gray = shape == .smoothstep ? opacity : UInt8((255 * x).rounded())
+      var sample = SIMD4<UInt8>(gray, gray, gray, opacity)
+      if rainbow {
+        let hue = 4 * (1 - x), sector = Int(hue)
+        let f = UInt8((255 * (hue - Double(sector))).rounded())
+        switch sector {
+          case 0: (sample.x, sample.y, sample.z) = (255, f, 0)
+          case 1: (sample.x, sample.y, sample.z) = (255 - f, 255, 0)
+          case 2: (sample.x, sample.y, sample.z) = (0, 255, f)
+          case 3: (sample.x, sample.y, sample.z) = (0, 255 - f, 255)
+          default: (sample.x, sample.y, sample.z) = (0, 0, 255)
+        }
+        if shape == .smoothstep {
+          func ramp(_ value: UInt8) -> UInt8 { UInt8((UInt16(value) * UInt16(opacity) + 127) / 255) }
+          (sample.x, sample.y, sample.z) = (ramp(sample.x), ramp(sample.y), ramp(sample.z))
+        }
+      }
+      return sample
+    }
+  }
+}
+
+struct AssistantConversationState: Codable, Equatable {
+  static let maximumNotes = 8
+  static let maximumNoteBytes = 640
+  let notes: [String]
+
+  init?(_ proposed: [String]) {
+    var seen: Set<String> = []
+    var notes: [String] = []
+    for entry in proposed {
+      let text = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard (1...Self.maximumNoteBytes).contains(text.utf8.count), seen.insert(text).inserted else { continue }
+      notes.append(text)
+      if notes.count == Self.maximumNotes { break }
+    }
+    guard !notes.isEmpty else { return nil }
+    self.notes = notes
   }
 }
 
@@ -360,6 +511,7 @@ struct VoiceAgentCommandHistory<Scope: Equatable & Codable>: Codable {
 
   private var receipts: [Receipt] = []
   private var chat: [ChatMessage] = []
+  var assistantState: AssistantConversationState?
   private static var inlineBudget: Int { 12 * 1024 }
   private static var pageBytes: Int { 4096 }
 
@@ -367,7 +519,7 @@ struct VoiceAgentCommandHistory<Scope: Equatable & Codable>: Codable {
     chat.map { ($0.role == "user", String(decoding: $0.text, as: UTF8.self)) }
   }
   var scopes: [Scope] { receipts.map(\.scope) + chat.map(\.scope) }
-  var isEmpty: Bool { receipts.isEmpty && chat.isEmpty }
+  var isEmpty: Bool { receipts.isEmpty && chat.isEmpty && assistantState == nil }
 
   mutating func rebindScopes(_ replacement: (Scope) -> Scope) {
     for i in receipts.indices { receipts[i].scope = replacement(receipts[i].scope) }
@@ -377,6 +529,7 @@ struct VoiceAgentCommandHistory<Scope: Equatable & Codable>: Codable {
   mutating func clear() {
     receipts.removeAll()
     chat.removeAll()
+    assistantState = nil
   }
 
   mutating func appendMessage(scope: Scope, user: Bool, text: String) {

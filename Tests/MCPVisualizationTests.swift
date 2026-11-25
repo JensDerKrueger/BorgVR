@@ -451,7 +451,7 @@ struct MCPVisualizationTests {
       FileManager.default.fileExists(atPath: extendedURL.path),
       "Screenshot destinations did not round-trip: \(runner.scriptLogText)")
     try expect(try Data(contentsOf: previewURL) == paired.preview, "Screenshot preview width did not survive GSC replay")
-    let scriptURL = root.appendingPathComponent("roundtrip.gsc")
+    let scriptURL = root.appendingPathComponent("roundtrip.GSC")
     let script = """
     fullscreen false
     resize 840 620
@@ -479,7 +479,11 @@ struct MCPVisualizationTests {
     extendedscreenshot "\(root.path)/script-extended" false
     """
     try script.write(to: scriptURL, atomically: true, encoding: .utf8)
-    runner.runScript(at: scriptURL)
+    let ignoredDrops = [URL(string: "https://example.invalid/test.gsc")!,
+                        root.appendingPathComponent("dataset.data"),
+                        root.appendingPathComponent("folder.gsc", isDirectory: true)]
+    try expect(!runner.runDroppedScript(ignoredDrops) && !runner.isRunning, "A non-script drop was accepted")
+    try expect(runner.runDroppedScript(ignoredDrops + [scriptURL]), "The local GSC drop was not accepted")
     let scriptDeadline = ContinuousClock.now + .seconds(15)
     while runner.isRunning {
       if ContinuousClock.now >= scriptDeadline { runner.stopScript(); throw Failure.failed("GSC test timed out") }
@@ -498,9 +502,91 @@ struct MCPVisualizationTests {
     try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("script.png").path), "GSC screenshot was not saved")
     try expect(try Data(contentsOf: root.appendingPathComponent("script-preview.png")) == paired.preview,
       "GSC screenshot width was ignored")
+    try await testScriptOutputDirectory(root: root, datasetID: metadata.uniqueID, defaults: isolated)
     if let device = MTLCreateSystemDefaultDevice() { try testDeferredTFUpload(device: device) }
     try await testCommandRecordingRoundtrip(fixture: URL(fileURLWithPath: CommandLine.arguments[1]), directory: root)
     print("MCP/GSC visualization tests passed: live HTTP tools, main-window point/pixel resize, fullscreen notification/cancellation lifecycle, TF channels/files, picture roundtrip, validation/no-clobber, settings backup/reset/restore, screenshots, recording and real interpreter execution")
+  }
+
+  static func testScriptOutputDirectory(root: URL, datasetID: String, defaults: UserDefaults) async throws {
+    let fm = FileManager.default
+    let dataRoot = root.appendingPathComponent("BorgVRData", isDirectory: true)
+    let resources = root.appendingPathComponent("Fixture.app/Contents/Resources", isDirectory: true)
+    let localRoot = root.appendingPathComponent("LocalDataset", isDirectory: true)
+    for directory in [dataRoot, resources, localRoot] { try fm.createDirectory(at: directory, withIntermediateDirectories: true) }
+
+    let preferences = UserDefaults.standard
+    let keys = ["dataDirectory", "dataDirectoryBookmark"]
+    let previous = keys.map { preferences.object(forKey: $0) }
+    defer {
+      for (key, value) in zip(keys, previous) {
+        if let value { preferences.set(value, forKey: key) } else { preferences.removeObject(forKey: key) }
+      }
+    }
+    preferences.removeObject(forKey: "dataDirectoryBookmark")
+    preferences.set(dataRoot.path, forKey: "dataDirectory")
+
+    let locked = dataRoot.appendingPathComponent("Locked", isDirectory: true)
+    var requested: [URL] = []
+    var pickerReply: URL?
+    let runner = BorgVRScriptRunner(selectOutputDirectory: { base, _, complete in
+      requested.append(base)
+      if pickerReply != nil { try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: locked.path) }
+      complete(pickerReply)
+    })
+    let stored = StoredAppModel(), model = AppModel(), parameters = RenderingParameters(), settings = AppSettings()
+    let session = ScreenBorgVRSession.screen(appModel: model, renderingParameters: parameters, appSettings: settings)
+    let sharePlay = SharePlayCoordinator(platformAdapter: MacSharePlayPlatformAdapter(
+      storedAppModel: stored, serverController: BackgroundServerController()))
+    runner.configure(appModel: model, renderingParameters: parameters, session: session, appSettings: settings,
+      storedAppModel: stored, sharePlay: sharePlay, docking: DockingController(defaults: defaults),
+      commandService: BorgVRScreenCommandService(session: session))
+
+    let scriptURL = root.appendingPathComponent("output-directory.gsc")
+    func run(_ folder: String) async throws -> String {
+      try "setdir \(folder)\nlogfile result.log\nlog Captured".write(to: scriptURL, atomically: true, encoding: .utf8)
+      runner.runScript(at: scriptURL)
+      let deadline = ContinuousClock.now + .seconds(3)
+      while runner.isRunning {
+        if ContinuousClock.now >= deadline { runner.stopScript(); throw Failure.failed("Output directory test timed out") }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      return runner.scriptLogText
+    }
+
+    model.openDataset(.init(identifier: resources.appendingPathComponent("fixture.data").path,
+      description: "Built-in fixture", source: .builtIn, uniqueId: datasetID), automaticallyLoadState: false)
+    let builtInResult = try await run("Sweep")
+    try expect(builtInResult.contains("Script finished") && requested.isEmpty &&
+      fm.fileExists(atPath: dataRoot.appendingPathComponent("Sweep/result.log").path) &&
+      !fm.fileExists(atPath: resources.appendingPathComponent("Sweep").path),
+      "Built-in output did not go to the configured folder: \(builtInResult)")
+
+    try fm.createDirectory(at: locked, withIntermediateDirectories: true)
+    try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: locked.path)
+    defer { try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: locked.path) }
+    let cancelled = try await run("Locked")
+    try expect(requested.count == 1 && requested[0].path == dataRoot.path && cancelled.contains("Script stopped") &&
+      !fm.fileExists(atPath: locked.appendingPathComponent("result.log").path),
+      "Denied access did not prompt for the configured folder or cancellation continued: \(cancelled)")
+
+    pickerReply = dataRoot
+    let retried = try await run("Locked")
+    try expect(requested.count == 2 && retried.contains("Script finished") &&
+      fm.fileExists(atPath: locked.appendingPathComponent("result.log").path) && stored.resolvedDataDirectoryURL().path == dataRoot.path,
+      "Granting access did not resume at the original output path: \(retried)")
+
+    model.openDataset(.init(identifier: localRoot.appendingPathComponent("fixture.data").path,
+      description: "Local fixture", source: .local, uniqueId: datasetID), automaticallyLoadState: false)
+    let localResult = try await run("Sweep")
+    try expect(localResult.contains("Script finished") && requested.count == 2 &&
+      fm.fileExists(atPath: localRoot.appendingPathComponent("Sweep/result.log").path),
+      "Local output was not relative to the dataset: \(localResult)")
+
+    try Data().write(to: localRoot.appendingPathComponent("Collision"))
+    let collision = try await run("Collision")
+    try expect(collision.contains("Script error") && requested.count == 2,
+      "A non-permission error opened the access picker: \(collision)")
   }
 
   static func testFullscreenTransitions() async throws {

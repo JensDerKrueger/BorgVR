@@ -178,6 +178,11 @@ typedef struct {
   simd_float3 position;
 } Vertex;
 
+typedef struct {
+  simd_float4 color;
+  simd_float3 boundingBoxExtent; ///< Positive extent selects unlit local XYZ coloring.
+} VolumeMarkerStyle;
+
 /**
  LevelData:
  Metadata for each LOD level in the brick hierarchy.

@@ -132,7 +132,11 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
           missingBrickCount: missingBrickCount
         )
         if commandBuffer.status == .completed {
-          self.finishScreenshot(screenshot)
+          if let screenshot, !self.core.screenshotPagingComplete {
+            self.screenshotRequests.retry(id: screenshot.id)
+          } else {
+            self.finishScreenshot(screenshot)
+          }
         } else if let screenshot {
           self.finishScreenshotRequest(id: screenshot.id, result: .failure(MetalScreenshotError.readbackFailed))
         }
@@ -149,7 +153,8 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   }
 
   private func makeScreenshotReadback(from frame: ScreenVolumeEncodedFrame) -> PendingScreenshot? {
-    guard let request = screenshotRequests.takePending() else { return nil }
+    guard frame.renderedVolume,
+          let request = screenshotRequests.takePending(pagingComplete: core.screenshotPagingComplete) else { return nil }
     do {
       return PendingScreenshot(
         id: request.id,

@@ -2,41 +2,88 @@
   "version": 1,
   "rules": [
     {
-      "id": "state.before_guessing", "operations": [], "topics": [],
+      "id": "state.before_guessing", "operations": [],
       "text": "Use confirmed state or fresh observations to resolve an open question. Distinguish the requested visual effect from the command that produces it. If a concrete command is already specified, no unnecessary visual investigation is needed."
     },
     {
-      "id": "intensity.unknown", "operations": ["inspect.intensity_bands"],
-      "topics": ["intensity", "sweep", "noise", "rauschen", "transfer", "tf", "knochen", "bone", "haut", "skin", "realistisch", "realistic", "sichtbar", "opacity"],
-      "text": "When useful intensity ranges are unknown, compare isolated band previews. Coverage or an image difference is not a structure label. Use inspect.previews to actually see candidate IDs; select a seen candidate only if it answers the request, or design a combination from observed ranges. Unwanted noise should not be made visible; locate it rather than assuming it always occupies a fixed range. Inspect the combined live result. Do not require a sweep if current evidence already suffices."
+      "id": "view.visibility", "operations": ["rotate_view", "set_transform", "set_clipping", "set_transfer_function_component", "set_render_mode", "set_lighting", "edit_volume"],
+      "text": "For a visibility goal in a loaded volume, honor an explicitly requested method. Otherwise use current state or a fresh view to determine why the target is not visible before choosing a method. If it is off-screen or the viewing angle is wrong, translate or rotate the volume. If material in front blocks it, consider reversible clipping. If opacity is the issue and intensities can distinguish the target, adjust the transfer function. If the target is present but difficult to read, compare render modes or lighting. Edit voxels only when the user requests a change to the volume data, subject to local approval. If the cause is unclear, choose an available observation that distinguishes plausible causes rather than trying unrelated changes. Apply the smallest justified change and inspect the live result before choosing another method."
     },
     {
-      "id": "intensity.component", "operations": ["set_transfer_function_component"],
-      "topics": ["transfer", "tf", "opacity", "opazitat", "farbe", "color", "rauschen", "noise"],
-      "text": "For small transfer-function changes, prefer component control points over writing a full RGBA table. RGB sets color; alpha sets visibility. Keep unrelated components intact unless the intended result requires changing them. A simple lighting comparison can improve perceived depth and natural appearance."
+      "id": "intensity.unknown", "operations": ["inspect.intensity_bands"],
+      "text": "If the transfer function is the chosen way to reveal a structure and the intensity interval is unknown, and no better observation is available, request inspect.intensity_bands (the threshold sweep); skip it when the interval is already known. Compare the rendered candidates after the transitions; use inspect.previews to inspect more. Each preview keeps all higher values together; the ramp runs from threshold to opaque_from. A visible change brackets where appearance changes as the threshold rises. An image difference is not a structure label: material can disappear or reveal material behind it. Do not infer an exact material interval from one transition or add preview images. Use supported evidence and the reported channel for a targeted transfer function change. If target and occluder overlap in intensity, consider another observation or a spatial tool such as clipping. Use full opacity only when requested and verify the live result. The user can see the sweep but not internal preview IDs. Ask about the live view or explain uncertainty instead of asking for an ID."
+    },
+    {
+      "id": "intensity.read_curve", "operations": ["get_transfer_function"],
+      "text": "Use the current curve as a reference when editing part of its range or retaining existing colors or opacity. A curve marked as a preview shows its shape, not the full table. The curve does not identify materials. A full replacement with an inspected sweep preview does not need a separate read of the old curve."
+    },
+    {
+      "id": "intensity.component", "operations": ["set_transfer_function", "set_transfer_function_component", "apply_preview"],
+      "text": "After a sweep, if a visually inspected preview matches the requested appearance and does not violate any user constraints, apply_preview is the default. Pass only the matching preview ID; do not recreate its curve with samples or component points. It preserves both the color and opacity of the preview. Respect explicit requests to change only certain components or preserve colors or opacity. For a custom transfer function, prefer adjusting RGB and alpha together in the affected intensity range unless the user asks otherwise. Use set_transfer_function for a coordinated RGBA edit. Its sample rows are [R,G,B,A], four integer bytes in 0...255 at implicit, evenly spaced intensities; do not put an intensity position into a row. For a single-component edit use set_transfer_function_component with a small number of normalized [position,value] control points. RGB sets color; alpha (component 3) sets opacity. This tool replaces the chosen component, so anchor it outside that band. Use 1 for fully opaque if requested. Verify the live result."
     },
     {
       "id": "geometry.pose", "operations": ["rotate_view", "set_transform"],
-      "topics": ["rotation", "rotate", "dreh", "view", "ansicht", "profile", "profil", "unterseite", "underside"],
-      "text": "For a desired pose, first establish what is facing the viewer. Use trustworthy orientation or rendered evidence. Distinguish object, world and view axes and choose the smallest justified change. Verify with a new view instead of trying unrelated rotations."
+      "text": "For a named view with uncertain orientation, use the rendered dataset and its XYZ bounding box as a spatial reference. Check renderingOptions.datasetBoundingBoxVisible and show the box if hidden before capturing the view. If the box extends beyond the image, temporarily reduce every component of state.transform.scale by the same factor with set_transform (scale only), then capture again. Restore any guide-only zoom and box visibility changes afterward, retaining the desired rotation. Red increases along local +X, green along +Y, and blue along +Z; mixed colors identify corners on several maximum sides. The colors move with the dataset and do not identify anatomical front, back, or top. Use visible landmarks or known orientation metadata for that. Distinguish dataset axes from the axes of a relative rotation and inspect the result. An explicit axis and angle need no automatic box or orientation survey."
+    },
+    {
+      "id": "geometry.pose_lighting", "operations": ["inspect.orientation"],
+      "text": "Use inspect.orientation whenever visual evidence is needed to determine or verify a named orientation. Do not assemble the comparison yourself with set_render_mode or separate screenshots. BorgVR captures the same pose with and without lighting, or only once in isovalue mode, and restores the original render mode and leaves the transfer function unchanged. A clear match in either image confirms the pose. If neither confirms it, seek a better cue or make a justified correction, then run inspect.orientation again. Use an ordinary screenshot only if the workflow is unavailable or the user explicitly disallows changing render mode. Exact rotations or poses established from reliable orientation metadata do not need a visual comparison."
     },
     {
       "id": "geometry.position", "operations": ["pick_screenshot_positions"],
-      "topics": ["position", "marker", "center", "zentrier", "femur", "edit", "pixel"],
       "text": "If the target is visible, use its pixel position and the position buffer belonging to the same screenshot to obtain dataset-local 3D coordinates. A miss or an ambiguous occluded point is not evidence of depth. Do not invent 3D coordinates from a screenshot."
     },
     {
-      "id": "view.obstruction", "operations": ["capture_screenshot", "set_clipping"],
-      "topics": ["inside", "inner", "interior", "verdeckt", "sichtbar", "clipping", "cutaway", "querschnitt"],
-      "text": "First determine whether the target is outside the field of view, occluded, or transparent. Zooming out, changing viewing direction, clipping along the view direction and altering opacity solve different problems. Prefer reversible changes to editing for a visualization request."
+      "id": "render.verify", "operations": ["capture_screenshot"],
+      "text": "Use the live render to compare what is visible with the requested outcome. A receipt confirms execution; a sweep candidate describes only its own settings. If the image shows a mismatch, report what differs and use it to choose a justified corrective action. If the image is inconclusive, seek evidence that can distinguish the possibilities. Recheck after a correction."
     }
   ],
+  "decisionGraph": {
+    "root": "assistant",
+    "nodes": [
+      {"id": "assistant", "kind": "root", "description": "What does the user want to do?", "children": ["visibility"],
+       "ruleIDs": ["state.before_guessing", "view.visibility"]},
+      {"id": "visibility", "kind": "goal", "description": "Reveal or emphasize a structure in a loaded volume. Use observations to distinguish causes if the user leaves the method open.",
+       "children": ["visibility.transform", "visibility.clipping", "visibility.tf", "visibility.rendering", "visibility.editing"]},
+      {"id": "visibility.transform", "kind": "method", "description": "Reframe the target or change the viewing angle. If a named view is uncertain and screenshots are available, show the XYZ bounding box if hidden. Use inspect.orientation to check the pose before a correction and after any rotation. Accept a clear match in either orientation image. Do not infer anatomical front from the box alone.",
+       "methodNames": ["drehe", "rotiere", "verschiebe", "rotate", "translate", "pan"],
+       "operations": ["rotate_view", "set_transform"], "children": ["transform.reference_box", "transform.observe_pose", "transform.verify_pose"]},
+      {"id": "visibility.clipping", "kind": "method", "description": "Use reversible clipping when material in front blocks the target and spatial separation can reveal it.",
+       "methodNames": ["clippe", "clipping", "clip", "querschnitt", "cutaway"],
+       "operations": ["set_clipping"], "children": ["visibility.verify"]},
+      {"id": "visibility.tf", "kind": "method", "description": "Adjust the transfer function when opacity or color can separate the target. If its intensity interval is unknown, inspect sweep candidates before changing the live curve. Read the current curve only when it provides information needed for a partial edit.",
+       "methodNames": ["TF", "Transferfunktion", "transfer function"],
+       "children": ["tf.observe_bands", "tf.read_curve", "tf.adjust", "visibility.verify"]},
+      {"id": "visibility.rendering", "kind": "method", "description": "Compare render modes or lighting when the structure is present but contrast or shading makes it hard to read.",
+       "methodNames": ["Rendermodus", "Beleuchtung", "render mode", "lighting", "shading", "isovalue"],
+       "operations": ["set_render_mode", "set_lighting", "set_iso_value"], "children": ["visibility.verify"]},
+      {"id": "visibility.editing", "kind": "method", "description": "Change voxel data only if the user requests editing the volume itself. Local approvals still apply.",
+       "methodNames": ["editiere", "lösche", "Voxeldaten", "edit", "erase", "voxels"],
+       "operations": ["edit_volume"], "children": ["edit.locate", "visibility.verify"]},
+      {"id": "transform.reference_box", "kind": "apply", "description": "When needed for a visual pose check, temporarily show the dataset XYZ bounding box; preserve the user's original visibility.",
+       "operations": ["set_bounding_box"]},
+      {"id": "transform.observe_pose", "kind": "observe", "description": "Use inspect.orientation to observe the XYZ box and visible landmarks. If the box is outside the frame, temporarily zoom out uniformly before comparing. An ordinary screenshot is a fallback if the comparison is unavailable.",
+       "operations": ["inspect.orientation", "capture_screenshot"], "ruleIDs": ["geometry.pose", "geometry.pose_lighting"]},
+      {"id": "transform.verify_pose", "kind": "verify", "description": "Verify the resulting pose with inspect.orientation. One clear match confirms the orientation.",
+       "operations": ["inspect.orientation", "capture_screenshot"], "ruleIDs": ["geometry.pose", "geometry.pose_lighting", "render.verify"]},
+      {"id": "edit.locate", "kind": "observe", "description": "For a visible target, establish its position reliably from a screenshot before proposing a volume edit.",
+       "operations": ["pick_screenshot_positions"], "ruleIDs": ["geometry.position"]},
+      {"id": "tf.observe_bands", "kind": "observe", "description": "When the target interval is unknown, compare rendered candidates after significant threshold changes. Match each inspected image to its candidate threshold and channel, which may differ from the threshold at the peak change. Do not treat a transition as an isolated intensity band. Skip this investigation if the needed range is already known.",
+       "operations": ["inspect.intensity_bands", "inspect.previews"], "ruleIDs": ["intensity.unknown"]},
+      {"id": "tf.read_curve", "kind": "observe", "description": "Read the current channel curve when needed to preserve unaffected regions. The curve alone cannot identify the target.",
+       "operations": ["get_transfer_function"], "ruleIDs": ["intensity.read_curve"]},
+      {"id": "tf.adjust", "kind": "apply", "description": "Adjust RGB and alpha together by default in the supported interval and channel. Honor explicit component constraints. Use 1 in alpha only for requested full opacity. If intensities overlap, report the limitation instead of guessing. Apply a whole preview only when its palette and masking are wanted.",
+       "operations": ["set_transfer_function_component", "set_transfer_function", "apply_preview"], "ruleIDs": ["intensity.component"]},
+      {"id": "visibility.verify", "kind": "verify", "description": "Compare the live result with the goal. Use a mismatch to choose the next justified action or observation.",
+       "operations": ["capture_screenshot"], "ruleIDs": ["render.verify"]}
+    ]
+  },
   "workflows": [
     {
       "id": "inspect.intensity_bands",
-      "description": "Investigate which normalized intensity bands show the wanted structure. Render isolated coarse previews, refine where adjacent bands differ, and return selectable IDs. This does not modify the live view.",
+      "description": "Slide a shared smooth RGBA ramp forward through the live transfer function, then restore the original curve. Return candidate images after the strongest measured transitions, with the transition and candidate thresholds. Higher values stay visible together. If the user stops the sweep, leave the visible curve in place.",
       "steps": [
-        {"kind": "intensityScan", "scan": {"initialBands": 5, "maxPreviews": 17, "minWidth": 0.025, "differenceThreshold": 0.2, "palette": "grayscale"}}
+        {"kind": "intensityScan", "scan": {"differenceThreshold": 0.2, "palette": "grayscale", "transitionWidth": 0.06}}
       ]
     }
   ]

@@ -11,6 +11,7 @@ struct TFChannelControlVaryings {
 
 struct VolumeMarkerVaryings {
   float4 position [[position]];
+  float3 localPosition;
   float3 worldPosition;
   float3 worldNormal;
   float3 eyePosition;
@@ -86,6 +87,7 @@ vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
 
   VolumeMarkerVaryings out;
   out.position = mvpPerView[ampId] * world;
+  out.localPosition = local;
   out.worldPosition = world.xyz;
   out.worldNormal = normalize((modelMatrix * float4(normals[vertexId].position, 0.0)).xyz);
   out.eyePosition = eyePositionPerView[ampId];
@@ -94,13 +96,15 @@ vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
 
 fragment float4 fragmentShaderVolumeMarker(
   VolumeMarkerVaryings in [[stage_in]],
-  constant float4 &markerColor [[buffer(23)]])
+  constant VolumeMarkerStyle &style [[buffer(23)]])
 {
+  if (style.boundingBoxExtent.x > 0.0) {
+    return float4(saturate(in.localPosition / style.boundingBoxExtent + 0.5), 1.0);
+  }
   float3 normal = normalize(in.worldNormal);
   float3 lightDirection = normalize(in.eyePosition - in.worldPosition);
   float diffuse = max(dot(normal, lightDirection), 0.0);
-  float3 baseColor = markerColor.rgb;
-  return float4(baseColor * (0.28 + 0.72 * diffuse), markerColor.a);
+  return float4(style.color.rgb * (0.28 + 0.72 * diffuse), style.color.a);
 }
 
 vertex VisionSceneMeshVaryings vertexShaderSceneMesh(

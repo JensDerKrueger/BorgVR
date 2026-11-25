@@ -74,7 +74,7 @@ private func expectRejection(_ name: String, data: Data) throws {
 
 @main
 private enum BORGVRMetaDataParserTests {
-  static func main() throws {
+  static func main() async throws {
     if CommandLine.arguments.contains("--verify-cpp") {
       try verifyCPPFixtures(in: URL(fileURLWithPath: CommandLine.arguments.last!))
       return
@@ -140,6 +140,8 @@ private enum BORGVRMetaDataParserTests {
     var invalidUTF8 = valid
     invalidUTF8[datasetDescriptionStart] = 0xff
     try expectRejection("invalid UTF-8", data: invalidUTF8)
+    let datasetDescriptionEnd = datasetDescriptionStart + Int(readInt64(from: valid, at: datasetDescriptionStart - 8))
+    try await testHeaderScan(valid, headerEnd: datasetDescriptionEnd)
 
     let metadataCountOffset = brickCountOffset(in: valid)
     var negativeBrickCount = valid
@@ -182,6 +184,45 @@ private enum BORGVRMetaDataParserTests {
     try testChannelInterpretations(in: URL(fileURLWithPath: CommandLine.arguments.last!).deletingLastPathComponent())
 
     print("Swift BORGVR metadata parser tests passed.")
+  }
+}
+
+private func testHeaderScan(_ metadata: Data, headerEnd: Int) async throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-list-headers-\(UUID())")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  let full = try BORGVRMetaData(fromData: metadata)
+  let offset = 8 + full.brickMetadata.count * 8
+  func write(_ name: String, count: Int, metadataOffset: Int = offset) throws -> URL {
+    let url = directory.appendingPathComponent(name)
+    var file = Data(from: UInt64(metadataOffset))
+    file.append(Data(count: offset - 8))
+    file.append(contentsOf: metadata.prefix(count))
+    try file.write(to: url)
+    return url
+  }
+
+  let complete = try write("complete.DATA", count: metadata.count)
+  let truncatedTable = try write("truncated-table.data", count: metadata.count - 1)
+  let headerOnly = try write("header-only.data", count: headerEnd)
+  _ = try write("truncated-header.data", count: headerEnd - 1)
+  _ = try write("invalid-offset.data", count: metadata.count, metadataOffset: 0)
+  _ = try write("ignored.txt", count: metadata.count)
+
+  let scan = await BORGVRMetaData.scanListHeaders(in: directory, includeBuiltIn: false)
+  guard scan.directoryError == nil,
+        Set(scan.entries.map(\.url.lastPathComponent)) == Set([complete, truncatedTable, headerOnly].map(\.lastPathComponent)),
+        scan.entries.allSatisfy({ $0.header == full.listHeader && !$0.isBuiltIn }) else {
+    throw TestFailure.expectedRejection("dataset list should use only validated headers")
+  }
+
+  _ = try BORGVRFileData(filename: complete.path)
+  for url in [headerOnly, truncatedTable] {
+    do {
+      _ = try BORGVRFileData(filename: url.path)
+      throw TestFailure.expectedRejection("dataset opened without a complete brick table")
+    } catch is BORGVRError {}
   }
 }
 

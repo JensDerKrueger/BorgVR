@@ -6,6 +6,7 @@
 
 struct ScreenVolumeMarkerVaryings {
   float4 position [[position]];
+  float3 localPosition;
   float3 worldPosition;
   float3 worldNormal;
   float3 eyePosition;
@@ -24,6 +25,7 @@ vertex ScreenVolumeMarkerVaryings screenVolumeMarkerVertex(
 
   ScreenVolumeMarkerVaryings out;
   out.position = viewProjection * world;
+  out.localPosition = local;
   out.worldPosition = world.xyz;
   out.worldNormal = normalize((modelMatrix * float4(normals[vertexId].position, 0.0)).xyz);
   out.eyePosition = eyePosition;
@@ -32,12 +34,15 @@ vertex ScreenVolumeMarkerVaryings screenVolumeMarkerVertex(
 
 fragment float4 screenVolumeMarkerFragment(
   ScreenVolumeMarkerVaryings in [[stage_in]],
-  constant float4 &markerColor [[buffer(23)]])
+  constant VolumeMarkerStyle &style [[buffer(23)]])
 {
+  if (style.boundingBoxExtent.x > 0.0) {
+    return float4(saturate(in.localPosition / style.boundingBoxExtent + 0.5), 1.0);
+  }
   float3 normal = normalize(in.worldNormal);
   float3 lightDirection = normalize(in.eyePosition - in.worldPosition);
   float diffuse = max(dot(normal, lightDirection), 0.0);
-  return float4(markerColor.rgb * (0.28 + 0.72 * diffuse), markerColor.a);
+  return float4(style.color.rgb * (0.28 + 0.72 * diffuse), style.color.a);
 }
 
 struct ScreenMeasurementPointInstance {

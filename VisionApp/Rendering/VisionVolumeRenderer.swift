@@ -135,6 +135,7 @@ final actor VisionVolumeRenderer {
   private let datasetID: String
   private let datasetRequestID: UUID
   private var reportedFirstVolumeFrame = false
+  private var screenshotPagingComplete = false
   /// The volume atlas used for managing brick data.
   var volumeAtlas: VolumeAtlas
   /// A matrix representing the scale applied to the volume.
@@ -916,6 +917,7 @@ extension VisionVolumeRenderer {
   private func updateRenderState(drawable: LayerRenderer.Drawable) {
     if frameSnapshot.settings.purgeAtlas, !atlasPurgeHandled {
       volumeAtlas.purge()
+      screenshotPagingComplete = false
       atlasPurgeHandled = true
       Task { @MainActor [weak sharedAppModel] in
         sharedAppModel?.purgeAtlas = false
@@ -1123,7 +1125,7 @@ extension VisionVolumeRenderer {
 
    - Parameter commandBuffer: The command buffer from the current frame.
    */
-  func readBackHashTable(commandBuffer: MTLCommandBuffer) {
+  func readBackHashTable(commandBuffer: MTLCommandBuffer) -> Int {
     let missingBricks = hashTable.getValues(from: commandBuffer)
 
     if !missingBricks.isEmpty {
@@ -1131,6 +1133,7 @@ extension VisionVolumeRenderer {
 
       try? volumeAtlas.pageIn(IDs: intArray)
     }
+    return missingBricks.count
   }
 
 
@@ -2171,7 +2174,8 @@ extension VisionVolumeRenderer {
     // access has been revoked terminates the process on visionOS.
     guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
-    let mcpScreenshotRequest = runtimeAppModel.mcpRenderBridge.takeScreenshotRequest()
+    let screenshotBridge = runtimeAppModel.mcpRenderBridge
+    let mcpScreenshotRequest = screenshotBridge.screenshotRequest(pagingComplete: screenshotPagingComplete && volumeWasDrawn)
     var mcpScreenshotReadback: MetalPairedScreenshotReadback?
     var mcpScreenshotError: Error?
     if mcpScreenshotRequest != nil {
@@ -2193,7 +2197,10 @@ extension VisionVolumeRenderer {
     commandBuffer.waitUntilCompleted()
 
     if let error = commandBuffer.error as NSError? {
-      mcpScreenshotRequest?.completion(.failure(error))
+      screenshotPagingComplete = false
+      if let id = mcpScreenshotRequest?.id {
+        screenshotBridge.completeScreenshot(id: id)?.completion(.failure(error))
+      }
       let submissionWasNotPermitted = error.domain == MTLCommandBufferErrorDomain &&
         error.code == MTLCommandBufferError.notPermitted.rawValue
       if submissionWasNotPermitted || Task.isCancelled || layerRenderer.state != .running {
@@ -2221,15 +2228,17 @@ extension VisionVolumeRenderer {
 
     timer.recordCompletedFrame(commandBuffer)
 
-    let completedFrame = runtimeAppModel.mcpRenderBridge.recordFrame()
-    if let request = mcpScreenshotRequest, let error = mcpScreenshotError {
-      request.completion(.failure(error))
-    } else if let request = mcpScreenshotRequest, let readback = mcpScreenshotReadback {
+    let missingBrickCount = readBackHashTable(commandBuffer: commandBuffer)
+    screenshotPagingComplete = commandBuffer.status == .completed && volumeWasDrawn && missingBrickCount == 0
+    let completedFrame = screenshotBridge.recordFrame()
+    if screenshotPagingComplete, let id = mcpScreenshotRequest?.id, let request = screenshotBridge.completeScreenshot(id: id) {
       do {
+        if let error = mcpScreenshotError { throw error }
+        guard let readback = mcpScreenshotReadback else { throw MetalScreenshotError.readbackFailed }
         let png = try MetalScreenshotEncoder.pngImage(from: readback.color, maxWidth: request.maxWidth)
         let positions = readback.positionReadback?.positions()
         if let positions {
-          runtimeAppModel.mcpRenderBridge.screenshotCache.store(positions, id: request.id, renderedFrame: completedFrame)
+          screenshotBridge.screenshotCache.store(positions, id: request.id, renderedFrame: completedFrame)
         }
         request.completion(.success(BorgVRMCPImage(
           pngData: png.data,
@@ -2254,7 +2263,6 @@ extension VisionVolumeRenderer {
       )
     )
 
-    readBackHashTable(commandBuffer: commandBuffer)
     updatePerformanceCounters()
 
     return true

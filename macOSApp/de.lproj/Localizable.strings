@@ -122,6 +122,7 @@
 "modeselection_settings" = "Einstellungen";
 "modeselection_about" = "Info";
 "modeselection_drop_script" = "GSC-Skript zum Ausführen ablegen";
+"Select the folder to allow script output: %@" = "Wähle diesen Ordner, damit das Skript dort schreiben darf: %@";
 "modeselection_start_background_server" = "Hintergrundserver starten";
 "modeselection_stop_background_server" = "Hintergrundserver stoppen";
 "modeselection_server_running" = "Datensatzserver läuft";

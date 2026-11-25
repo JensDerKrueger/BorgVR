@@ -601,7 +601,6 @@ final class VisionOpaqueGeometryRenderer {
       var modelMatrix =
         frame.modelMatrix * Transform(translation: markerVolumePosition).matrix
         * Transform(scale: SIMD3<Float>(repeating: point.radius)).matrix
-      var color = color
       renderEncoder.setVertexBuffer(
         markerSphereBuffer,
         offset: 0,
@@ -613,11 +612,7 @@ final class VisionOpaqueGeometryRenderer {
         length: MemoryLayout<simd_float4x4>.stride,
         index: 21
       )
-      renderEncoder.setFragmentBytes(
-        &color,
-        length: MemoryLayout<SIMD4<Float>>.stride,
-        index: 23
-      )
+      renderEncoder.setVolumeMarkerStyle(color: color)
       renderEncoder.drawPrimitives(
         type: .triangle,
         vertexStart: 0,
@@ -626,7 +621,7 @@ final class VisionOpaqueGeometryRenderer {
     }
 
     func drawControllerPointer(_ sample: BorgSpatialInputSample) {
-      var color = SIMD4<Float>(0.62, 0.65, 0.7, 1)
+      let color = SIMD4<Float>(0.62, 0.65, 0.7, 1)
       var pointerMatrix = sample.aimTransform
       renderEncoder.setVertexBuffer(
         spatialControllerPointerBuffer,
@@ -643,11 +638,7 @@ final class VisionOpaqueGeometryRenderer {
         length: MemoryLayout<simd_float4x4>.stride,
         index: 21
       )
-      renderEncoder.setFragmentBytes(
-        &color,
-        length: MemoryLayout<SIMD4<Float>>.stride,
-        index: 23
-      )
+      renderEncoder.setVolumeMarkerStyle(color: color)
       renderEncoder.drawPrimitives(
         type: .triangle,
         vertexStart: 0,
@@ -684,7 +675,6 @@ final class VisionOpaqueGeometryRenderer {
         )
       else { return }
       var modelMatrix = frame.modelMatrix
-      var color = color
       renderEncoder.setVertexBuffer(
         tubeMesh.positionBuffer,
         offset: 0,
@@ -696,11 +686,7 @@ final class VisionOpaqueGeometryRenderer {
         length: MemoryLayout<simd_float4x4>.stride,
         index: 21
       )
-      renderEncoder.setFragmentBytes(
-        &color,
-        length: MemoryLayout<SIMD4<Float>>.stride,
-        index: 23
-      )
+      renderEncoder.setVolumeMarkerStyle(color: color)
       renderEncoder.drawPrimitives(
         type: .triangle,
         vertexStart: 0,
@@ -927,7 +913,6 @@ final class VisionOpaqueGeometryRenderer {
       ) {
         guard mesh.vertexCount >= 3, mesh.vertexCount.isMultiple(of: 3) else { return }
         var modelMatrix = frame.modelMatrix
-        var color = color
         renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
         renderEncoder.setDepthStencilState(depthStencilState)
         renderEncoder.setCullMode(cullMode)
@@ -945,11 +930,7 @@ final class VisionOpaqueGeometryRenderer {
           length: MemoryLayout<simd_float4x4>.stride,
           index: 21
         )
-        renderEncoder.setFragmentBytes(
-          &color,
-          length: MemoryLayout<SIMD4<Float>>.stride,
-          index: 23
-        )
+        renderEncoder.setVolumeMarkerStyle(color: color)
         renderEncoder.drawPrimitives(
           type: .triangle,
           vertexStart: 0,

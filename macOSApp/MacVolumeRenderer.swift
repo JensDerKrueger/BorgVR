@@ -212,7 +212,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
           missingBrickCount: missingBrickCount
         )
         if commandBuffer.status == .completed {
-          self.finishScreenshotCapture(screenshotCapture)
+          if let screenshotCapture, !self.core.screenshotPagingComplete {
+            self.screenshotRequests.retry(id: screenshotCapture.id)
+          } else {
+            self.finishScreenshotCapture(screenshotCapture)
+          }
         } else if let screenshotCapture {
           self.finishScreenshotRequest(id: screenshotCapture.id, result: .failure(MetalScreenshotError.readbackFailed))
         }
@@ -336,7 +340,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   }
 
   private func makeScreenshotCapture(from frame: ScreenVolumeEncodedFrame) -> ScreenshotCapture? {
-    guard let request = screenshotRequests.takePending() else { return nil }
+    guard frame.renderedVolume,
+          let request = screenshotRequests.takePending(pagingComplete: core.screenshotPagingComplete) else { return nil }
     do {
       return ScreenshotCapture(id: request.id, readback: try MetalScreenshotEncoder.encodePairedReadback(
         color: frame.drawable.texture, depth: frame.interactionDepthTexture,

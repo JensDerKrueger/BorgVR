@@ -77,6 +77,7 @@ protocol VoiceAgentApplicationBridge: AnyObject {
   func resolveImportFileSelection(id: UUID, url: URL?)
   var changes: AnyPublisher<VoiceAgentApplicationChange, Never> { get }
   func stateSnapshot() throws -> [String: Any]
+  func sweepView() -> AssistantSweepView?
   func executeTool(name: String, arguments: [String: Any], validateContext: @escaping () throws -> Void) async throws -> [String: Any]
   func executeFileTool(name: String, arguments: [String: Any], select: (VoiceAgentFileSelection) async -> URL?,
                        validateContext: @escaping () throws -> Void, willCommit: () -> Void) async throws -> [String: Any]
@@ -91,7 +92,7 @@ protocol VoiceAgentApplicationBridge: AnyObject {
                          validateContext: @escaping () throws -> Void) async throws -> [String: Any]
   func volumeBrickStatus() -> VoiceAgentVolumeBrickStatus?
   func openDataset(id: String, validateContext: @escaping () throws -> Void,
-                   didBegin: @escaping (VoiceAgentContext) throws -> Void) async throws -> [String: Any]
+                   validateRequest: @escaping () throws -> Void) async throws -> [String: Any]
 }
 
 extension VoiceAgentApplicationBridge {

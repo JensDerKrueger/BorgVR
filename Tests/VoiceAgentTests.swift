@@ -31,13 +31,15 @@ struct VoiceAgentTests {
     }
     try rejects { try VoiceAgentEndpoint.validateToken("short") }
     try rejects { try VoiceAgentEndpoint.validateToken(String(repeating: "a", count: 64) + "\r\nInjected") }
-    let projection = VoiceAgentVolumePreview(width: 2, height: 1, depth: 2, samples: [0.1, 0.6, 0.8, 0.55])
-    try expect(try previewRGBA(projection.render(low: 0, high: 0.2, rainbow: false)) == [26, 26, 26, 255, 0, 0, 0, 0],
-               "An isolated opacity band leaked another band")
-    try expect(try previewRGBA(projection.render(low: 0.5, high: 0.7, rainbow: false)) == [0, 0, 0, 0, 153, 153, 153, 255],
-               "Only the first sample inside the band should color a projection ray")
-    let colored = try previewRGBA(projection.render(low: 0.5, high: 0.7, rainbow: true))
-    try expect(colored[7] == 255 && colored[4] != colored[6], "The rainbow palette did not color the visible pixel")
+    let ramp = VoiceAgentPreviewOpacity(.smoothstep, low: 0.25, high: 0.5)!
+    let upperEdge = VoiceAgentPreviewOpacity(.smoothstep, low: 1, high: 1.04)!
+    let grayRamp: [UInt8] = [0, 0, 0, 128, 255, 255, 255, 255, 255]
+    try expect(ramp.samples(count: 9, rainbow: false) == grayRamp.map { SIMD4(repeating: $0) },
+               "The visible preview must use the same Smoothstep ramp in all four channels")
+    try expect(ramp.samples(count: 9, rainbow: true)[3] == SIMD4(0, 128, 64, 128),
+               "A colored Smoothstep must ramp RGB together with opacity")
+    try expect(upperEdge.samples(count: 9, rainbow: false).allSatisfy { $0 == .zero },
+               "The upper threshold must be a transparent reference")
 
     let fixture = URL(fileURLWithPath: CommandLine.arguments[2])
     let cert = try Data(contentsOf: fixture.appendingPathComponent("runtime/tls/server.crt"))
@@ -61,20 +63,10 @@ struct VoiceAgentTests {
     try expect(!system.accepts(untrusted!, host: "localhost"), "Untrusted self-signed certificate accepted")
 
     let metadata = try BORGVRMetaData(url: URL(fileURLWithPath: CommandLine.arguments[1]))
-    let scanTimer = ContinuousClock()
-    let scanStart = scanTimer.now
-    let preview = try VoiceAgentVolumePreview.read(BORGVRFileData(filename: CommandLine.arguments[1]), channel: 0)
-    let loadTime = scanStart.duration(to: scanTimer.now)
-    try expect(preview.samples.max() ?? 0 > 0 && preview.samples.min() != preview.samples.max(), "Dataset preview is blank")
-    let imagesStart = scanTimer.now
-    for i in 0..<5 {
-      let png = try preview.render(low: Double(i) / 5, high: Double(i + 1) / 5, rainbow: false)
-      try expect(CGImageSourceCreateWithData(png as CFData, nil) != nil, "Dataset preview did not encode as PNG")
-    }
-    print("Isolated intensity preview: load=\(loadTime), five previews=\(imagesStart.duration(to: scanTimer.now))")
     let app = AppModel(), parameters = RenderingParameters(), appSettings = AppSettings()
     let entry = AppModel.DatasetEntry(identifier: CommandLine.arguments[1], description: "Synthetic agent test",
       source: .local, uniqueId: metadata.uniqueID)
+    try await testDatasetOpening(metadata: metadata, entry: entry)
     app.openDataset(entry, automaticallyLoadState: false)
     guard case .opening(_, let openingID) = app.datasetSessionState else { fatalError() }
     app.prepareDatasetRenderer(key: app.activeDatasetRenderKey, metadata: metadata, requestID: openingID)
@@ -82,6 +74,7 @@ struct VoiceAgentTests {
     app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
     let session = ScreenBorgVRSession.screen(appModel: app, renderingParameters: parameters, appSettings: appSettings)
     let service = BorgVRScreenCommandService(session: session)
+    try await testLiveTFCommands(app: app, session: session, service: service, opening: openingID, datasetID: entry.uniqueId)
     let scaledMeasurement = BorgVRMeasurementCommandState(id: UUID(), name: "Anisotropic scale", kind: .length,
       points: [.init(id: UUID(), position: .zero), .init(id: UUID(), position: SIMD3(0.25, 0.5, 0))])
     let scaledValue = try scaledMeasurement.measurement(physicalExtent: SIMD3(2, 3, 4)).geometry.value
@@ -177,7 +170,7 @@ struct VoiceAgentTests {
       throw Failure.failed("Stale agent context was dispatched")
     } catch is VoiceAgentError {}
     try expect(session.currentSnapshot().transform == before, "Context check happened after mutation")
-    let definitions = router.toolDefinitions + VoiceAgentPolicy.importCatalog + [VoiceAgentPolicy.intensityPreviewTool]
+    let definitions = router.toolDefinitions + VoiceAgentPolicy.importCatalog
     let catalog = VoiceAgentPolicy.catalog(definitions, vision: false, transferFunctions: true, images: true)
     let applicationCatalog = VoiceAgentPolicy.catalog(definitions, vision: false,
       transferFunctions: true, images: true, datasetReady: false)
@@ -310,6 +303,17 @@ struct VoiceAgentTests {
     settings.selectProfile(local.id)
     defer { try? KeychainSecretStore.delete(account: account + "-openai") }
     let initialIdentity = settings.identity
+    try expect(settings.responseLength == .standard, "The default response length changed")
+    for length in VoiceAgentResponseLength.allCases {
+      settings.responseLength = length
+      try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).responseLength == length,
+                 "Response length did not persist")
+      try expect(settings.identity == initialIdentity, "Changing response length reconnects the agent")
+    }
+    defaults.set("unknown", forKey: "voiceAgent.responseLength")
+    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).responseLength == .standard,
+               "An unknown response length did not fall back to normal")
+    settings.responseLength = .standard
     settings.speechRateMultiplier = 1.6
     try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).speechRateMultiplier == 1.6,
                "Speech rate was not persisted")
@@ -339,17 +343,115 @@ struct VoiceAgentTests {
     print("Native assistant tests passed: TLS trust, provider separation, local policy, screenshots, import and fusion")
   }
 
-  static func previewRGBA(_ data: Data) throws -> [UInt8] {
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw Failure.failed("Invalid preview PNG") }
-    var pixels = [UInt8](repeating: 0, count: 8)
-    try pixels.withUnsafeMutableBytes { pointer in
-      guard let canvas = CGContext(data: pointer.baseAddress, width: 2, height: 1, bitsPerComponent: 8, bytesPerRow: 8,
-                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-      else { throw Failure.failed("Could not decode preview") }
-      canvas.draw(image, in: CGRect(x: 0, y: 0, width: 2, height: 1))
+  static func testDatasetOpening(metadata: BORGVRMetaData, entry: AppModel.DatasetEntry) async throws {
+    let catalogEntry = BorgVRMCPDatasetCatalogEntry(id: entry.uniqueId, description: entry.description,
+      metadata: .init(metadata), metadataError: nil, sources: [])
+    for replaced in [false, true] {
+      let app = AppModel()
+      let session = ScreenBorgVRSession.screen(appModel: app, renderingParameters: RenderingParameters(), appSettings: AppSettings())
+      var editStateID: UUID?
+      var startedOpening: UUID?
+      let service = BorgVRScreenCommandService(session: session, datasetListProvider: { [catalogEntry] },
+        datasetOpener: { id, validateContext, didBegin in
+          try validateContext()
+          try expect(id == entry.uniqueId, "The selected catalog ID was not opened")
+          app.openDataset(entry, automaticallyLoadState: false)
+          guard case .opening(_, let requestID) = app.datasetSessionState else { throw Failure.failed("Dataset did not start opening") }
+          startedOpening = requestID
+          try didBegin()
+          // Renderer setup creates a working edit state after the opening has started.
+          editStateID = UUID()
+          if replaced { app.openDataset(entry, automaticallyLoadState: false) }
+          guard case .opening(_, let activeID) = app.datasetSessionState else { throw Failure.failed("Dataset was not loading") }
+          let key = app.activeDatasetRenderKey
+          app.prepareDatasetRenderer(key: key, metadata: metadata, requestID: activeID)
+          try expect(app.markRenderedDataset(key: key, requestID: activeID), "Fixture did not finish opening")
+        })
+      let bridge = BorgVRVoiceAgentBridge(service: service) {
+        switch app.datasetSessionState {
+          case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
+            return .init(datasetID: dataset.uniqueId, openingID: requestID, editStateID: editStateID)
+          default: return nil
+        }
+      }
+      _ = try await bridge.executeTool(name: "search_datasets", arguments: ["query": "Synthetic agent test"], validateContext: {})
+      let initialScope = bridge.applicationDatasetContext
+      do {
+        let result = try await bridge.openDataset(id: entry.uniqueId, validateContext: {
+          guard bridge.applicationDatasetContext == initialScope else { throw VoiceAgentError.contextChanged }
+        }, validateRequest: { try Task.checkCancellation() })
+        let state = result["structuredContent"] as? [String: Any]
+        try expect(!replaced && startedOpening != nil && bridge.context?.openingID == startedOpening &&
+                   bridge.context?.editStateID != nil && state?["rendererReady"] as? Bool == true &&
+                   (state?["dataset"] as? [String: Any])?["id"] as? String == entry.uniqueId,
+                   "Loading a working edit state lost the ready receipt, or a replacement opening was accepted")
+      } catch VoiceAgentError.contextChanged {
+        try expect(replaced && startedOpening != nil && bridge.context?.datasetID == entry.uniqueId &&
+                   bridge.context?.openingID != startedOpening,
+                   "The intended opening was rejected as a context change")
+      }
     }
-    return pixels
+  }
+
+  static func testLiveTFCommands(app: AppModel, session: ScreenBorgVRSession, service: BorgVRScreenCommandService,
+                                 opening: UUID, datasetID: String) async throws {
+    let original = try service.transferFunction(channel: 0)
+    let bridge = BorgVRVoiceAgentBridge(service: service) {
+      VoiceAgentContext(datasetID: datasetID, openingID: opening, editStateID: nil)
+    }
+    guard let initialView = bridge.sweepView() else { throw Failure.failed("A scalar screen dataset is not cacheable") }
+    func command(_ name: String, _ arguments: [String: Any]) async throws -> [String: Any] {
+      try await bridge.executeTool(name: name, arguments: arguments, validateContext: { try Task.checkCancellation() })
+    }
+    let result = try await command("get_transfer_function", ["channel": 0])
+    let stored = (result["structuredContent"] as? [String: Any])?["samples"] as? [[Int]]
+    try expect(stored == original.samples.map { $0.map(Int.init) }, "The macro cannot save the full TF")
+    var curve = original.samples.map { $0.map(Int.init) }
+    curve[0][3] ^= 1
+
+    let requests = ScreenScreenshotRequestQueue()
+    app.renderScreenshotHandler = { id, url, _, width, completion in
+      guard let url, requests.enqueue(.init(id: id, url: url, accessURL: nil, maxWidth: width, completion: completion)) else {
+        completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
+        return
+      }
+    }
+    app.renderScreenshotCancelHandler = { id, error in requests.cancel(id: id)?.completion(.failure(error)) }
+    var tfCommits = 0
+    let subscription = session.commandEvents.sink { event in
+      if case .setTransferFunction = event.command, event.phase == .committed { tfCommits += 1 }
+    }
+    defer {
+      app.renderScreenshotHandler = nil
+      app.renderScreenshotCancelHandler = nil
+      subscription.cancel()
+      try? service.setTransferFunction(original)
+    }
+
+    _ = try await command("set_transfer_function", ["channel": 0, "samples": curve])
+    try expect(try service.transferFunction(channel: 0).samples == curve.map { $0.map(UInt8.init) } &&
+               session.frameSnapshot().transferFunctions[0].samples.map { [Int($0.x), Int($0.y), Int($0.z), Int($0.w)] } == curve &&
+               tfCommits == 1, "The sweep TF must be an actual app edit and render state")
+    app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
+    try expect(bridge.sweepView().map(initialView.matches) == true,
+               "Changing the live TF or finishing a frame invalidated the sweep")
+    let aspect = session.visualizationState.viewportAspectRatio
+    _ = session.visualizationState.updateViewportAspectRatio(aspect * 1.2)
+    let resized = bridge.sweepView()
+    _ = session.visualizationState.updateViewportAspectRatio(aspect)
+    try expect(resized.map(initialView.matches) == false && bridge.sweepView().map(initialView.matches) == true,
+               "A change to screen framing was not included in the sweep cache key")
+
+    let pending = Task { @MainActor in try await command("capture_screenshot", ["max_width": 512]) }
+    let deadline = ContinuousClock.now + .seconds(2)
+    while !requests.hasOutstandingRequest, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+    try expect(requests.hasOutstandingRequest, "The screenshot was not queued")
+    pending.cancel()
+    do { _ = try await pending.value; throw Failure.failed("A cancelled capture completed") }
+    catch is CancellationError {}
+    try expect(!requests.hasOutstandingRequest && tfCommits == 1 &&
+               (try service.transferFunction(channel: 0)).samples == curve.map { $0.map(UInt8.init) },
+               "Cancelling a pending screenshot did not leave the current TF in place")
   }
 
   private static func testImportWorkflow(fixture: URL, service: BorgVRScreenCommandService, model: AppModel) async throws {

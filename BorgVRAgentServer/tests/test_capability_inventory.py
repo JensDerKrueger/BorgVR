@@ -15,7 +15,7 @@ def test_all_declared_commands_tools_gsc_ui_registries_and_settings_are_classifi
     assert audit.validate(catalog, inventory) == []
     assert inventory["agent"] - inventory["local_client"] < inventory["mcp"]
     assert inventory["agent"] - inventory["mcp"] == {
-        "get_command_history", "import_volume", "fuse_volumes", "get_import_status", "cancel_import", "capture_tf_preview",
+        "get_command_history", "import_volume", "fuse_volumes", "get_import_status", "cancel_import",
     }
     assert {"edit_volume", "wait_volume_edits", "create_edit_state", "rename_edit_state", "delete_edit_state",
             "load_visualization_state"} <= inventory["agent"]

@@ -208,7 +208,7 @@ private struct OpenAIModelPicker: View {
         Text(voiceAgentText("Could not load models. Check the API key, its permissions and the network."))
       } else if let modelIDs {
         if modelIDs.isEmpty {
-          Text(voiceAgentText("No OpenAI models available"))
+          Text(voiceAgentText("No compatible OpenAI models available"))
         } else {
           TextField(voiceAgentText("Search models"), text: $search)
             .textFieldStyle(.roundedBorder)

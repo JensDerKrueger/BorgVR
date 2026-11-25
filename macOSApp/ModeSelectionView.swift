@@ -5,10 +5,8 @@ struct ModeSelectionView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var serverController: BackgroundServerController
-  @EnvironmentObject private var scriptRunner: BorgVRScriptRunner
   @EnvironmentObject private var voiceAgent: VoiceAgentController
   @State private var showingAbout = false
-  @State private var scriptDropIsTargeted = false
 
   var body: some View {
     GeometryReader { proxy in
@@ -22,37 +20,7 @@ struct ModeSelectionView: View {
             height: proxy.size.height
           )
           .clipped()
-          .contentShape(Rectangle())
-          .overlay {
-            if scriptDropIsTargeted {
-              ZStack {
-                Color.black.opacity(0.42)
-
-                VStack(spacing: 14) {
-                  Image(systemName: "play.circle.fill")
-                    .font(.system(size: 54, weight: .semibold))
-                  Text("modeselection_drop_script")
-                    .font(.title2.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(28)
-              }
-              .transition(.opacity)
-            }
-          }
-          .dropDestination(for: URL.self) { urls, _ in
-            guard let scriptURL = urls.first(where: {
-              $0.pathExtension.caseInsensitiveCompare("gsc") == .orderedSame
-            }) else {
-              return false
-            }
-            scriptRunner.runScript(at: scriptURL)
-            return true
-          } isTargeted: { isTargeted in
-            withAnimation(.easeInOut(duration: 0.15)) {
-              scriptDropIsTargeted = isTargeted
-            }
-          }
+          .modifier(ScriptDropTarget())
           .modifier(MandelbulbEasterEgg())
 
         controlPanel

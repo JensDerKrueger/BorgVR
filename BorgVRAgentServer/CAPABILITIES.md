@@ -5,7 +5,7 @@ Dies ist ein statischer Abdeckungsnachweis, keine Laufzeitfreigabe und kein Nach
 Plattformangaben beschreiben die Benutzerfunktion; konkrete MCP- und Agentenaufrufe haben zusätzliche Grenzen.
 Der Swift-Assistent ist auch im Startmenü nutzbar. Lokale Freigaben, Datensatz- und Rendererzustand begrenzen die tatsächlich verfügbaren Werkzeuge.
 
-Erfasst: **77 Funktionsgruppen**, **64 MCP-Werkzeuge**, **48 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **105 unterschiedliche GSC-Namen**.
+Erfasst: **77 Funktionsgruppen**, **64 MCP-Werkzeuge**, **47 maximal erlaubte native Agentenwerkzeuge**, **100 Command-/UI-Registereinträge**, **105 unterschiedliche GSC-Namen**.
 
 Der Agent filtert weiter nach Plattform, RGB/RGBA und Bildfreigabe. Beispiel: Hintergrund/Projektion entfallen auf visionOS.
 GSC meint benannte macOS-DSL-Befehle. `sessioncommand` kann weitere native Commands verlustfrei auf allen nativen Plattformen wiedergeben;
@@ -53,7 +53,7 @@ Der Assistenzkern verwendet den lokalen Werkzeugrouter. Das Modell schlägt stru
 | Darstellung | [Darstellungsgruppen gezielt zurücksetzen](#render-reset) | dataset | vorhanden | ja | ja* |
 | Darstellung | [Renderabschluss abwarten und Screenshot aufnehmen](#render-wait_capture) | dataset | vorhanden | ja | teilweise* |
 | Darstellung | [Interaktionsmodus und TF-Malwerkzeug auswählen](#render-interaction) | dataset | vorhanden | nein | nein |
-| Transferfunktionen | [Skalare Intensitätsbereiche isoliert abbilden](#tf-intensity_preview) | dataset | lokale Funktion | nein | ja* |
+| Transferfunktionen | [Intensitätsschwellen vergleichen](#tf-intensity_preview) | dataset | lokale Funktion | nein | nein |
 | Transferfunktionen | [Mehrkanal-TF lesen und durch RGBA-Einträge oder Stützstellen ändern](#tf-samples) | dataset | vorhanden | ja | ja* |
 | Transferfunktionen | [Aktiven TF-Kanal und bearbeitete RGBA-Komponenten auswählen](#tf-channel) | dataset | vorhanden | nein | nein |
 | Transferfunktionen | [TF-Katalog durchsuchen, TF laden und speichern](#tf-files) | dataset | teilweise | ja | nein |
@@ -604,18 +604,18 @@ Der Assistenzkern verwendet den lokalen Werkzeugrouter. Das Modell schlägt stru
 - Vorhandene Testquellen: kein spezifischer Test zugeordnet
 
 <a id="tf-intensity_preview"></a>
-### Skalare Intensitätsbereiche isoliert abbilden
+### Intensitätsschwellen vergleichen
 
-- Kennung: `tf.intensity_preview`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Bildübertragung nur bei erlaubter Bildfreigabe.
+- Kennung: `tf.intensity_preview`; Plattformen: macOS, iOS, visionOS; Kontext: `dataset`; Wirkung: Bildübertragung nur bei erlaubter Bildfreigabe. Sichtbare Änderungen der TF; Stopp lässt die aktuelle Kurve stehen.
 - Register: kein spezifischer Command/UI-Registereintrag
 - MCP: fehlt
-- Native Agentenwerkzeuge: `capture_tf_preview`
+- Native Agentenwerkzeuge: fehlen
 - Benannte GSC-Befehle (macOS): keine; Command-Payloads ggf. separat verfügbar
-- Zustandsabfrage: Grobe Z-Projektion eines einzelnen normierten Intensitätsbandes; keine Änderung der Ansichts-TF.
-- Lücke: Feste Ansicht aus der niedrigsten Volumenauflösung, keine exakte Live-Ansicht.
+- Zustandsabfrage: Assistenz-Workflow aus vorhandenen Befehlen: TF lesen, setzen, auf das Rendering warten und Screenshot aufnehmen. Kandidatenbilder nach deutlichen Übergängen zurückgeben und beim vollständigen Durchlauf die Original-TF wiederherstellen.
+- Lücke: Für einen aussagekräftigen Vergleich muss die Ansicht stabil bleiben.
 - Nächster Schritt: Laufzeit und Treffer auf repräsentativen Datensätzen messen.
-- Quellen: [AppSupport/Voice/VoiceAgentVolumePreview.swift](../AppSupport/Voice/VoiceAgentVolumePreview.swift), [AppSupport/Voice/assistant-knowledge.json](../AppSupport/Voice/assistant-knowledge.json), [AppSupport/Voice/BorgVRAssistantCore.swift](../AppSupport/Voice/BorgVRAssistantCore.swift)
-- Vorhandene Testquellen: kein spezifischer Test zugeordnet
+- Quellen: [AppSupport/Voice/assistant-knowledge.json](../AppSupport/Voice/assistant-knowledge.json), [AppSupport/Voice/BorgVRAssistantCore.swift](../AppSupport/Voice/BorgVRAssistantCore.swift)
+- Vorhandene Testquellen: [Tests/AssistantCoreTests.swift](../Tests/AssistantCoreTests.swift)
 
 <a id="tf-samples"></a>
 ### Mehrkanal-TF lesen und durch RGBA-Einträge oder Stützstellen ändern

@@ -87,7 +87,6 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   var hasTransferFunctions: Bool { service.transferFunctionCount > 0 }
   var toolDefinitions: [[String: Any]] {
     router.toolDefinitions + (beginImport == nil ? [] : VoiceAgentPolicy.importCatalog)
-      + ((service.volumeEditing as? VolumeBrushModel)?.supportsIntensityPreview == true ? [VoiceAgentPolicy.intensityPreviewTool] : [])
   }
   var importUpdates: AnyPublisher<VoiceAgentImportStatus?, Never> { $importStatus.eraseToAnyPublisher() }
 
@@ -126,18 +125,41 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
     return VoiceAgentPolicy.compactResult(object, tool: "get_application_state")
   }
 
+  func sweepView() -> AssistantSweepView? {
+    #if os(macOS) || os(iOS)
+    guard let screen = service as? BorgVRScreenCommandService, let context = applicationDatasetContext else { return nil }
+    var state = service.applicationState()
+    // The sweep only replaces one TF. Other active channels or shared voxel edits can change its images.
+    guard state.rendererReady, state.transferFunctionCount == 1, state.volumeEditing?.shared != true,
+          state.volumeEditing?.isUpdatingBricks != true else { return nil }
+    let rotation = state.transform.rotation
+    let translation = state.transform.translation
+    guard rotation.count == 4, translation.count == 3,
+          rotation.allSatisfy(\.isFinite), translation.allSatisfy(\.isFinite) else { return nil }
+    struct Signature: Encodable {
+      let state: BorgVRMCPApplicationState
+      let aspectRatio: Float
+      let editStateID: UUID?
+      let editRevision: UInt64?
+    }
+    state.transform.rotation = []
+    state.transform.translation = []
+    state.completedFrame = 0
+    state.volumeEditing = nil
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    guard let signature = try? encoder.encode(Signature(state: state, aspectRatio: screen.viewportAspectRatio,
+      editStateID: context.editStateID, editRevision: service.volumeEditing.editRevision)) else { return nil }
+    return AssistantSweepView(opening: context.openingID, rotation: .init(rotation), translation: .init(translation),
+                              renderSignature: signature)
+    #else
+    return nil
+    #endif
+  }
+
   func executeTool(name: String, arguments: [String: Any], validateContext: @escaping () throws -> Void) async throws -> [String: Any] {
     try validateContext()
     switch name {
-      case "capture_tf_preview":
-        guard let brush = service.volumeEditing as? VolumeBrushModel,
-              let channel = arguments["channel"] as? Int, let low = arguments["low"] as? Double,
-              let high = arguments["high"] as? Double, let palette = arguments["palette"] as? String else {
-          throw BorgVRMCPCommandError.screenshotUnavailable
-        }
-        let png = try await brush.captureIntensityPreview(channel: channel, low: low, high: high, rainbow: palette == "rainbow")
-        try validateContext()
-        return ["content": [["type": "image", "mimeType": "image/png", "data": png.base64EncodedString()]]]
       case "get_import_status":
         if let seconds = arguments["wait_seconds"] as? Double, seconds > 0,
            let job = importStatus, job.active {
@@ -872,7 +894,7 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   }
 
   func openDataset(id: String, validateContext: @escaping () throws -> Void,
-                   didBegin: @escaping (VoiceAgentContext) throws -> Void) async throws -> [String: Any] {
+                   validateRequest: @escaping () throws -> Void) async throws -> [String: Any] {
     guard importStatus?.active != true else {
       return volumeEditRejection("import_running", "Wait for the active import or fusion before opening a dataset.")
     }
@@ -884,19 +906,18 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
     _ = try await BorgVRCommandExecutionContext.$originOverride.withValue(origin) {
       try await router.callTool(name: "open_dataset", arguments: ["id": id], validateContext: validateContext,
         datasetDidBegin: { [self] in
+          try validateRequest()
           guard let opened = applicationDatasetContext, opened.datasetID == id else { throw VoiceAgentError.contextChanged }
-          try didBegin(opened)
           expected = opened
         })
     }
     guard let expected else { throw VoiceAgentError.contextChanged }
     let deadline = ContinuousClock.now + .seconds(300)
     while true {
-      try Task.checkCancellation()
-      try validateContext()
+      try validateRequest()
+      // The renderer can initialize an edit state without changing this opening.
       guard let current = applicationDatasetContext, current.hasSameOpening(as: expected) else { throw VoiceAgentError.contextChanged }
       if let ready = context, ready.hasSameOpening(as: expected) {
-        try didBegin(ready)
         return ["structuredContent": try stateSnapshot()]
       }
       guard ContinuousClock.now < deadline else { throw VoiceAgentError.timedOut }

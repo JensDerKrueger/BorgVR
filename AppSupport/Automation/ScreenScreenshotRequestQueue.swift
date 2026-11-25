@@ -23,11 +23,16 @@ final class ScreenScreenshotRequestQueue {
     return true
   }
 
-  func takePending() -> ScreenScreenshotRequest? {
-    guard let request = pendingRequest else { return nil }
+  func takePending(pagingComplete: Bool) -> ScreenScreenshotRequest? {
+    guard pagingComplete, let request = pendingRequest else { return nil }
     pendingRequest = nil
     inFlightRequests[request.id] = request
     return request
+  }
+
+  func retry(id: UUID) {
+    guard let request = inFlightRequests.removeValue(forKey: id) else { return }
+    pendingRequest = request
   }
 
   func complete(id: UUID) -> ScreenScreenshotRequest? {

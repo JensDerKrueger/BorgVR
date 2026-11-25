@@ -69,6 +69,9 @@ final class VoiceAgentSettings: ObservableObject {
   @Published private(set) var profiles: [VoiceAgentProfile]
   @Published private(set) var selectedProfileID: UUID?
   @Published var speaks: Bool { didSet { defaults.set(speaks, forKey: "voiceAgent.speaks") } }
+  @Published var responseLength: VoiceAgentResponseLength {
+    didSet { defaults.set(responseLength.rawValue, forKey: "voiceAgent.responseLength") }
+  }
   @Published var speechRateMultiplier: Double {
     didSet {
       let value = VoiceAgentSpeechRate.normalized(speechRateMultiplier)
@@ -108,6 +111,7 @@ final class VoiceAgentSettings: ObservableObject {
     profiles = stored.profiles
     selectedProfileID = stored.selected
     speaks = defaults.object(forKey: "voiceAgent.speaks") as? Bool ?? true
+    responseLength = defaults.string(forKey: "voiceAgent.responseLength").flatMap(VoiceAgentResponseLength.init(rawValue:)) ?? .standard
     speechRateMultiplier = VoiceAgentSpeechRate.normalized(
       defaults.object(forKey: "voiceAgent.speechRateMultiplier") as? Double ?? VoiceAgentSpeechRate.defaultMultiplier)
     savesConversation = defaults.bool(forKey: "voiceAgent.saveConversation")
@@ -271,11 +275,15 @@ final class VoiceAgentSettings: ObservableObject {
   }
 
   func knowledge() throws -> AssistantKnowledge {
-    if let customKnowledge { return try AssistantKnowledge.load(customKnowledge) }
-    guard let url = Bundle.main.url(forResource: "assistant-knowledge", withExtension: "json") else {
-      throw VoiceAgentError.configuration
+    if let customKnowledge {
+      do { return try AssistantKnowledge.load(customKnowledge) }
+      catch { throw AssistantRunFailure.knowledgeInvalid }
     }
-    return try AssistantKnowledge.load(Data(contentsOf: url))
+    guard let url = Bundle.main.url(forResource: "assistant-knowledge", withExtension: "json") else {
+      throw AssistantRunFailure.knowledgeMissing
+    }
+    do { return try AssistantKnowledge.load(Data(contentsOf: url)) }
+    catch { throw AssistantRunFailure.knowledgeInvalid }
   }
 
   private func changeArchiveOwner() {

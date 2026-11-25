@@ -5,8 +5,13 @@ struct DatasetListMetadata: Equatable, Sendable {
   let physicalVolume: Double?
 
   init(_ metadata: BORGVRMetaData) {
-    voxelCount = Double(metadata.width) * Double(metadata.height) * Double(metadata.depth)
-    let spacing = [metadata.voxelSpacingX, metadata.voxelSpacingY, metadata.voxelSpacingZ]
+    self.init(dimensions: SIMD3(metadata.width, metadata.height, metadata.depth),
+      voxelSpacing: SIMD3(metadata.voxelSpacingX, metadata.voxelSpacingY, metadata.voxelSpacingZ))
+  }
+
+  init(dimensions: SIMD3<Int>, voxelSpacing: SIMD3<Float>) {
+    voxelCount = Double(dimensions.x) * Double(dimensions.y) * Double(dimensions.z)
+    let spacing = [voxelSpacing.x, voxelSpacing.y, voxelSpacing.z]
     let volume = voxelCount * spacing.reduce(1) { $0 * Double($1) }
     physicalVolume = spacing.allSatisfy { $0.isFinite && $0 > 0 } && volume.isFinite && volume > 0
       ? volume : nil

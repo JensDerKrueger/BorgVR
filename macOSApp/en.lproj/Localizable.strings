@@ -119,6 +119,7 @@
 "modeselection_settings" = "Settings";
 "modeselection_about" = "About";
 "modeselection_drop_script" = "Drop GSC script to run";
+"Select the folder to allow script output: %@" = "Select the folder to allow script output: %@";
 "modeselection_start_background_server" = "Start Background Server";
 "modeselection_stop_background_server" = "Stop Background Server";
 "modeselection_server_running" = "Dataset server running";

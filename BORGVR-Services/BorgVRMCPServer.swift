@@ -1218,7 +1218,7 @@ final class BorgVRMCPToolRouter {
       tool("set_fullscreen", "macOS only: explicitly enter (enabled:true) or leave (enabled:false) native fullscreen for the main window. Idempotent; waits for AppKit's completion, not a fixed delay. A concurrent transition or open sheet is reported as an error.",
         properties: ["enabled": ["type": "boolean"]], required: ["enabled"]),
       tool("get_transfer_function", "Read a zero-based channel's TF as an ordered array of straight RGBA bytes (0...255). RGB/RGBA volumes have no TFs.", properties: ["channel": channelSchema]),
-      tool("set_transfer_function", "Set a zero-based channel's TF. Each sample is four integer bytes [R,G,B,A] in 0...255. A compact ramp is linearly resampled to the current TF resolution. Other channels remain unchanged; updates render immediately and synchronize through SharePlay.", properties: [
+      tool("set_transfer_function", "Set a zero-based channel's TF. Each sample is four integer bytes [R,G,B,A] in 0...255. Rows are uniformly spaced across the intensity range and are linearly resampled to the current TF resolution. The position is implicit in the row index; do not add an intensity column or supply control points. Other channels remain unchanged; updates render immediately and synchronize through SharePlay.", properties: [
         "channel": channelSchema, "samples": ["type": "array", "minItems": 1, "maxItems": 65536,
           "items": ["type": "array", "minItems": 4, "maxItems": 4,
             "items": ["type": "integer", "minimum": 0, "maximum": 255]]]
@@ -1256,12 +1256,12 @@ final class BorgVRMCPToolRouter {
         properties: ["input_path": ["type": "string"]], required: ["input_path"]),
       tool("reset_settings", "Reset all registered settings to defaults EXCEPT the running MCP connection's settings. Save settings with include_credentials:true before resetting if you want to restore everything afterward. Does not reset the current visualization; use reset_state for that. Requires confirm:true.",
         properties: ["confirm": ["type": "boolean", "enum": [true]]], required: ["confirm"]),
-      tool("capture_screenshot", "Capture a PNG, with screenshotId when pixel positions are available. Optional max_width limits the PNG width in pixels without cropping or upscaling; omit it for full resolution. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.", properties: [
+      tool("capture_screenshot", "Wait for volume paging to settle, then capture a PNG, with screenshotId when pixel positions are available. Optional max_width limits the PNG width in pixels without cropping or upscaling; omit it for full resolution. include_alpha defaults to true (background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.", properties: [
         "include_alpha": ["type": "boolean"],
         "max_width": ["type": "integer", "minimum": 1, "maximum": MetalScreenshotEncoder.maximumPreviewWidth],
         "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
       ]),
-      tool("capture_extended_screenshot", "Capture the PNG and matching XYZ position map as one .borgvrcapture file. Supply an absolute output_path for large captures; inline responses are limited to 12 MiB before base64. include_alpha defaults to true. Existing files require overwrite:true.", properties: [
+      tool("capture_extended_screenshot", "Wait for volume paging to settle, then capture the PNG and matching XYZ position map as one .borgvrcapture file. Supply an absolute output_path for large captures; inline responses are limited to 12 MiB before base64. include_alpha defaults to true. Existing files require overwrite:true.", properties: [
         "include_alpha": ["type": "boolean"], "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
       ]),
       tool("pick_screenshot_positions", "Read visible volume positions from the latest screenshot using its screenshotId. x and y are normalized image coordinates from the top left. Returns normalized dataset XYZ or null for each point in order; available:false means capture a new image. This does not edit or create a marker.", properties: [

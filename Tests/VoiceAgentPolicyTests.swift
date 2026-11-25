@@ -30,6 +30,16 @@ struct VoiceAgentPolicyTests {
     try rejects { try VoiceAgentPolicy.validate(["visible": true, "value": Double.nan], schema: schema) }
     try rejects { try VoiceAgentPolicy.validate(["visible": true, "value": 2], schema: schema) }
     try rejects { try VoiceAgentPolicy.validate(["visible": true, "output_path": "/secret"], schema: schema) }
+    let rgba: [String: Any] = ["type": "array", "minItems": 4, "maxItems": 4,
+      "items": ["type": "integer", "minimum": 0, "maximum": 255]]
+    try VoiceAgentPolicy.validate([255, 255, 255, 255], schema: rgba)
+    do {
+      try VoiceAgentPolicy.validate([[0, 0, 0, 0], [0.1, 255, 255, 255]], schema: ["type": "array", "items": rgba])
+      throw Failure.failed("An intensity coordinate in an RGBA row was accepted")
+    } catch let issue as VoiceAgentPolicy.ArgumentIssue {
+      try check(issue.path == "arguments[1][0]" && issue.reason.contains("expected an integer, got 0.1"),
+                "A nested validation failure did not identify the value and position")
+    }
     try rejects { _ = try VoiceAgentPolicy.decode("[]") }
     try rejects { _ = try VoiceAgentPolicy.encoded(["text": String(repeating: "x", count: 1024)], limit: 64) }
     try check(VoiceAgentPolicy.outputName(" Result.DATA ", extension: "data") == "Result.data", "Filename extension not normalized")
@@ -41,7 +51,8 @@ struct VoiceAgentPolicyTests {
     try check(preview["originalSampleCount"] as? Int == 65536 && preview["samplesArePreview"] as? Bool == true,
               "TF preview was not explicitly marked")
     let samples = preview["samples"] as! [[Int]]
-    try check(samples.count == 256 && samples.first == rows.first && samples.last == rows.last,
+    try check(samples.count == VoiceAgentPolicy.maximumTransferPreviewSamples &&
+              samples.first == rows.first && samples.last == rows.last,
               "TF preview size or endpoints changed")
     _ = try VoiceAgentPolicy.encoded(preview, limit: VoiceAgentPolicy.maximumResultBytes)
     try check(rows.count == 65536, "TF preview changed the original table")

@@ -343,7 +343,6 @@ final class ScreenOpaqueGeometryRenderer {
     }
 
     func drawSphere(_ point: VolumeMarkerPoint, color: SIMD4<Float>) {
-      var color = color
       let volumePosition = simd_make_float3(
         volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
       )
@@ -353,7 +352,7 @@ final class ScreenOpaqueGeometryRenderer {
       encoder.setVertexBuffer(sphereBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
       encoder.setVertexBuffer(sphereNormalBuffer, offset: 0, index: 24)
       encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
-      encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
+      encoder.setVolumeMarkerStyle(color: color)
       encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: sphereVertexCount)
     }
 
@@ -364,7 +363,6 @@ final class ScreenOpaqueGeometryRenderer {
         device: device
       ) else { return }
       var markerModel = modelMatrix
-      var color = color
       encoder.setVertexBuffer(
         mesh.positionBuffer,
         offset: 0,
@@ -376,11 +374,7 @@ final class ScreenOpaqueGeometryRenderer {
         length: MemoryLayout<simd_float4x4>.stride,
         index: 21
       )
-      encoder.setFragmentBytes(
-        &color,
-        length: MemoryLayout<SIMD4<Float>>.stride,
-        index: 23
-      )
+      encoder.setVolumeMarkerStyle(color: color)
       encoder.drawPrimitives(
         type: .triangle,
         vertexStart: 0,
@@ -400,13 +394,12 @@ final class ScreenOpaqueGeometryRenderer {
       ) else { return }
       encoder.setRenderPipelineState(markerPipeline)
       var markerModel = modelMatrix
-      var color = color
       encoder.setDepthStencilState(writesDepth ? markerDepthState : measurementSurfaceDepthState)
       encoder.setCullMode(.none)
       encoder.setVertexBuffer(mesh.positionBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
       encoder.setVertexBuffer(mesh.normalBuffer, offset: 0, index: 24)
       encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
-      encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
+      encoder.setVolumeMarkerStyle(color: color)
       encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: mesh.vertexCount)
     }
 

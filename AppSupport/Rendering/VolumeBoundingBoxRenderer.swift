@@ -56,13 +56,19 @@ final class VolumeBoundingBoxRenderer {
     }
     guard let positions, let normals else { return }
     var modelMatrix = modelMatrix
-    var color = SIMD4<Float>(1, 1, 1, 1)
     encoder.pushDebugGroup("Dataset Bounding Box")
     encoder.setVertexBuffer(positions, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
     encoder.setVertexBuffer(normals, offset: 0, index: 24)
     encoder.setVertexBytes(&modelMatrix, length: MemoryLayout<simd_float4x4>.stride, index: 21)
-    encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
+    encoder.setVolumeMarkerStyle(color: .zero, boundingBoxExtent: extent)
     encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
     encoder.popDebugGroup()
+  }
+}
+
+extension MTLRenderCommandEncoder {
+  func setVolumeMarkerStyle(color: SIMD4<Float>, boundingBoxExtent: SIMD3<Float> = .zero) {
+    var style = VolumeMarkerStyle(color: color, boundingBoxExtent: boundingBoxExtent)
+    setFragmentBytes(&style, length: MemoryLayout<VolumeMarkerStyle>.stride, index: 23)
   }
 }

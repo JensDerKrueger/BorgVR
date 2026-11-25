@@ -36,7 +36,7 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
     request?.completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
   }
 
-  func cancelScreenshot(id: UUID) {
+  func cancelScreenshot(id: UUID, error: Error) {
     lock.lock()
     guard pendingRequest?.id == id else {
       lock.unlock()
@@ -45,15 +45,20 @@ final class VisionMCPRenderBridge: @unchecked Sendable {
     let request = pendingRequest
     pendingRequest = nil
     lock.unlock()
-    request?.completion(.failure(BorgVRMCPCommandError.timeout))
+    request?.completion(.failure(error))
   }
 
-  func takeScreenshotRequest() -> Request? {
-    lock.lock()
-    defer { lock.unlock() }
-    let request = pendingRequest
-    pendingRequest = nil
-    return request
+  func screenshotRequest(pagingComplete: Bool) -> Request? {
+    guard pagingComplete else { return nil }
+    return lock.withLock { pendingRequest }
+  }
+
+  func completeScreenshot(id: UUID) -> Request? {
+    lock.withLock {
+      guard let request = pendingRequest, request.id == id else { return nil }
+      pendingRequest = nil
+      return request
+    }
   }
 
   @discardableResult
@@ -382,18 +387,26 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     let runtime = session.runtimeState
     guard runtime.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }
     let requestID = UUID()
-    let image = try await withCheckedThrowingContinuation {
-      (continuation: CheckedContinuation<BorgVRMCPImage, Error>) in
-      let gate = BorgVRMCPContinuationGate(continuation)
-      runtime.mcpRenderBridge.requestScreenshot(id: requestID, maxWidth: maxWidth) { result in
-        gate.resume(with: result)
+    let bridge = runtime.mcpRenderBridge
+    let image: BorgVRMCPImage = try await withTaskCancellationHandler {
+      try Task.checkCancellation()
+      return try await withCheckedThrowingContinuation { continuation in
+        let gate = BorgVRMCPContinuationGate(continuation)
+        let timeout = Task {
+          do { try await Task.sleep(for: .seconds(10)) }
+          catch { return }
+          bridge.cancelScreenshot(id: requestID, error: BorgVRMCPCommandError.timeout)
+          gate.resume(with: .failure(BorgVRMCPCommandError.timeout))
+        }
+        bridge.requestScreenshot(id: requestID, maxWidth: maxWidth) {
+          timeout.cancel()
+          gate.resume(with: $0)
+        }
       }
-      Task {
-        try? await Task.sleep(for: .seconds(10))
-        runtime.mcpRenderBridge.cancelScreenshot(id: requestID)
-        gate.resume(with: .failure(BorgVRMCPCommandError.timeout))
-      }
+    } onCancel: {
+      Task { @MainActor in bridge.cancelScreenshot(id: requestID, error: CancellationError()) }
     }
+    try Task.checkCancellation()
     return includeAlpha ? image : try image.composited(over: .passthrough)
   }
 

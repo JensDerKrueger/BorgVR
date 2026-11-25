@@ -522,11 +522,6 @@
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		57A620261117000000000001 /* Voice */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AppSupport/Voice;
-			sourceTree = SOURCE_ROOT;
-		};
 		111111111111111111111201 /* iOSApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -596,6 +591,11 @@
 			);
 			path = TerminalConverterApp;
 			sourceTree = "<group>";
+		};
+		57A620261117000000000001 /* AppSupport/Voice */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AppSupport/Voice;
+			sourceTree = SOURCE_ROOT;
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -701,7 +701,7 @@
 				57A010052EF0000100000001 /* SharePlay */,
 				57A010082EF0000100000001 /* UI */,
 				57A010072EF0000100000001 /* Web */,
-				57A620261117000000000001 /* Voice */,
+				57A620261117000000000001 /* AppSupport/Voice */,
 			);
 			path = AppSupport;
 			sourceTree = "<group>";
@@ -867,9 +867,9 @@
 			fileSystemSynchronizedGroups = (
 				111111111111111111111201 /* iOSApp */,
 				560B00012E00000000000001 /* BORGVR-Services */,
-				57A620261117000000000001 /* Voice */,
 				560D09552D98280400EAD023 /* BORGVR-Render */,
 				565582772D4E5EAF008E7CE6 /* BORGVR-IO */,
+				57A620261117000000000001 /* AppSupport/Voice */,
 			);
 			name = iOSApp;
 			packageProductDependencies = (
@@ -918,8 +918,8 @@
 				560B00012E00000000000001 /* BORGVR-Services */,
 				560C00012E00000000000002 /* macOSApp */,
 				560D09552D98280400EAD023 /* BORGVR-Render */,
-				57A620261117000000000001 /* Voice */,
 				565582772D4E5EAF008E7CE6 /* BORGVR-IO */,
+				57A620261117000000000001 /* AppSupport/Voice */,
 			);
 			name = macOSApp;
 			packageProductDependencies = (
@@ -946,7 +946,7 @@
 				560B00012E00000000000001 /* BORGVR-Services */,
 				560D09552D98280400EAD023 /* BORGVR-Render */,
 				564183792D649679003A1EC4 /* VisionApp */,
-				57A620261117000000000001 /* Voice */,
+				57A620261117000000000001 /* AppSupport/Voice */,
 			);
 			name = VisionApp;
 			packageProductDependencies = (
@@ -1448,6 +1448,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BorgVR uses the microphone when you ask the AI assistant a question.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "BorgVR transcribes your spoken requests for the AI assistant.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
@@ -1485,6 +1487,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "BorgVR uses the microphone when you ask the AI assistant a question.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "BorgVR transcribes your spoken requests for the AI assistant.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";

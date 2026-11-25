@@ -292,7 +292,6 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   private var openingContinuation: CheckedContinuation<UUID?, Error>?
   private var preparedChoice: (datasetID: String, stateID: UUID?)?
   private var dataSource: BorgVRVolumeEditDataSource?
-  private var intensityPreviewCache: (generation: UUID, revision: UInt64, channel: Int, value: VoiceAgentVolumePreview)?
   private var openingTask: Task<Void, Never>?
   private var closingTask: Task<Void, Never>?
   private var workingState: BorgVRVolumeEditState?
@@ -311,33 +310,6 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   var canExport: Bool {
     !isPreparingRecording && !isInSharePlay && !isExporting && !isOpeningState && !isDiscardingEdits && !isRestoringPersonalState &&
       dataSource?.editingStatus() != nil
-  }
-
-  var supportsIntensityPreview: Bool {
-    channelInterpretation == .independentChannels && dataSource?.getMetadata().componentType == .unsignedInteger
-  }
-
-  func captureIntensityPreview(channel: Int, low: Double, high: Double, rainbow: Bool) async throws -> Data {
-    guard supportsIntensityPreview, let source = dataSource,
-          !isOpeningState, !isUpdatingBricks, !isDiscardingEdits, !isRestoringPersonalState,
-          (0..<componentCount).contains(channel) else { throw BorgVRMCPCommandError.screenshotUnavailable }
-    let generation = datasetGeneration
-    let revision = source.contentRevision
-    let cached = intensityPreviewCache.flatMap {
-      $0.generation == generation && $0.revision == revision && $0.channel == channel ? $0.value : nil
-    }
-    let worker = Task.detached(priority: .utility) {
-      let snapshot = try cached ?? VoiceAgentVolumePreview.read(source, channel: channel)
-      return (snapshot, try snapshot.render(low: low, high: high, rainbow: rainbow))
-    }
-    let (snapshot, png) = try await withTaskCancellationHandler {
-      try await worker.value
-    } onCancel: { worker.cancel() }
-    try Task.checkCancellation()
-    guard source === dataSource, datasetGeneration == generation, source.contentRevision == revision,
-          !isOpeningState, !isUpdatingBricks else { throw BorgVRMCPCommandError.screenshotUnavailable }
-    intensityPreviewCache = (generation, revision, channel, snapshot)
-    return png
   }
 
   init(projectsOntoVolume: Bool = true) {
@@ -487,7 +459,6 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   func close() {
-    intensityPreviewCache = nil
     recordingStateAliases.removeAll()
     restorePersonalStateTask?.cancel()
     restorePersonalStateTask = nil

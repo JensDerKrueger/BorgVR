@@ -68,7 +68,8 @@ final class DatasetCatalogService {
     includeBuiltIn: Bool = true,
     remoteLoadStarted: (() -> Void)? = nil
   ) async -> [AppModel.DatasetEntry] {
-    var loaded = loadLocalDatasets(includeBuiltIn: includeBuiltIn)
+    var loaded = await loadLocalDatasets(includeBuiltIn: includeBuiltIn)
+    guard !Task.isCancelled else { return [] }
     if includeRemote {
       remoteLoadStarted?()
       let knownMetadata = Dictionary(loaded.compactMap { dataset in
@@ -109,8 +110,7 @@ final class DatasetCatalogService {
     )
   }
 
-  private func loadLocalDatasets(includeBuiltIn: Bool) -> [AppModel.DatasetEntry] {
-    var loaded: [AppModel.DatasetEntry] = []
+  private func loadLocalDatasets(includeBuiltIn: Bool) async -> [AppModel.DatasetEntry] {
     let accessURL = storage.beginAccess()
     defer { storage.endAccess(accessURL) }
 
@@ -119,54 +119,28 @@ final class DatasetCatalogService {
       logger?.error(localAccessError)
     }
 
-    if let directoryURL = storage.directoryURL {
-      do {
-        let files = try FileManager.default.contentsOfDirectory(
-          at: directoryURL,
-          includingPropertiesForKeys: nil
-        )
-        for url in files where url.pathExtension.lowercased() == "data" {
-          if let data = try? BORGVRFileData(filename: url.path) {
-            let metadata = data.getMetadata()
-            loaded.append(
-              AppModel.DatasetEntry(
-                identifier: url.path,
-                description: metadata.datasetDescription,
-                source: .local,
-                uniqueId: metadata.uniqueID,
-                metadataSummary: Self.metadataSummary(for: metadata),
-                listMetadata: DatasetListMetadata(metadata)
-              )
-            )
-          }
-        }
-      } catch {
-        let message = "Error loading dataset files in \(directoryURL.path): \(error.localizedDescription)"
-        localAccessError = message
-        logger?.error(message)
-      }
-    } else {
+    let directoryURL = storage.directoryURL
+    let scan = await BORGVRMetaData.scanListHeaders(in: directoryURL, includeBuiltIn: includeBuiltIn)
+    guard !Task.isCancelled else { return [] }
+    if let directoryURL, let error = scan.directoryError {
+      let message = "Error loading dataset files in \(directoryURL.path): \(error)"
+      localAccessError = message
+      logger?.error(message)
+    } else if directoryURL == nil {
       localAccessError = String(localized: "The documents directory is not available.")
     }
 
-    if includeBuiltIn,
-       let datasetURLs = Bundle.main.urls(forResourcesWithExtension: "data", subdirectory: nil) {
-      for url in datasetURLs {
-        if let metadata = try? BORGVRMetaData(url: url) {
-          loaded.append(
-            AppModel.DatasetEntry(
-              identifier: url.path,
-              description: metadata.datasetDescription,
-              source: .builtIn,
-              uniqueId: metadata.uniqueID,
-              metadataSummary: Self.metadataSummary(for: metadata),
-              listMetadata: DatasetListMetadata(metadata)
-            )
-          )
-        }
-      }
+    return scan.entries.map { entry in
+      let header = entry.header
+      return AppModel.DatasetEntry(
+        identifier: entry.url.path,
+        description: header.datasetDescription,
+        source: entry.isBuiltIn ? .builtIn : .local,
+        uniqueId: header.uniqueID,
+        metadataSummary: Self.metadataSummary(for: header),
+        listMetadata: DatasetListMetadata(dimensions: header.dimensions, voxelSpacing: header.voxelSpacing)
+      )
     }
-    return loaded
   }
 
   private func loadRemoteDatasets() async -> [AppModel.DatasetEntry] {
@@ -257,7 +231,7 @@ final class DatasetCatalogService {
     }
   }
 
-  static func metadataSummary(for metadata: BORGVRMetaData) -> String {
+  static func metadataSummary(for metadata: BORGVRMetaData.ListHeader) -> String {
     let bitsPerComponent = metadata.bytesPerComponent * 8
     let channelText = metadata.componentCount == 1
       ? String(localized: "1 channel")
@@ -265,11 +239,11 @@ final class DatasetCatalogService {
     let compressionText = metadata.compression
       ? String(localized: "compressed")
       : String(localized: "uncompressed")
-    let lodText = metadata.levelMetadata.count == 1
+    let lodText = metadata.levelCount == 1
       ? String(localized: "1 LOD")
-      : String(format: String(localized: "metadata_lod_count_format"), metadata.levelMetadata.count)
+      : String(format: String(localized: "metadata_lod_count_format"), metadata.levelCount)
 
-    return "\(metadata.width) x \(metadata.height) x \(metadata.depth) - " +
+    return "\(metadata.dimensions.x) x \(metadata.dimensions.y) x \(metadata.dimensions.z) - " +
       "\(bitsPerComponent)-bit, \(channelText) - " +
       "\(String(localized: "Brick")) \(metadata.brickSize) - \(lodText) - " +
       "\(compressionText) - \(String(localized: "Values")) \(metadata.valueRange.minimum)...\(metadata.valueRange.maximum)"
@@ -570,7 +544,7 @@ final class DatasetOpenWorkflow: ObservableObject {
     let localPath = localURL.path
 
     let metadata = try? BORGVRMetaData(url: localURL)
-    let metadataSummary = metadata.map { DatasetCatalogService.metadataSummary(for: $0) } ?? dataset.metadataSummary
+    let metadataSummary = metadata.map { DatasetCatalogService.metadataSummary(for: $0.listHeader) } ?? dataset.metadataSummary
     return AppModel.DatasetEntry(
       identifier: localPath,
       description: dataset.description,

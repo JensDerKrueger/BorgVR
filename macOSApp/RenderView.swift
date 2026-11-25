@@ -143,6 +143,7 @@ struct RenderView: View {
 
   private var presentedRenderContent: some View {
     renderContent
+    .modifier(ScriptDropTarget())
     .onAppear {
       docking.restoreForDatasetOpen()
       updateDetachedPanelWindows()

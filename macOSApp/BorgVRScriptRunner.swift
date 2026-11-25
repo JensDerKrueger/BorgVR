@@ -10,9 +10,11 @@ final class BorgVRScriptRunner: ObservableObject {
     case text
     case file
     case directory
+    case outputDirectory(URL)
   }
 
   private struct ScriptInputRequest: Equatable {
+    let id = UUID()
     let kind: ScriptInputKind
     let prompt: String
   }
@@ -93,6 +95,8 @@ final class BorgVRScriptRunner: ObservableObject {
   private var commandService: BorgVRScreenCommandService?
 
   private var outputSubdirectory = ""
+  private let selectOutputDirectory: ((URL, String, @escaping (URL?) -> Void) -> Void)?
+  private var outputDirectoryAccessURLs: [URL] = []
   private var logFileURL: URL?
   private var logFileAccessURL: URL?
 
@@ -128,12 +132,17 @@ final class BorgVRScriptRunner: ObservableObject {
   private var importBorderModeOverride: ExtensionStrategy?
   private var initialRenderDisplaySyncEnabled: Bool?
 
+  init(selectOutputDirectory: ((URL, String, @escaping (URL?) -> Void) -> Void)? = nil) {
+    self.selectOutputDirectory = selectOutputDirectory
+  }
+
   deinit {
     executionTask?.cancel()
     windowCommandTask?.cancel()
     isoSurfaceExportTask?.cancel()
     volumeEditTask?.cancel()
     storedAppModel?.stopAccessingDataDirectory(logFileAccessURL)
+    for url in outputDirectoryAccessURLs { url.stopAccessingSecurityScopedResource() }
   }
 
   func configure(
@@ -173,6 +182,14 @@ final class BorgVRScriptRunner: ObservableObject {
     if panel.runModal() == .OK, let url = panel.url {
       runScript(at: url)
     }
+  }
+
+  func runDroppedScript(_ urls: [URL]) -> Bool {
+    guard let url = urls.first(where: {
+      $0.isFileURL && !$0.hasDirectoryPath && $0.pathExtension.caseInsensitiveCompare("gsc") == .orderedSame
+    }) else { return false }
+    runScript(at: url)
+    return true
   }
 
   func runScript(at url: URL) {
@@ -251,6 +268,7 @@ final class BorgVRScriptRunner: ObservableObject {
     if isRunning {
       logInfo("Script stopped")
     }
+    releaseOutputDirectoryAccess()
     restoreRenderDisplaySync()
     isRunning = false
     statusText = String(localized: "No script active")
@@ -266,6 +284,7 @@ final class BorgVRScriptRunner: ObservableObject {
           try? await Task.sleep(nanoseconds: 16_000_000)
         case .finished:
           logInfo("Script finished")
+          releaseOutputDirectoryAccess()
           restoreRenderDisplaySync()
           isRunning = false
           statusText = String(localized: "No script active")
@@ -273,6 +292,7 @@ final class BorgVRScriptRunner: ObservableObject {
         default:
           let lineText = interpreter.lastErrorLine.map { " in Zeile \($0)" } ?? ""
           logError("Script error\(lineText): \(result)")
+          releaseOutputDirectoryAccess()
           restoreRenderDisplaySync()
           isRunning = false
           statusText = String(localized: "Script error")
@@ -954,12 +974,11 @@ final class BorgVRScriptRunner: ObservableObject {
     _ kind: ScriptInputKind,
     prompt: String
   ) -> CommandValueResult {
-    let request = ScriptInputRequest(kind: kind, prompt: prompt)
-    if pendingScriptInput == request {
+    if let pendingScriptInput, pendingScriptInput.kind == kind, pendingScriptInput.prompt == prompt {
       guard let value = pendingScriptInputValue else {
         return .status(.waitingNoop)
       }
-      pendingScriptInput = nil
+      self.pendingScriptInput = nil
       pendingScriptInputValue = nil
       return .value(value)
     }
@@ -967,6 +986,7 @@ final class BorgVRScriptRunner: ObservableObject {
     guard pendingScriptInput == nil else {
       return .status(.callbackError)
     }
+    let request = ScriptInputRequest(kind: kind, prompt: prompt)
     pendingScriptInput = request
     pendingScriptInputValue = nil
 
@@ -977,6 +997,12 @@ final class BorgVRScriptRunner: ObservableObject {
         presentFileInput(for: request, choosesDirectories: false)
       case .directory:
         presentFileInput(for: request, choosesDirectories: true)
+      case .outputDirectory(let base):
+        if let selectOutputDirectory {
+          selectOutputDirectory(base, prompt) { [weak self] url in self?.completeFileInput(request, url: url) }
+        } else {
+          presentFileInput(for: request, choosesDirectories: true, startingAt: base.deletingLastPathComponent())
+        }
     }
     return .status(.waitingNoop)
   }
@@ -1010,7 +1036,8 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func presentFileInput(
     for request: ScriptInputRequest,
-    choosesDirectories: Bool
+    choosesDirectories: Bool,
+    startingAt directory: URL? = nil
   ) {
     let panel = NSOpenPanel()
     panel.title = request.prompt
@@ -1019,15 +1046,11 @@ final class BorgVRScriptRunner: ObservableObject {
     panel.canChooseDirectories = choosesDirectories
     panel.canChooseFiles = !choosesDirectories
     panel.canCreateDirectories = choosesDirectories
+    panel.directoryURL = directory
 
     let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
       Task { @MainActor in
-        if response == .OK, let url = panel.url {
-          self?.rememberScriptInputURL(url)
-          self?.completeScriptInput(request, value: url.path)
-        } else {
-          self?.cancelScriptInput(request)
-        }
+        self?.completeFileInput(request, url: response == .OK ? panel.url : nil)
       }
     }
 
@@ -1036,6 +1059,13 @@ final class BorgVRScriptRunner: ObservableObject {
     } else {
       panel.begin(completionHandler: completion)
     }
+  }
+
+  private func completeFileInput(_ request: ScriptInputRequest, url: URL?) {
+    guard isRunning, pendingScriptInput == request else { return }
+    guard let url else { cancelScriptInput(request); return }
+    rememberScriptInputURL(url)
+    completeScriptInput(request, value: url.path)
   }
 
   private var scriptDialogWindow: NSWindow? {
@@ -1535,17 +1565,72 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func setOutputDirectory(_ path: String) -> CommandResultCode {
-    outputSubdirectory = path
-    let directory = outputDirectoryURL()
-    do {
-      let accessURL = storedAppModel?.startAccessingDataDirectory()
-      defer { storedAppModel?.stopAccessingDataDirectory(accessURL) }
-      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let base = scriptOutputBaseURL()
+    let directory = path.isEmpty ? base : base.appendingPathComponent(path, isDirectory: true)
+    func acceptDirectory() -> CommandResultCode {
+      outputSubdirectory = path
       return logInfo("Script output directory: \(directory.path)")
+    }
+    if let request = pendingScriptInput, case .outputDirectory(let requestedBase) = request.kind {
+      guard requestedBase == base else {
+        logError("The script output location changed while waiting for access.")
+        return .callbackError
+      }
+      switch requestScriptInput(request.kind, prompt: request.prompt) {
+        case .status(let result): return result
+        case .value(let path):
+          guard let selected = scriptInputURLs[URL(fileURLWithPath: path).standardizedFileURL.path] else { return .callbackError }
+          let accessing = selected.startAccessingSecurityScopedResource()
+          var retainAccess = false
+          defer { if accessing, !retainAccess { selected.stopAccessingSecurityScopedResource() } }
+          guard selected.resolvingSymlinksInPath().path == base.resolvingSymlinksInPath().path else {
+            logError("Select the requested folder to grant access: \(base.path)")
+            return .callbackError
+          }
+          do {
+            try prepareOutputDirectory(directory)
+            if accessing { outputDirectoryAccessURLs.append(selected); retainAccess = true }
+            return acceptDirectory()
+          } catch {
+            logError("Output directory could not be prepared: \(error.localizedDescription)")
+            return .callbackError
+          }
+      }
+    }
+    do {
+      try prepareOutputDirectory(directory)
+      return acceptDirectory()
     } catch {
-      logError("Output directory could not be created: \(error.localizedDescription)")
+      if Self.isOutputPermissionError(error) {
+        let prompt = String(format: String(localized: "Select the folder to allow script output: %@"), base.path)
+        if case let .status(result) = requestScriptInput(.outputDirectory(base), prompt: prompt) { return result }
+        return .callbackError
+      }
+      logError("Output directory could not be prepared: \(error.localizedDescription)")
       return .callbackError
     }
+  }
+
+  private func prepareOutputDirectory(_ directory: URL) throws {
+    let accessURL = storedAppModel?.startAccessingDataDirectory()
+    defer { storedAppModel?.stopAccessingDataDirectory(accessURL) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    // Creating an existing directory can succeed even when writing files inside it is denied.
+    let probe = directory.appendingPathComponent(".borgvr-write-test-\(UUID().uuidString)")
+    try Data().write(to: probe, options: .withoutOverwriting)
+    try FileManager.default.removeItem(at: probe)
+  }
+
+  private static func isOutputPermissionError(_ error: Error) -> Bool {
+    let error = error as NSError
+    if error.domain == NSCocoaErrorDomain, error.code == NSFileWriteNoPermissionError { return true }
+    if error.domain == NSPOSIXErrorDomain, error.code == Int(EACCES) || error.code == Int(EPERM) { return true }
+    return (error.userInfo[NSUnderlyingErrorKey] as? Error).map(isOutputPermissionError) ?? false
+  }
+
+  private func releaseOutputDirectoryAccess() {
+    for url in outputDirectoryAccessURLs { url.stopAccessingSecurityScopedResource() }
+    outputDirectoryAccessURLs.removeAll()
   }
 
   private func takeScreenshot(filename: String?, includeAlpha: Bool = true,
@@ -2508,20 +2593,15 @@ final class BorgVRScriptRunner: ObservableObject {
     sharePlay?.synchronize(kind: .stateOnly)
   }
 
-  private func datasetDirectoryURL() -> URL {
-    if let dataset = appModel?.activeDataset {
-      switch dataset.source {
-        case .local, .builtIn:
-          return URL(fileURLWithPath: dataset.identifier).deletingLastPathComponent()
-        case .remote:
-          break
-      }
+  private func scriptOutputBaseURL() -> URL {
+    if let dataset = appModel?.activeDataset, dataset.source == .local {
+      return URL(fileURLWithPath: dataset.identifier).deletingLastPathComponent()
     }
     return storedAppModel?.resolvedDataDirectoryURL() ?? FileManager.default.homeDirectoryForCurrentUser
   }
 
   private func outputDirectoryURL() -> URL {
-    let base = datasetDirectoryURL()
+    let base = scriptOutputBaseURL()
     guard !outputSubdirectory.isEmpty else { return base }
     return base.appendingPathComponent(outputSubdirectory, isDirectory: true)
   }

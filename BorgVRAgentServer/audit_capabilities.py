@@ -73,7 +73,7 @@ def read_inventory(root=ROOT):
     bundle = json.loads(read("AppSupport/Voice/assistant-knowledge.json"))
     core = read("AppSupport/Voice/BorgVRAssistantCore.swift")
     internal = {row["id"] for row in bundle["workflows"]}
-    internal.update(re.findall(r'\["name": "([a-z_.]+)", "description":', core))
+    internal.update(re.findall(r'\[\s*"name"\s*:\s*"([a-z_.]+)"\s*,\s*"description"\s*:', core))
     return {"symbols": symbols, "mcp": mcp, "agent": agent, "local_client": local_client,
             "internal_agent": internal, "gsc": gsc,
             "settings": settings, "recorded_settings": recorded, "local_settings": local}

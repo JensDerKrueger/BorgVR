@@ -61,11 +61,13 @@ final class ScreenVolumeRendererCore {
   private var detached = false
   var isAttached: Bool { !detached }
   private var atlasPurgeRequested = false
+  private(set) var screenshotPagingComplete = false
 
   var atlasPagingStatistics: AtlasPagingStatistics? { volumeAtlas?.pagingStatistics }
 
   func requestAtlasPurge() {
     guard !detached, volumeAtlas != nil else { return }
+    screenshotPagingComplete = false
     atlasPurgeRequested = true
   }
   private var pipelineDrawableWidth: Float = 0
@@ -398,13 +400,17 @@ final class ScreenVolumeRendererCore {
   }
 
   func completeFrame(_ frame: ScreenVolumeEncodedFrame) -> Int {
+    screenshotPagingComplete = false
     guard isCurrentDatasetRequest(frame.requestID),
-          loadedDatasetRequestID == frame.requestID else { return 0 }
+          loadedDatasetRequestID == frame.requestID,
+          frame.commandBuffer.status == .completed else { return 0 }
     interactionDepthSnapshot = VolumeInteractionDepthSnapshot(
       texture: frame.interactionDepthTexture,
       textureToClip: [frame.textureToClip]
     )
+    let purging = atlasPurgeRequested
     let missingBrickCount = readBackHashTable(commandBuffer: frame.commandBuffer)
+    screenshotPagingComplete = frame.renderedVolume && !purging && missingBrickCount == 0
     timer.recordCompletedFrame(frame.commandBuffer)
     return missingBrickCount
   }
@@ -439,6 +445,7 @@ final class ScreenVolumeRendererCore {
   }
 
   private func clearDatasetResources(resetSharedState: Bool = true) {
+    screenshotPagingComplete = false
     if resetSharedState {
       appModel.volumeBrush.close()
       appModel.trackDatasetStreaming(nil)

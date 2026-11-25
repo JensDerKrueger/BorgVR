@@ -44,6 +44,7 @@ struct VoiceAgentView: View {
   @ObservedObject private var settings: VoiceAgentSettings
   @Environment(\.dismiss) private var dismiss
   @State private var text = ""
+  @State private var pendingModelProfileID: UUID?
   @State private var pickerSelection: VoiceAgentFileSelection?
   @State private var filePickerPresented = false
 
@@ -58,16 +59,17 @@ struct VoiceAgentView: View {
       VStack(spacing: 12) {
         HStack {
           Label(agent.status, systemImage: agent.connectionState == .ready ? "checkmark.shield" : "network")
-          Spacer()
+            .lineLimit(1)
+          Spacer(minLength: 0)
           if (agent.busy && agent.annotationDeletion == nil && agent.editStateDeletion == nil &&
               agent.volumeEditApproval == nil) || agent.connectionState == .connecting {
             ProgressView().controlSize(.small)
           }
+          modelMenu
           Button { agent.newConversation() } label: { Image(systemName: "arrow.counterclockwise") }
             .help(voiceAgentText("New conversation"))
             .accessibilityLabel(voiceAgentText("New conversation"))
         }
-        if !agent.model.isEmpty { Text(agent.model).font(.caption).foregroundStyle(.secondary) }
         if let job = agent.importStatus {
           VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -134,6 +136,14 @@ struct VoiceAgentView: View {
           .onChange(of: agent.messages.count) { _, _ in
             if let last = agent.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
           }
+        }
+        if let step = agent.stepText {
+          VStack(alignment: .leading, spacing: 2) {
+            Text(voiceAgentText("Next step")).font(.caption.weight(.semibold))
+            Text(verbatim: step).font(.callout).lineLimit(3).textSelection(.enabled)
+          }
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
         if let selection = agent.presentedFileSelection {
           HStack {
@@ -207,6 +217,16 @@ struct VoiceAgentView: View {
     .frame(width: 600, height: 580)
     #endif
     .task { await agent.connect() }
+    .alert(voiceAgentText("Switch to another model?"), isPresented: Binding(
+      get: { pendingModelProfileID != nil },
+      set: { visible in if !visible { pendingModelProfileID = nil } }), presenting: pendingModelProfileID) { id in
+        Button(voiceAgentText("Switch model"), role: .destructive) {
+          if canSwitchModel { settings.selectProfile(id) }
+        }
+        Button(voiceAgentText("Cancel"), role: .cancel) {}
+    } message: { _ in
+      Text(voiceAgentText("Switching models clears the current conversation."))
+    }
     .fileImporter(isPresented: $filePickerPresented,
                   allowedContentTypes: selectionContentTypes,
                   allowsMultipleSelection: false, onCompletion: { result in
@@ -271,6 +291,44 @@ struct VoiceAgentView: View {
       if let selection = agent.fileSelection { agent.resolveFileSelection(id: selection.id, url: nil) }
     }
     .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
+  }
+
+  private var canSwitchModel: Bool {
+    !agent.busy && !speech.isRecording && agent.connectionState != .connecting
+  }
+
+  private var modelMenu: some View {
+    let title = settings.selectedProfile.map(modelProfileTitle) ?? voiceAgentText("No model profiles")
+    return Menu {
+      ForEach(settings.profiles) { profile in
+        Button {
+          guard canSwitchModel, profile.id != settings.selectedProfileID else { return }
+          if agent.messages.isEmpty { settings.selectProfile(profile.id) }
+          else { pendingModelProfileID = profile.id }
+        } label: {
+          if profile.id == settings.selectedProfileID {
+            Label(modelProfileTitle(profile), systemImage: "checkmark")
+              .accessibilityAddTraits(.isSelected)
+          } else {
+            Text(verbatim: modelProfileTitle(profile))
+          }
+        }
+      }
+    } label: {
+      Label(title, systemImage: "cpu").lineLimit(1)
+    }
+    .frame(maxWidth: 192)
+    .layoutPriority(1)
+    .disabled(settings.profiles.isEmpty || !canSwitchModel)
+    .help(agent.model.isEmpty ? title : agent.model)
+    .accessibilityLabel(voiceAgentText("Model profiles"))
+    .accessibilityValue(title)
+  }
+
+  private func modelProfileTitle(_ profile: VoiceAgentProfile) -> String {
+    let title = profile.title
+    guard profile.provider == .openAI, !profile.model.isEmpty, profile.model != title else { return title }
+    return "\(title) (\(profile.model))"
   }
 
   private var selectionContentTypes: [UTType] {
@@ -411,6 +469,16 @@ struct VoiceAgentSettingsView: View {
         }
         Toggle(voiceAgentText("Confirm volume edits"), isOn: $settings.confirmsVolumeEdits)
         Toggle(voiceAgentText("Speak responses"), isOn: $settings.speaks)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(voiceAgentText("Response length"))
+          Picker(voiceAgentText("Response length"), selection: $settings.responseLength) {
+            Text(voiceAgentText("Concise")).tag(VoiceAgentResponseLength.concise)
+            Text(voiceAgentText("Normal")).tag(VoiceAgentResponseLength.standard)
+            Text(voiceAgentText("Detailed")).tag(VoiceAgentResponseLength.detailed)
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+        }
         Stepper(value: $settings.workMinutes, in: VoiceAgentSettings.workMinutesRange) {
           HStack {
             Text(voiceAgentText("Maximum work time (minutes)"))

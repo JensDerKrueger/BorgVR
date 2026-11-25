@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import OSLog
 
 struct VoiceAgentMessage: Identifiable {
   let id = UUID()
@@ -12,6 +13,7 @@ struct VoiceAgentMessage: Identifiable {
 @MainActor
 final class VoiceAgentController: ObservableObject, AssistantWorkspace {
   enum ConnectionState { case disconnected, connecting, ready }
+  private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "BorgVR", category: "Assistant")
   let settings: VoiceAgentSettings
   let speech = VoiceAgentSpeech()
   @Published private(set) var connectionState: ConnectionState = .disconnected
@@ -24,6 +26,7 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
   @Published private(set) var fileSelection: VoiceAgentFileSelection?
   @Published private(set) var model = ""
   @Published private(set) var messages: [VoiceAgentMessage] = []
+  @Published private(set) var stepText: String?
   @Published private(set) var status = voiceAgentText("Disconnected")
   @Published private(set) var conversationStorageError: String?
   @Published var errorText: String?
@@ -33,6 +36,8 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
   private var observedContext: VoiceAgentContext?
   private var revision: UInt64 = 0
   private var manualOperations = Set<UUID>()
+  private var manualChangeRevisions: [String: UInt64] = [:]
+  private var lastManualChangeAt: ContinuousClock.Instant?
   private var scopeTransition = false
   private var settingsIdentity: VoiceAgentConnectionIdentity?
   private var subscriptions = Set<AnyCancellable>()
@@ -45,8 +50,8 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
   private var declined: Set<String> = []
   private var approval: CheckedContinuation<Bool, Never>?
   private var selectedFile: CheckedContinuation<URL?, Never>?
-  private var continuationGoal: String?
-  private var continuationCore: BorgVRAssistantCore?
+  private var continuation: (question: String, core: BorgVRAssistantCore)?
+  private let sweepCache = AssistantSweepCache()
   private var history = VoiceAgentCommandHistory<VoiceAgentContext?>()
   private var storeOwner: UUID
   private let conversationStore: VoiceAgentConversationStore
@@ -79,12 +84,16 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
     subscriptions.removeAll()
     self.bridge = bridge
     observedContext = bridge.applicationDatasetContext
+    manualChangeRevisions.removeAll()
+    manualOperations.removeAll()
+    lastManualChangeAt = nil
     bridge.importUpdates.sink { [weak self] in self?.importStatus = $0 }.store(in: &subscriptions)
     bridge.changes.sink { [weak self] event in
       guard let self else { return }
       self.revision &+= 1
       if event.phase == .began { self.manualOperations.insert(event.id) }
       else { self.manualOperations.remove(event.id) }
+      if event.phase == .committed { self.recordManualChange(domain: event.domain) }
       if self.approval != nil { self.resolveApproval(false) }
     }.store(in: &subscriptions)
   }
@@ -95,19 +104,39 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
     observedContext = next
     guard !scopeTransition else { return }
     revision &+= 1
+    recordManualChange(domain: "dataset_or_edit_state")
     manualOperations.removeAll()
     bricks?.cancel()
     volumeBrickStatus = nil
-    if busy { cancel() }
+    if approval != nil { resolveApproval(false) }
+  }
+
+  func manualChangeDomains(since revision: UInt64) -> [String] {
+    manualChangeRevisions.compactMap { $0.value > revision ? $0.key : nil }.sorted()
+  }
+
+  private func recordManualChange(domain: String) {
+    manualChangeRevisions[domain] = revision
+    lastManualChangeAt = .now
   }
 
   func waitForUser() async throws {
-    while !manualOperations.isEmpty { try await Task.sleep(for: .milliseconds(100)) }
-    try Task.checkCancellation()
-    guard settingsIdentity == settings.identity else { throw CancellationError() }
+    while true {
+      try Task.checkCancellation()
+      guard settingsIdentity == settings.identity else { throw CancellationError() }
+      if !manualOperations.isEmpty {
+        try await Task.sleep(for: .milliseconds(100))
+      } else if let settled = lastManualChangeAt?.advanced(by: .milliseconds(180)), settled > .now {
+        // Drag and scroll callbacks may publish several committed changes in one gesture.
+        try await ContinuousClock().sleep(until: settled)
+      } else {
+        return
+      }
+    }
   }
 
   func snapshot() throws -> [String: Any] { try bridge?.stateSnapshot() ?? [:] }
+  func sweepView() -> AssistantSweepView? { bridge?.sweepView() }
 
   func operations() -> [[String: Any]] {
     guard let bridge else { return [] }
@@ -158,14 +187,12 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
     runningID = id
     declined.removeAll()
     settingsIdentity = settings.identity
-    let background = messages.suffix(6).map { ($0.user ? "User: " : "Assistant: ") + String($0.text.prefix(1200)) }
-    let request = continuationGoal.map { "Previous objective: \($0)\nUser reply: \(prompt)" } ?? prompt
-    let previousGoal = continuationGoal ?? prompt
-    let previousCore = continuationCore
-    continuationGoal = nil
-    continuationCore = nil
+    let previous = continuation
+    let responseLength = settings.responseLength
+    continuation = nil
     append(prompt, user: true)
     busy = true
+    stepText = nil
     errorText = nil
     status = voiceAgentText("Working…")
     running = Task { @MainActor [weak self] in
@@ -174,26 +201,43 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
       do {
         let client = try self.settings.modelClient()
         let knowledge = try self.settings.knowledge()
-        let assistant = previousCore ?? BorgVRAssistantCore(workspace: self, model: client, knowledge: knowledge,
-                                                             imagesAllowed: self.settings.sharesProviderImages)
+        let assistant = previous?.core ?? BorgVRAssistantCore(workspace: self, model: client, knowledge: knowledge,
+          imagesAllowed: self.settings.sharesProviderImages, sweepCache: self.sweepCache,
+          conversationState: self.history.assistantState)
         core = assistant
-        let result = try await assistant.run(request, history: background, timeLimit: .seconds(self.settings.workMinutes * 60)) { _ in
-          self.status = voiceAgentText("Comparing volume previews…")
+        let result = try await assistant.run(prompt, answering: previous?.question,
+          timeLimit: .seconds(self.settings.workMinutes * 60), responseLength: responseLength,
+          onConversationStateChange: { state in
+            guard self.generation == id, !Task.isCancelled else { return }
+            self.history.assistantState = state
+            self.saveConversation()
+          }) { operation, text in
+          guard self.generation == id, !Task.isCancelled else { return }
+          self.stepText = text
+          if operation.hasPrefix("inspect.") { self.status = voiceAgentText("Comparing volume previews…") }
         }
         guard self.generation == id, !Task.isCancelled else { return }
         if !client.model.isEmpty { self.model = client.model }
         self.connectionState = .ready
         if result.awaitingAnswer {
-          self.continuationGoal = previousGoal
-          self.continuationCore = assistant
+          self.continuation = (result.text, assistant)
         }
         self.append(result.text, user: false, confirmedChanges: result.applied)
         if self.settings.speaks { self.speech.speak(result.text, rateMultiplier: self.settings.speechRateMultiplier) }
       } catch is CancellationError { }
       catch {
         guard self.generation == id else { return }
+        let diagnostic = error as? AssistantRunFailure
+        let code = diagnostic?.rawValue ?? (error is VoiceAgentError ? "assistant_error" : "unexpected_error")
+        let provider = self.settings.identity.provider.rawValue
+        Self.log.error("Assistant request failed: provider=\(provider, privacy: .public) code=\(code, privacy: .public)")
         if core?.effectInFlight == true { self.errorText = VoiceAgentError.completionUncertain.localizedDescription }
+        else if let error = error as? VoiceAgentError, error == .connection || error == .configuration {
+          self.errorText = error.localizedDescription
+        }
+        else if error is URLError { self.errorText = VoiceAgentError.connection.localizedDescription }
         else if (core?.applied ?? 0) > 0 { self.errorText = VoiceAgentError.changesAppliedVerificationFailed.localizedDescription }
+        else if let diagnostic { self.errorText = diagnostic.localizedDescription }
         else { self.errorText = (error as? VoiceAgentError ?? .connection).localizedDescription }
       }
     }
@@ -213,13 +257,14 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
     deadline = nil
     running = nil
     busy = false
+    stepText = nil
     if generation == id { status = voiceAgentText(connectionState == .ready ? "Connected" : "Disconnected") }
   }
 
   func execute(_ name: String, arguments: [String: Any], at version: AssistantEvidenceVersion) async throws -> [String: Any] {
     guard let bridge else { throw VoiceAgentError.commandFailed }
     let id = generation
-    var scope = bridge.applicationDatasetContext
+    let scope = bridge.applicationDatasetContext
     let transitions = VoiceAgentPolicy.datasetTransitions.contains(name)
     try check(id, version)
     if transitions { scopeTransition = true }
@@ -231,10 +276,13 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
         manualOperations.removeAll()
       }
     }
-    let validate = {
+    let validateRequest = {
       try Task.checkCancellation()
       guard self.generation == id, self.settingsIdentity == self.settings.identity,
             self.manualOperations.isEmpty, self.revision == version.revision else { throw VoiceAgentError.contextChanged }
+    }
+    let validate = {
+      try validateRequest()
       let now = bridge.applicationDatasetContext
       if name == "close_dataset", now == nil { return }
       if ["select_edit_state", "create_edit_state"].contains(name), let scope, now?.hasSameOpening(as: scope) == true { return }
@@ -242,11 +290,7 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
     }
     let result: [String: Any]
     if name == "open_dataset", let destination = arguments["id"] as? String {
-      result = try await bridge.openDataset(id: destination, validateContext: validate, didBegin: { opened in
-        try Task.checkCancellation()
-        guard self.generation == id else { throw CancellationError() }
-        scope = opened
-      })
+      result = try await bridge.openDataset(id: destination, validateContext: validate, validateRequest: validateRequest)
     } else if name == VoiceAgentPolicy.commandHistoryTool {
       result = ["structuredContent": history.lookup(scope: bridge.context, query: arguments)]
     } else if VoiceAgentPolicy.fileTools.contains(name) {
@@ -385,19 +429,20 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
 
   func cancel() {
     generation = UUID()
+    stepText = nil
     running?.cancel()
     deadline?.cancel()
     resolveApproval(false)
     if let selection = fileSelection { resolveFileSelection(id: selection.id, url: nil) }
     if let job = importStatus, job.active { bridge?.cancelImport(id: job.id) }
     speech.cancel()
-    continuationGoal = nil
-    continuationCore = nil
+    continuation = nil
     status = voiceAgentText(connectionState == .ready ? "Connected" : "Disconnected")
   }
 
   func disconnect() {
     cancel()
+    sweepCache.last = nil
     settingsIdentity = nil
     connectionState = .disconnected
     model = ""
@@ -406,6 +451,7 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
 
   func newConversation() {
     cancel()
+    sweepCache.last = nil
     messages.removeAll()
     history.clear()
     errorText = nil
@@ -438,8 +484,8 @@ final class VoiceAgentController: ObservableObject, AssistantWorkspace {
     guard storeOwner != settings.archiveOwnerID else { return }
     storeOwner = settings.archiveOwnerID
     messages.removeAll(); history.clear(); removeConversation()
-    continuationCore = nil
-    continuationGoal = nil
+    sweepCache.last = nil
+    continuation = nil
   }
 
   private func saveConversation() {

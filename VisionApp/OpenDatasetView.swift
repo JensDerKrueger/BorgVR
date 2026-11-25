@@ -11,7 +11,6 @@ struct OpenDatasetView: View {
   enum LoadingStage: Equatable {
     case idle
     case scanningFiles
-    case loadingLocalDataset(String, Int, Int)
     case connectingServer(String, Int)
 
     var message: String {
@@ -22,16 +21,6 @@ struct OpenDatasetView: View {
           return NSLocalizedString(
             "open_loading_scanning_files",
             comment: "Status text while scanning local files"
-          )
-        case .loadingLocalDataset(let name, let index, let total):
-          return String(
-            format: NSLocalizedString(
-              "open_loading_local_dataset_format",
-              comment: "Status text while loading local dataset (name, index, total)"
-            ),
-            name,
-            index + 1,
-            total
           )
         case let .connectingServer(address,port):
           return String(
@@ -51,8 +40,6 @@ struct OpenDatasetView: View {
           return ""
         case .scanningFiles:
           return "folder"
-        case .loadingLocalDataset:
-          return "doc.text"
         case .connectingServer:
           return "network"
       }
@@ -361,12 +348,6 @@ struct OpenDatasetView: View {
               .font(.system(size: 36))
               .foregroundColor(.blue)
 
-            ProgressView(value: currentProgress(), total: totalProgress())
-              .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-              .frame(width: 200)
-              .transition(.opacity)
-              .animation(.easeInOut(duration: 0.3), value: currentProgress())
-
             Text(loadingStage.message)
               .font(.headline)
               .foregroundColor(.primary)
@@ -413,20 +394,6 @@ struct OpenDatasetView: View {
       case let .remote(address, port, _):
         return String(format: NSLocalizedString("open_dataset_description_remote_suffix", comment: ""), dataset.description, address, port)
     }
-  }
-
-  private func currentProgress() -> Double {
-    if case .loadingLocalDataset(_, let index, _) = loadingStage {
-      return Double(index)
-    }
-    return 0
-  }
-
-  private func totalProgress() -> Double {
-    if case .loadingLocalDataset(_, _, let total) = loadingStage {
-      return Double(total)
-    }
-    return 1
   }
 
   @MainActor
@@ -668,98 +635,40 @@ struct OpenDatasetView: View {
   }
 
   private func listLocalDataset() async -> [RuntimeAppModel.DatasetEntry] {
-    var datasets: [RuntimeAppModel.DatasetEntry] = []
-
-    let fileManager = FileManager.default
-    if let documentsURL = fileManager.urls(
-      for: .documentDirectory,
-      in: .userDomainMask
-    ).first {
-      do {
-        let files = try fileManager.contentsOfDirectory(
-          at: documentsURL,
-          includingPropertiesForKeys: nil
-        )
-        let datasetURLs = files.filter {
-          $0.pathExtension.lowercased() == "data"
-        }
-        for (index, url) in datasetURLs.enumerated() {
-          await MainActor.run {
-            loadingStage = .loadingLocalDataset(
-              url.lastPathComponent,
-              index,
-              datasetURLs.count
-            )
-          }
-          try? await Task.sleep(nanoseconds: 10_000_000)
-          if let data = try? BORGVRMetaData(url: url) {
-            datasets.append(
-              RuntimeAppModel.DatasetEntry(
-                identifier: url.lastPathComponent,
-                description: data.datasetDescription,
-                source: .local,
-                uniqueId: data.uniqueID,
-                listMetadata: DatasetListMetadata(data)
-              )
-            )
-          }
-        }
-      } catch {
-        runtimeAppModel.logger.error(
-          String(
-            format: NSLocalizedString(
-              "open_error_loading_dataset_files",
-              comment: "Error loading local dataset files"
-            ),
-            error.localizedDescription
-          )
-        )
-      }
+    let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+    let scan = await BORGVRMetaData.scanListHeaders(in: directory, includeBuiltIn: !storedAppModel.hideBuiltInDatasets)
+    if let error = scan.directoryError {
+      runtimeAppModel.logger.error(String(format: NSLocalizedString(
+        "open_error_loading_dataset_files", comment: "Error loading local dataset files"
+      ), error))
     }
 
-    if !storedAppModel.hideBuiltInDatasets,
-       let datasetURLs = Bundle.main.urls(
-      forResourcesWithExtension: "data",
-      subdirectory: nil
-    ) {
-      for (index, url) in datasetURLs.enumerated() {
-        await MainActor.run {
-          loadingStage = .loadingLocalDataset(
-            url.lastPathComponent,
-            index,
-            datasetURLs.count
-          )
-        }
-        try? await Task.sleep(nanoseconds: 10_000_000)
-
-        if let data = try? BORGVRMetaData(url: url) {
-          datasets.append(
-            RuntimeAppModel.DatasetEntry(
-              identifier: url.path(),
-              description: data.datasetDescription,
-              source: .builtIn,
-              uniqueId: data.uniqueID,
-              listMetadata: DatasetListMetadata(data)
-            )
-          )
-        }
-      }
+    return scan.entries.map { entry in
+      let header = entry.header
+      return RuntimeAppModel.DatasetEntry(
+        identifier: entry.isBuiltIn ? entry.url.path() : entry.url.lastPathComponent,
+        description: header.datasetDescription,
+        source: entry.isBuiltIn ? .builtIn : .local,
+        uniqueId: header.uniqueID,
+        listMetadata: DatasetListMetadata(dimensions: header.dimensions, voxelSpacing: header.voxelSpacing)
+      )
     }
-    return datasets
   }
 
   @MainActor
   private func loadDatasetFilesAsync() async {
     guard !isDeleting, !isLoading else { return }
-    await MainActor.run {
-      isLoading = true
-      loadingStage = .scanningFiles
-      selectedDatasetKey = nil
-      datasets.removeAll()
+    isLoading = true
+    loadingStage = .scanningFiles
+    selectedDatasetKey = nil
+    datasets.removeAll()
+    defer {
+      isLoading = false
+      loadingStage = .idle
     }
-    try? await Task.sleep(nanoseconds: 20_000_000)
 
     var loadedDatasets: [RuntimeAppModel.DatasetEntry] = await listLocalDataset()
+    guard !Task.isCancelled else { return }
     let knownMetadata = Dictionary(loadedDatasets.compactMap { dataset in
       dataset.listMetadata.map { (dataset.uniqueId, $0) }
     }, uniquingKeysWith: { first, _ in first })
@@ -769,10 +678,7 @@ struct OpenDatasetView: View {
       return dataset
     })
 
-    await MainActor.run {
-      datasets = loadedDatasets.sorted { $0.description < $1.description }
-      isLoading = false
-      loadingStage = .idle
-    }
+    guard !Task.isCancelled else { return }
+    datasets = loadedDatasets.sorted { $0.description < $1.description }
   }
 }
